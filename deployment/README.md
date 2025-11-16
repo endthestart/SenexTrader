@@ -10,14 +10,14 @@
 
 **Choose your setup path:**
 
-#### Path A: Existing Deployment (Migrating from senex_trader_config)
+#### Path A: Existing Deployment (Migrating from senextrader_config)
 If you have existing configs from a backup or previous deployment:
 
 ```bash
 # Copy your existing configs to config/ directory
 cp -r ~/path/to/config-backup/* config/
-# OR if you still have the old senex_trader_config repo:
-cp -r ~/Development/senex_trader_config/* config/
+# OR if you still have the old senextrader_config repo:
+cp -r ~/Development/senextrader_config/* config/
 
 # Verify files are in place
 ls config/ansible/inventory/hosts.yml
@@ -29,8 +29,8 @@ If setting up for the first time, follow these steps in order:
 
 **Step 1: Copy Build Configuration**
 ```bash
-cp .senex_trader.json.example .senex_trader.json
-# Edit .senex_trader.json with your container registry details
+cp .senextrader.json.example .senextrader.json
+# Edit .senextrader.json with your container registry details
 ```
 
 **Step 2: Create Config Directory Structure**
@@ -111,7 +111,7 @@ make deploy-production
 make build TAG=v1.0.0
 ```
 
-This builds the container and pushes to your registry (from `.senex_trader.json`).
+This builds the container and pushes to your registry (from `.senextrader.json`).
 
 ### 3. Deploy to Production
 
@@ -130,8 +130,8 @@ This uses Ansible to:
 ## 📁 Repository Structure
 
 ```
-senex_trader/                         # Monorepo root
-├── .senex_trader.json                # Build config (gitignored, use .example)
+senextrader/                         # Monorepo root
+├── .senextrader.json                # Build config (gitignored, use .example)
 ├── build.py                          # Container build script
 ├── Makefile                          # Deployment commands
 ├── deployment/
@@ -153,10 +153,10 @@ senex_trader/                         # Monorepo root
 
 ## 🔧 Configuration Files
 
-### `.senex_trader.json` (Build Configuration)
+### `.senextrader.json` (Build Configuration)
 
 **Location:** Project root
-**Gitignored:** ✅ Yes (use `.senex_trader.json.example` as template)
+**Gitignored:** ✅ Yes (use `.senextrader.json.example` as template)
 
 ```json
 {
@@ -424,12 +424,12 @@ cp deployment/ansible/inventory/hosts.yml.example config/ansible/inventory/hosts
 
 **Check:**
 ```bash
-ls -la .senex_trader.json
+ls -la .senextrader.json
 ```
 
 **Fix:**
 ```bash
-cp .senex_trader.json.example .senex_trader.json
+cp .senextrader.json.example .senextrader.json
 # Edit with your registry details
 ```
 
@@ -473,7 +473,7 @@ make deploy-production # Deploy to production
 
 **Gitignored Files (Never Commit):**
 - ✅ `config/` directory - All your private deployment configs
-- ✅ `.senex_trader.json` - Your container registry
+- ✅ `.senextrader.json` - Your container registry
 - ✅ `config/ansible/inventory/hosts.yml` - Your server IPs
 - ✅ `config/ansible/vault/*-vault.yml` - Encrypted secrets
 - ✅ `.vault_pass*` - Vault password files

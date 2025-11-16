@@ -7,7 +7,7 @@ set -euo pipefail
 
 # Configuration
 BACKUP_DIR="/var/backups/postgresql"
-DB_NAME="senex_trader"
+DB_NAME="senextrader"
 DB_USER="senex_user"
 TIMESTAMP=$(date +%Y%m%d_%H%M%S)
 RETENTION_DAYS=30

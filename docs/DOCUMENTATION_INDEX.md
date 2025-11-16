@@ -1,11 +1,11 @@
 # Senex Trader Documentation Index
 
 **Last reviewed**: 2025-10-21
-**Repository**: `senex_trader_docs`
+**Repository**: `senextrader_docs`
 
 ## Quick Start
 
-- Read `../senex_trader/AI.md` for global rules and workflow expectations.
+- Read `../senextrader/AI.md` for global rules and workflow expectations.
 - Use `STATUS_AND_ROADMAP.md` for the current state of development.
 - Track active work in `planning/`; triage proposals in `backlog/`.
 

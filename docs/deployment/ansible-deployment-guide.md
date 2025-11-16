@@ -219,7 +219,7 @@ To deploy a new version:
 
 1. **Build and push new image:**
    ```bash
-   cd /path/to/senex_trader
+   cd /path/to/senextrader
    python build.py --tag v0.2.0
    ```
 
@@ -331,14 +331,14 @@ podman inspect web | grep -i status
 
 ### Access Database
 
-**Container names are simplified (no senex_trader_ prefix)**
+**Container names are simplified (no senextrader_ prefix)**
 
 ```bash
 # SSH to server
 ssh root@your-domain.com
 
 # PostgreSQL shell
-podman exec -it postgres psql -U senex_user -d senex_trader
+podman exec -it postgres psql -U senex_user -d senextrader
 
 # Run Django migrations
 podman exec -it web python manage.py migrate
@@ -380,7 +380,7 @@ podman exec -it web python manage.py daily_data_update
 ```
 
 **How It Works:**
-1. .env file sets `DJANGO_SETTINGS_MODULE=senex_trader.settings.production`
+1. .env file sets `DJANGO_SETTINGS_MODULE=senextrader.settings.production`
 2. Quadlet passes .env to container via `EnvironmentFile=`
 3. manage.py uses the settings module from environment
 4. Commands automatically connect to PostgreSQL, not SQLite
@@ -418,10 +418,10 @@ backup_schedule: "02:00"       # Daily run time (2 AM)
 ssh root@your-domain.com  # or ssh senex@your-domain.com
 
 # Manual backup (compressed)
-podman exec postgres pg_dump -U senex_user senex_trader | gzip > /opt/senex-trader/backups/manual-$(date +%Y-%m-%d-%H%M%S).sql.gz
+podman exec postgres pg_dump -U senex_user senextrader | gzip > /opt/senex-trader/backups/manual-$(date +%Y-%m-%d-%H%M%S).sql.gz
 
 # Manual backup (uncompressed)
-podman exec postgres pg_dump -U senex_user senex_trader > /opt/senex-trader/backups/manual-$(date +%Y-%m-%d-%H%M%S).sql
+podman exec postgres pg_dump -U senex_user senextrader > /opt/senex-trader/backups/manual-$(date +%Y-%m-%d-%H%M%S).sql
 
 # Verify backup
 ls -lh /opt/senex-trader/backups/
@@ -438,17 +438,17 @@ ls -lh /opt/senex-trader/backups/
 
 # Restore from compressed backup
 gunzip -c /opt/senex-trader/backups/postgres-2025-10-15-020000.sql.gz | \
-  podman exec -i postgres psql -U senex_user -d senex_trader
+  podman exec -i postgres psql -U senex_user -d senextrader
 
 # Restore from uncompressed backup
 cat /opt/senex-trader/backups/pre-deploy-2025-10-15-120000.sql | \
-  podman exec -i postgres psql -U senex_user -d senex_trader
+  podman exec -i postgres psql -U senex_user -d senextrader
 
 # Restore from specific backup (drops existing database first)
 gunzip -c /opt/senex-trader/backups/postgres-2025-10-15-020000.sql.gz | \
-  podman exec -i postgres psql -U senex_user -d postgres -c "DROP DATABASE IF EXISTS senex_trader; CREATE DATABASE senex_trader;" && \
+  podman exec -i postgres psql -U senex_user -d postgres -c "DROP DATABASE IF EXISTS senextrader; CREATE DATABASE senextrader;" && \
   gunzip -c /opt/senex-trader/backups/postgres-2025-10-15-020000.sql.gz | \
-  podman exec -i postgres psql -U senex_user -d senex_trader
+  podman exec -i postgres psql -U senex_user -d senextrader
 ```
 
 #### Monitor Automated Backups
@@ -680,14 +680,14 @@ All environment variables are defined in `templates/env.j2` and sourced from vau
 **Critical Environment Variables:**
 
 - `ALLOWED_HOSTS` - Django allowed hosts (must include domain names)
-- `CSRF_TRUSTED_ORIGINS` - Auto-generated from ALLOWED_HOSTS for HTTPS (see `senex_trader/settings/production.py:43`)
+- `CSRF_TRUSTED_ORIGINS` - Auto-generated from ALLOWED_HOSTS for HTTPS (see `senextrader/settings/production.py:43`)
 - `WS_ALLOWED_ORIGINS` - WebSocket allowed origins (must match domain)
 - `APP_BASE_URL` - Base URL for absolute links
 - `APP_DIR` - Application directory for bind mounts (staging/production: `/opt/senex-trader`)
 
 **Staging-Specific Settings:**
 
-Staging runs behind nginx reverse proxy that handles SSL termination. Configuration in `senex_trader/settings/staging.py`:
+Staging runs behind nginx reverse proxy that handles SSL termination. Configuration in `senextrader/settings/staging.py`:
 
 ```python
 # Trust X-Forwarded-Proto header from proxy
@@ -741,10 +741,10 @@ Quadlet doesn't support replicas like Compose. For multiple instances:
 
 For comprehensive deployment planning and advanced scenarios, see:
 
-- **senex_trader_docs/deployment/README.md** - Complete deployment documentation
-- **senex_trader_docs/deployment/00-OVERVIEW.md** - Architecture overview
-- **senex_trader_docs/deployment/04-SERVICE-CONFIGURATION.md** - Service configs
-- **senex_trader_docs/deployment/10-IMPLEMENTATION-PHASES.md** - Phased deployment plan
+- **senextrader_docs/deployment/README.md** - Complete deployment documentation
+- **senextrader_docs/deployment/00-OVERVIEW.md** - Architecture overview
+- **senextrader_docs/deployment/04-SERVICE-CONFIGURATION.md** - Service configs
+- **senextrader_docs/deployment/10-IMPLEMENTATION-PHASES.md** - Phased deployment plan
 
 ## Support
 

@@ -138,8 +138,8 @@ END
 
 **Adapt for Senex**:
 ```bash
-# Change 'config.wsgi' to 'senex_trader.settings.production'
-os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'senex_trader.settings.production')
+# Change 'config.wsgi' to 'senextrader.settings.production'
+os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'senextrader.settings.production')
 ```
 
 ---
@@ -285,7 +285,7 @@ errorlog = "-"
 loglevel = "info"
 
 # Process naming
-proc_name = "senex_trader_gunicorn"
+proc_name = "senextrader_gunicorn"
 
 # Security
 limit_request_line = 4096
@@ -407,7 +407,7 @@ LOGGING = {
 }
 ```
 
-**Senex Trader Current**: File-based logging at `/var/log/senex_trader/`
+**Senex Trader Current**: File-based logging at `/var/log/senextrader/`
 
 **Recommendation**:
 - Keep file-based for development (local debugging)
@@ -416,7 +416,7 @@ LOGGING = {
 
 **Code to Adapt**:
 ```python
-# senex_trader/settings/production.py
+# senextrader/settings/production.py
 if os.environ.get('CONTAINER_MODE', 'false').lower() == 'true':
     # Container mode: log to stdout/stderr
     LOGGING = {
@@ -552,7 +552,7 @@ nginx:
 **Reference Implementation**:
 ```yaml
 environment:
-  POSTGRES_DB: ${POSTGRES_DB:-senex_trader}
+  POSTGRES_DB: ${POSTGRES_DB:-senextrader}
 ```
 
 **Senex Adoption**: ✅ Use throughout compose files
@@ -586,7 +586,7 @@ environment:
 ### Files to Update
 
 - [ ] `requirements.txt` → Split into `requirements/base.txt`, `requirements/production.txt`, `requirements/development.txt`
-- [ ] `senex_trader/settings/production.py` → Add container-mode logging
+- [ ] `senextrader/settings/production.py` → Add container-mode logging
 - [ ] Add `psycopg2-binary` to production requirements
 - [ ] Add `daphne` to requirements (ASGI server)
 - [ ] Add `whitenoise` to requirements (if not present)

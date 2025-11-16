@@ -55,8 +55,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 RUN groupadd --gid 1000 senex && \
     useradd --uid 1000 --gid senex --shell /bin/bash --create-home senex
 
-RUN mkdir -p /app /app/logs /app/staticfiles /app/media /var/log/senex_trader && \
-    chown -R senex:senex /app /var/log/senex_trader
+RUN mkdir -p /app /app/logs /app/staticfiles /app/media /var/log/senextrader && \
+    chown -R senex:senex /app /var/log/senextrader
 
 WORKDIR /app
 
@@ -116,7 +116,7 @@ CMD ["web"]
 FROM python:3.12-slim-bookworm
 
 ENV PYTHONUNBUFFERED=1 \
-    DJANGO_SETTINGS_MODULE=senex_trader.settings.development
+    DJANGO_SETTINGS_MODULE=senextrader.settings.development
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libpq-dev \
@@ -162,7 +162,7 @@ SERVICE_TYPE="${1:-web}"
 echo "Waiting for PostgreSQL..."
 python << END
 import sys, time, os, django
-os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'senex_trader.settings.${ENVIRONMENT:-production}')
+os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'senextrader.settings.${ENVIRONMENT:-production}')
 django.setup()
 from django.db import connection
 from django.db.utils import OperationalError
@@ -211,12 +211,12 @@ fi
 case "$SERVICE_TYPE" in
     web|daphne)
         echo "Starting Daphne ASGI server..."
-        exec daphne -b 0.0.0.0 -p 8000 senex_trader.asgi:application
+        exec daphne -b 0.0.0.0 -p 8000 senextrader.asgi:application
         ;;
 
     gunicorn)
         echo "Starting Gunicorn WSGI server..."
-        exec gunicorn senex_trader.wsgi:application \
+        exec gunicorn senextrader.wsgi:application \
             --bind 0.0.0.0:8000 \
             --workers 4 \
             --timeout 120 \
@@ -226,7 +226,7 @@ case "$SERVICE_TYPE" in
 
     celery-worker|worker)
         echo "Starting Celery worker..."
-        exec celery -A senex_trader worker \
+        exec celery -A senextrader worker \
             --loglevel=info \
             --queues=celery,accounts,trading \
             --concurrency=4 \
@@ -236,7 +236,7 @@ case "$SERVICE_TYPE" in
     celery-beat|beat)
         echo "Starting Celery beat..."
         rm -f /app/celerybeat-schedule*
-        exec celery -A senex_trader beat \
+        exec celery -A senextrader beat \
             --loglevel=info \
             --pidfile=/tmp/celerybeat.pid \
             --schedule=/app/celerybeat-schedule
@@ -271,7 +271,7 @@ services:
   postgres:
     image: postgres:16-alpine
     environment:
-      POSTGRES_DB: ${DB_NAME:-senex_trader}
+      POSTGRES_DB: ${DB_NAME:-senextrader}
       POSTGRES_USER: ${DB_USER:-senex_user}
       POSTGRES_PASSWORD: ${DB_PASSWORD}
     volumes:
@@ -279,7 +279,7 @@ services:
     networks:
       - senex_network
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-senex_user} -d ${DB_NAME:-senex_trader}"]
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-senex_user} -d ${DB_NAME:-senextrader}"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -309,7 +309,7 @@ services:
       REDIS_URL: redis://redis:6379/0
       # ... (see docker-compose-strategy.md for complete list)
     volumes:
-      - logs:/var/log/senex_trader
+      - logs:/var/log/senextrader
       - staticfiles:/app/staticfiles
     networks:
       - senex_network
@@ -333,7 +333,7 @@ services:
     environment:
       # Same as web
     volumes:
-      - logs:/var/log/senex_trader
+      - logs:/var/log/senextrader
     networks:
       - senex_network
     depends_on:
@@ -350,7 +350,7 @@ services:
     environment:
       # Same as web
     volumes:
-      - logs:/var/log/senex_trader
+      - logs:/var/log/senextrader
       - celerybeat_schedule:/app
     networks:
       - senex_network
@@ -554,7 +554,7 @@ def health_check_simple(request):
     return JsonResponse({"status": "ok"}, status=200)
 ```
 
-**File**: `senex_trader/urls.py`
+**File**: `senextrader/urls.py`
 
 **Add**:
 ```python
@@ -571,7 +571,7 @@ urlpatterns = [
 
 ### 3. Update Production Settings for Containers
 
-**File**: `senex_trader/settings/production.py`
+**File**: `senextrader/settings/production.py`
 
 **Add/Modify**:
 
@@ -593,7 +593,7 @@ ALLOWED_HOSTS = os.environ.get('ALLOWED_HOSTS', '').split(',')
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.postgresql',
-        'NAME': os.environ.get('DB_NAME', 'senex_trader'),
+        'NAME': os.environ.get('DB_NAME', 'senextrader'),
         'USER': os.environ.get('DB_USER', 'senex_user'),
         'PASSWORD': os.environ.get('DB_PASSWORD'),
         'HOST': os.environ.get('DB_HOST', 'localhost'),
@@ -680,7 +680,7 @@ if os.environ.get('CONTAINER_MODE', 'false').lower() == 'true':
 
 ### 4. Ensure Celery App Configuration
 
-**File**: `senex_trader/celery.py`
+**File**: `senextrader/celery.py`
 
 **Verify/Update**:
 
@@ -689,16 +689,16 @@ import os
 from celery import Celery
 
 # Set default Django settings module
-os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'senex_trader.settings.production')
+os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'senextrader.settings.production')
 
 # Determine settings module based on ENVIRONMENT
 environment = os.environ.get('ENVIRONMENT', 'production')
 if environment == 'production':
-    os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'senex_trader.settings.production')
+    os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'senextrader.settings.production')
 else:
-    os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'senex_trader.settings.development')
+    os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'senextrader.settings.development')
 
-app = Celery('senex_trader')
+app = Celery('senextrader')
 app.config_from_object('django.conf:settings', namespace='CELERY')
 app.autodiscover_tasks()
 ```
@@ -788,8 +788,8 @@ See `build-workflow.md` for complete version.
 - [ ] Update `.gitignore`
 
 ### Phase 4: Testing
-- [ ] Test local build: `podman build -t senex_trader:test .`
-- [ ] Test Django check: `podman run --rm -e SECRET_KEY=test -e FIELD_ENCRYPTION_KEY=test senex_trader:test python manage.py check`
+- [ ] Test local build: `podman build -t senextrader:test .`
+- [ ] Test Django check: `podman run --rm -e SECRET_KEY=test -e FIELD_ENCRYPTION_KEY=test senextrader:test python manage.py check`
 - [ ] Test development compose: `podman-compose -f docker-compose.yml -f docker-compose.dev.yml up`
 - [ ] Verify all services healthy
 - [ ] Test application functionality
@@ -819,7 +819,7 @@ See `build-workflow.md` for complete version.
 
 **Test 1**: Dockerfile builds successfully
 ```bash
-podman build -f docker/Dockerfile -t senex_trader:test .
+podman build -f docker/Dockerfile -t senextrader:test .
 ```
 **Expected**: Build completes, image <500 MB
 
@@ -828,14 +828,14 @@ podman build -f docker/Dockerfile -t senex_trader:test .
 podman run --rm \
   -e SECRET_KEY=test-key \
   -e FIELD_ENCRYPTION_KEY=test-key \
-  senex_trader:test \
+  senextrader:test \
   python manage.py check
 ```
 **Expected**: "System check identified no issues"
 
 **Test 3**: Entry point routing works
 ```bash
-podman run --rm senex_trader:test web --help
+podman run --rm senextrader:test web --help
 ```
 **Expected**: Daphne help output
 
@@ -881,4 +881,4 @@ curl -I http://localhost:8000/admin/
 5. Document (Phase 5)
 6. Deploy to production (Phase 6)
 
-**Reference**: All other documentation files in `/path/to/senex_trader_docs/docker/` provide detailed guidance for each component.
+**Reference**: All other documentation files in `/path/to/senextrader_docs/docker/` provide detailed guidance for each component.

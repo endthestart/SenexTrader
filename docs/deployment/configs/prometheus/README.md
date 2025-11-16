@@ -91,7 +91,7 @@ tar xvfz postgres_exporter-*.linux-amd64.tar.gz
 sudo mv postgres_exporter-*/postgres_exporter /usr/local/bin/
 
 # Create connection string
-export DATA_SOURCE_NAME="postgresql://senex_user:PASSWORD@localhost:5432/senex_trader?sslmode=disable"
+export DATA_SOURCE_NAME="postgresql://senex_user:PASSWORD@localhost:5432/senextrader?sslmode=disable"
 
 # Create systemd service
 sudo tee /etc/systemd/system/postgres_exporter.service << 'EOF'
@@ -101,7 +101,7 @@ After=postgresql.service
 
 [Service]
 Type=simple
-Environment="DATA_SOURCE_NAME=postgresql://senex_user:PASSWORD@localhost:5432/senex_trader?sslmode=disable"
+Environment="DATA_SOURCE_NAME=postgresql://senex_user:PASSWORD@localhost:5432/senextrader?sslmode=disable"
 ExecStart=/usr/local/bin/postgres_exporter
 Restart=always
 

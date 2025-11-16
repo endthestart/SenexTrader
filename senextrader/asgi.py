@@ -1,5 +1,5 @@
 """
-ASGI config for senex_trader project.
+ASGI config for senextrader project.
 
 It exposes the ASGI callable as a module-level variable named ``application``.
 
@@ -17,7 +17,7 @@ faulthandler.enable(file=sys.stderr, all_threads=True)
 from django.core.asgi import get_asgi_application
 
 # CRITICAL: Initialize Django BEFORE importing channels
-os.environ.setdefault("DJANGO_SETTINGS_MODULE", "senex_trader.settings.development")
+os.environ.setdefault("DJANGO_SETTINGS_MODULE", "senextrader.settings.development")
 django_asgi_app = get_asgi_application()
 
 # These imports must come after Django initialization (E402 is intentional)

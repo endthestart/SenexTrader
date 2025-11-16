@@ -38,8 +38,8 @@ RUN groupadd --gid 1000 senex && \
     useradd --uid 1000 --gid senex --shell /bin/bash --create-home senex
 
 # Create application directories
-RUN mkdir -p /app /app/logs /app/staticfiles /app/media /var/log/senex_trader && \
-    chown -R senex:senex /app /var/log/senex_trader
+RUN mkdir -p /app /app/logs /app/staticfiles /app/media /var/log/senextrader && \
+    chown -R senex:senex /app /var/log/senextrader
 
 # Set working directory
 WORKDIR /app

@@ -28,7 +28,7 @@ These variables should be set for production:
 ALLOWED_HOSTS              # Comma-separated list of allowed hosts
 WS_ALLOWED_ORIGINS         # Comma-separated list of WebSocket origins
 APP_BASE_URL               # Base URL for application (e.g., https://your-domain.com)
-DB_NAME                    # PostgreSQL database name (default: senex_trader)
+DB_NAME                    # PostgreSQL database name (default: senextrader)
 DB_USER                    # PostgreSQL username (default: senex_user)
 DB_HOST                    # PostgreSQL hostname (default: postgres)
 REDIS_URL                  # Redis connection URL (default: redis://redis:6379/0)
@@ -119,17 +119,17 @@ environment:
 **Required**: No (auto-detected)
 
 **Default**: Determined by `ENVIRONMENT` variable
-- If `ENVIRONMENT=production`: `senex_trader.settings.production`
-- Otherwise: `senex_trader.settings.development`
+- If `ENVIRONMENT=production`: `senextrader.settings.production`
+- Otherwise: `senextrader.settings.development`
 
 **Options**:
-- `senex_trader.settings.development` - Development settings (SQLite, DEBUG=True)
-- `senex_trader.settings.production` - Production settings (PostgreSQL, DEBUG=False)
+- `senextrader.settings.development` - Development settings (SQLite, DEBUG=True)
+- `senextrader.settings.production` - Production settings (PostgreSQL, DEBUG=False)
 
 **Docker Compose Example**:
 ```yaml
 environment:
-  DJANGO_SETTINGS_MODULE: senex_trader.settings.production
+  DJANGO_SETTINGS_MODULE: senextrader.settings.production
 ```
 
 **Note**: Usually better to set `ENVIRONMENT` variable instead (simpler)
@@ -246,12 +246,12 @@ environment:
 
 **Required**: No
 
-**Default**: `senex_trader`
+**Default**: `senextrader`
 
 **Docker Compose Example**:
 ```yaml
 environment:
-  DB_NAME: senex_trader
+  DB_NAME: senextrader
 ```
 
 **Note**: Must match PostgreSQL container's `POSTGRES_DB`
@@ -812,7 +812,7 @@ WS_ALLOWED_ORIGINS=https://your-domain.com,https://api.your-domain.com
 APP_BASE_URL=https://your-domain.com
 
 # Database (PostgreSQL)
-DB_NAME=senex_trader
+DB_NAME=senextrader
 DB_USER=senex_user
 DB_PASSWORD=<GENERATE_WITH_OPENSSL>
 DB_HOST=postgres
@@ -857,7 +857,7 @@ services:
   postgres:
     image: postgres:16-alpine
     environment:
-      POSTGRES_DB: ${DB_NAME:-senex_trader}
+      POSTGRES_DB: ${DB_NAME:-senextrader}
       POSTGRES_USER: ${DB_USER:-senex_user}
       POSTGRES_PASSWORD: ${DB_PASSWORD}
 
@@ -876,7 +876,7 @@ services:
       APP_BASE_URL: ${APP_BASE_URL}
 
       # Database
-      DB_NAME: ${DB_NAME:-senex_trader}
+      DB_NAME: ${DB_NAME:-senextrader}
       DB_USER: ${DB_USER:-senex_user}
       DB_PASSWORD: ${DB_PASSWORD}
       DB_HOST: postgres

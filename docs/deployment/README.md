@@ -47,6 +47,6 @@ Refer to these documents when:
 
 ## Related Documentation
 
-- Main project: `/path/to/senex_trader/`
+- Main project: `/path/to/senextrader/`
 - Docker documentation: `../docker/`
 - Architecture documentation: `../architecture/`

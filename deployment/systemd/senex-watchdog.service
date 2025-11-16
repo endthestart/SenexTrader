@@ -21,7 +21,7 @@ PrivateTmp=yes
 NoNewPrivileges=yes
 ProtectSystem=strict
 ProtectHome=yes
-ReadWritePaths=/var/lib/senex-watchdog /var/log/senex_trader
+ReadWritePaths=/var/lib/senex-watchdog /var/log/senextrader
 
 # Resource limits
 MemoryMax=100M

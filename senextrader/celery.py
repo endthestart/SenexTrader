@@ -12,21 +12,21 @@ def _resolve_default_settings_module() -> str:
     """Return the default settings module respecting ENVIRONMENT."""
     env = os.environ.get("ENVIRONMENT")
     if env in ("production", "staging"):
-        return f"senex_trader.settings.{env}"
-    return "senex_trader.settings.development"
+        return f"senextrader.settings.{env}"
+    return "senextrader.settings.development"
 
 
 # Ensure Celery loads the same settings module as manage.py/asgi.py.
 if (
     not os.environ.get("DJANGO_SETTINGS_MODULE")
-    or os.environ["DJANGO_SETTINGS_MODULE"] == "senex_trader.settings"
+    or os.environ["DJANGO_SETTINGS_MODULE"] == "senextrader.settings"
 ):
     os.environ["DJANGO_SETTINGS_MODULE"] = _resolve_default_settings_module()
 
 # Don't call django.setup() here - it causes circular imports when Django is
 # already setting up. Celery workers handle their own Django setup.
 
-app = Celery("senex_trader")
+app = Celery("senextrader")
 
 # Using a string here means the worker doesn't have to serialize
 # the configuration object to child processes.

@@ -19,6 +19,9 @@ ENV/
 # Private configuration (not version controlled - monorepo structure)
 config/
 .claude
+AI.md
+AGENTS.md
+CLAUDE.md
 
 # Django
 db.sqlite3
@@ -113,13 +116,13 @@ deployment/ansible/inventory/hosts.yml
 !deployment/ansible/inventory/hosts.yml.example
 .vault_pass*
 
-# Build configuration symlinks (from senex_trader_config)
+# Build configuration symlinks (from senextrader_config)
 build.py
 deployment/ansible/inventory/production-vault.yml
 deployment/ansible/inventory/staging-vault.yml
 deployment/quadlet/*.container
 
 # Developer-specific build configuration
-.senex_trader.json
-!.senex_trader.json.example
+.senextrader.json
+!.senextrader.json.example
 *.pdf

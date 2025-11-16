@@ -1053,9 +1053,9 @@ return min(stress, 100)
 
 **Navigate to Epic 27**:
 ```bash
-cd /path/to/senex_trader_project/senex_trader
-cat ../senex_trader_docs/planning/27-code-quality-improvements/README.md
-cat ../senex_trader_docs/planning/27-code-quality-improvements/task-001-fix-n1-queries.md
+cd /path/to/senextrader_project/senextrader
+cat ../senextrader_docs/planning/27-code-quality-improvements/README.md
+cat ../senextrader_docs/planning/27-code-quality-improvements/task-001-fix-n1-queries.md
 ```
 
 **Start First Task** (Fix N+1 Queries - 2-3 hours):
@@ -1115,7 +1115,7 @@ python manage.py preload_market_metrics SPY QQQ
 *End of Documentation*
 
 # What I want to do
-From /path/to/senex_trader_project/senex_trader_docs/planning/epics-done/22-strategy-expansion/ it seems we added a lot of complexity. We ran into quite a few related and unrelated bugs. We changed some of the logic, allowed for suggestions to be forced. We created a management command that does daily suggestions. Created a multi-equity-suggestions command. We separated Trident. 
+From /path/to/senextrader_project/senextrader_docs/planning/epics-done/22-strategy-expansion/ it seems we added a lot of complexity. We ran into quite a few related and unrelated bugs. We changed some of the logic, allowed for suggestions to be forced. We created a management command that does daily suggestions. Created a multi-equity-suggestions command. We separated Trident. 
 Problems
 - Generation of suggestions is inconsistent. 
 - Market data recency and consistency is unknown. I have no idea if the data is stale or up to date going into a generation. 

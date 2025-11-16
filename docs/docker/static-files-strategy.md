@@ -100,7 +100,7 @@ whitenoise>=6.6.0
 
 ### 2. Configure Django Settings
 
-**senex_trader/settings/production.py**:
+**senextrader/settings/production.py**:
 ```python
 # Middleware - add WhiteNoise AFTER SecurityMiddleware
 MIDDLEWARE = [
@@ -521,7 +521,7 @@ Cache-Control: public, max-age=31536000, immutable
 ### Recommended Directory Layout
 
 ```
-senex_trader/
+senextrader/
 ├── static/                          # Source static files
 │   ├── css/
 │   │   └── dark-theme.css

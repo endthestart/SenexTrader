@@ -35,7 +35,7 @@ PublishPort=127.0.0.1:5432:5432
 Volume=postgres_data:/var/lib/postgresql/data:Z
 
 # Environment variables
-Environment=POSTGRES_DB=senex_trader
+Environment=POSTGRES_DB=senextrader
 Environment=POSTGRES_USER=senex_user
 Environment=POSTGRES_INITDB_ARGS=--encoding=UTF8 --locale=C
 Secret=db_password,type=env,target=POSTGRES_PASSWORD
@@ -61,7 +61,7 @@ Exec=postgres \
 # Exec=postgres -c config_file=/etc/postgresql/postgresql.conf
 
 # Health check
-HealthCmd=pg_isready -U senex_user -d senex_trader
+HealthCmd=pg_isready -U senex_user -d senextrader
 HealthInterval=10s
 HealthTimeout=5s
 HealthRetries=3
@@ -167,7 +167,7 @@ sudo apt install pgbouncer
 **Configuration** (`/etc/pgbouncer/pgbouncer.ini`):
 ```ini
 [databases]
-senex_trader = host=localhost port=5432 dbname=senex_trader
+senextrader = host=localhost port=5432 dbname=senextrader
 
 [pgbouncer]
 listen_addr = 127.0.0.1
@@ -446,7 +446,7 @@ PublishPort=8000:8000
 
 # Environment
 EnvironmentFile=/etc/senex-trader/.env
-Environment=DJANGO_SETTINGS_MODULE=senex_trader.settings.production
+Environment=DJANGO_SETTINGS_MODULE=senextrader.settings.production
 
 # Shared volumes for static/media files (served by Nginx)
 Volume=%h/senex-trader/static:/app/staticfiles:z
@@ -476,7 +476,7 @@ Exec=daphne \
   -p 8000 \
   --access-log - \
   --proxy-headers \
-  senex_trader.asgi:application
+  senextrader.asgi:application
 
 [Service]
 Restart=always
@@ -499,14 +499,14 @@ WantedBy=default.target
 
 ```bash
 # Django Core
-DJANGO_SETTINGS_MODULE=senex_trader.settings.production
+DJANGO_SETTINGS_MODULE=senextrader.settings.production
 SECRET_KEY=<from_ansible_vault>
 FIELD_ENCRYPTION_KEY=<from_ansible_vault>
 ALLOWED_HOSTS=your-domain.com,www.your-domain.com
 DEBUG=False
 
 # Database (via PgBouncer if configured)
-DB_NAME=senex_trader
+DB_NAME=senextrader
 DB_USER=senex_user
 DB_PASSWORD=<from_ansible_vault>
 DB_HOST=postgres
@@ -585,10 +585,10 @@ Network=senex_net.network
 
 # Environment
 EnvironmentFile=/etc/senex-trader/.env
-Environment=DJANGO_SETTINGS_MODULE=senex_trader.settings.production
+Environment=DJANGO_SETTINGS_MODULE=senextrader.settings.production
 
 # Celery worker command
-Exec=celery -A senex_trader worker \
+Exec=celery -A senextrader worker \
   --queues=trading,accounts,services \
   --loglevel=info \
   --concurrency=4 \
@@ -630,12 +630,12 @@ WantedBy=default.target
 
 **Inspect active tasks**:
 ```bash
-podman exec django celery -A senex_trader inspect active
+podman exec django celery -A senextrader inspect active
 ```
 
 **Check worker stats**:
 ```bash
-podman exec django celery -A senex_trader inspect stats
+podman exec django celery -A senextrader inspect stats
 ```
 
 **Monitor queue lengths**:
@@ -662,7 +662,7 @@ PublishPort=127.0.0.1:5555:5555
 
 EnvironmentFile=/etc/senex-trader/.env
 
-Exec=celery -A senex_trader flower \
+Exec=celery -A senextrader flower \
   --port=5555 \
   --basic_auth=admin:PASSWORD
 
@@ -702,10 +702,10 @@ Network=senex_net.network
 
 # Environment
 EnvironmentFile=/etc/senex-trader/.env
-Environment=DJANGO_SETTINGS_MODULE=senex_trader.settings.production
+Environment=DJANGO_SETTINGS_MODULE=senextrader.settings.production
 
 # Celery beat command (using Django database scheduler)
-Exec=celery -A senex_trader beat \
+Exec=celery -A senextrader beat \
   --loglevel=info \
   --scheduler=django_celery_beat.schedulers:DatabaseScheduler
 

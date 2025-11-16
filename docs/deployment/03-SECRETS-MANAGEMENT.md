@@ -61,7 +61,7 @@ vault_secret_key: "GENERATED-DJANGO-SECRET-KEY"
 vault_field_encryption_key: "GENERATED-FERNET-KEY"
 
 # Database
-vault_db_name: senex_trader
+vault_db_name: senextrader
 vault_db_user: senex_user
 vault_db_password: "GENERATED-DB-PASSWORD"
 vault_db_host: postgres
@@ -188,7 +188,7 @@ Complete list of environment variables used by Senex Trader:
 
 | Variable | Description | Example |
 |----------|-------------|---------|
-| `DJANGO_SETTINGS_MODULE` | Settings module | `senex_trader.settings.production` |
+| `DJANGO_SETTINGS_MODULE` | Settings module | `senextrader.settings.production` |
 | `SECRET_KEY` | Django secret key | From vault |
 | `FIELD_ENCRYPTION_KEY` | Fernet encryption key | From vault |
 | `ALLOWED_HOSTS` | Comma-separated domains | `your-domain.com,api.your-domain.com` |
@@ -198,7 +198,7 @@ Complete list of environment variables used by Senex Trader:
 
 | Variable | Description | Example |
 |----------|-------------|---------|
-| `DB_NAME` | Database name | `senex_trader` |
+| `DB_NAME` | Database name | `senextrader` |
 | `DB_USER` | Database user | `senex_user` |
 | `DB_PASSWORD` | Database password | From vault |
 | `DB_HOST` | Database host | `postgres` (container name) |

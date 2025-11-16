@@ -402,10 +402,10 @@ for task in tasks[:5]:
 
 ```bash
 # Interactive psql session
-su - senex -c 'podman exec -it postgres psql -U senex_trader -d senex_trader'
+su - senex -c 'podman exec -it postgres psql -U senextrader -d senextrader'
 
 # One-off query
-su - senex -c 'podman exec postgres psql -U senex_trader -d senex_trader -c "
+su - senex -c 'podman exec postgres psql -U senextrader -d senextrader -c "
 SELECT COUNT(*) FROM trading_tradingsuggestion WHERE DATE(generated_at) = CURRENT_DATE;
 "'
 ```
@@ -461,18 +461,18 @@ LIMIT 10;
 |---------|-------|
 | Host | `postgres` (container name) |
 | Port | 5432 |
-| Database | `senex_trader` |
-| User | `senex_trader` |
+| Database | `senextrader` |
+| User | `senextrader` |
 | Password | (in `.env` file) |
 
 ### Backup & Restore
 
 ```bash
 # Backup
-su - senex -c 'podman exec postgres pg_dump -U senex_trader senex_trader > backup.sql'
+su - senex -c 'podman exec postgres pg_dump -U senextrader senextrader > backup.sql'
 
 # Restore
-su - senex -c 'podman exec -i postgres psql -U senex_trader senex_trader < backup.sql'
+su - senex -c 'podman exec -i postgres psql -U senextrader senextrader < backup.sql'
 ```
 
 ---
@@ -595,7 +595,7 @@ su - senex -c 'podman exec redis redis-cli FLUSHALL'
 ```
 /app/                                     # Container working directory
 ├── manage.py
-├── senex_trader/                         # Django project
+├── senextrader/                         # Django project
 │   ├── settings/
 │   │   ├── base.py                       # Base settings
 │   │   ├── production.py                 # Production settings
@@ -622,9 +622,9 @@ su - senex -c 'podman exec redis redis-cli FLUSHALL'
 | File | Location | Purpose |
 |------|----------|---------|
 | `.env` | `/opt/senex-trader/.config/containers/systemd/` | Environment variables |
-| `base.py` | `/app/senex_trader/settings/` | Django base settings |
-| `production.py` | `/app/senex_trader/settings/` | Production overrides |
-| `celery.py` | `/app/senex_trader/` | Celery configuration |
+| `base.py` | `/app/senextrader/settings/` | Django base settings |
+| `production.py` | `/app/senextrader/settings/` | Production overrides |
+| `celery.py` | `/app/senextrader/` | Celery configuration |
 
 ### Copying Files To/From Containers
 
@@ -860,10 +860,10 @@ systemctl --user -M senex@ start web.service
 su - senex -c 'podman ps | grep postgres'
 
 # 2. Test database connection
-su - senex -c 'podman exec postgres pg_isready -U senex_trader'
+su - senex -c 'podman exec postgres pg_isready -U senextrader'
 
 # 3. Check connections
-su - senex -c 'podman exec postgres psql -U senex_trader -d senex_trader -c "
+su - senex -c 'podman exec postgres psql -U senextrader -d senextrader -c "
 SELECT count(*) FROM pg_stat_activity;
 "'
 

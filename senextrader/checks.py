@@ -56,7 +56,7 @@ def check_tastytrade_oauth_urls(app_configs, **kwargs):
                         f"Current URL: '{auth_url}'"
                     ),
                     obj=settings,
-                    id="senex_trader.E001",
+                    id="senextrader.E001",
                 )
             )
 
@@ -70,7 +70,7 @@ def check_tastytrade_oauth_urls(app_configs, **kwargs):
                         f"(sandbox). Current URL: '{token_url}'"
                     ),
                     obj=settings,
-                    id="senex_trader.E002",
+                    id="senextrader.E002",
                 )
             )
 
@@ -84,7 +84,7 @@ def check_tastytrade_oauth_urls(app_configs, **kwargs):
                     "TASTYTRADE_OAUTH_CONFIG in settings"
                 ),
                 obj=settings,
-                id="senex_trader.E003",
+                id="senextrader.E003",
             )
         )
 
@@ -97,7 +97,7 @@ def check_tastytrade_oauth_urls(app_configs, **kwargs):
                     "TASTYTRADE_OAUTH_CONFIG in settings"
                 ),
                 obj=settings,
-                id="senex_trader.E004",
+                id="senextrader.E004",
             )
         )
 
@@ -121,7 +121,7 @@ def check_tastytrade_configuration(app_configs, **kwargs):
                 "TastyTrade OAuth configuration is missing",
                 hint="Ensure TASTYTRADE_OAUTH_CONFIG is defined in settings",
                 obj=settings,
-                id="senex_trader.E005",
+                id="senextrader.E005",
             )
         )
         # Return early if no config exists
@@ -136,7 +136,7 @@ def check_tastytrade_configuration(app_configs, **kwargs):
                     f"TastyTrade OAuth configuration missing required field: {field}",
                     hint=f"Add '{field}' to TASTYTRADE_OAUTH_CONFIG in settings",
                     obj=settings,
-                    id=f"senex_trader.E00{6 + required_fields.index(field)}",
+                    id=f"senextrader.E00{6 + required_fields.index(field)}",
                 )
             )
 

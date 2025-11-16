@@ -31,7 +31,7 @@ Reference these documents when:
 
 ## Related Documentation
 
-- Implementation: `/path/to/senex_trader/`
+- Implementation: `/path/to/senextrader/`
 - Product specs: `../product/`
 - Work planning: `../planning/`
 - Optimization: `../optimization/`

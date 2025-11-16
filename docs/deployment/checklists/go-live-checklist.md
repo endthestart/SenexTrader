@@ -91,7 +91,7 @@
 
 - [ ] **Celery task execution** verified:
   ```bash
-  podman exec django celery -A senex_trader inspect active
+  podman exec django celery -A senextrader inspect active
   ```
 
 - [ ] **Scheduled tasks** visible in admin:
@@ -118,8 +118,8 @@
 
 - [ ] **Database connections** stable:
   ```bash
-  podman exec postgres psql -U senex_user -d senex_trader -c \
-    "SELECT count(*) FROM pg_stat_activity WHERE datname='senex_trader';"
+  podman exec postgres psql -U senex_user -d senextrader -c \
+    "SELECT count(*) FROM pg_stat_activity WHERE datname='senextrader';"
   ```
 
 - [ ] **Redis memory** within limits:
@@ -129,7 +129,7 @@
 
 - [ ] **Celery queue** processing:
   ```bash
-  podman exec django celery -A senex_trader inspect stats
+  podman exec django celery -A senextrader inspect stats
   ```
 
 ### Performance Checks
@@ -206,7 +206,7 @@ If critical issues arise:
 
 3. **Restore from backup** (if database changes made):
    ```bash
-   /opt/scripts/restore-postgresql.sh /var/backups/postgresql/senex_trader_LATEST.backup.gz
+   /opt/scripts/restore-postgresql.sh /var/backups/postgresql/senextrader_LATEST.backup.gz
    ```
 
 4. **Revert code** (if application issues):

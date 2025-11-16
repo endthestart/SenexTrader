@@ -53,7 +53,7 @@ services:
     container_name: senex_postgres
     restart: unless-stopped
     environment:
-      POSTGRES_DB: ${DB_NAME:-senex_trader}
+      POSTGRES_DB: ${DB_NAME:-senextrader}
       POSTGRES_USER: ${DB_USER:-senex_user}
       POSTGRES_PASSWORD: ${DB_PASSWORD}
     volumes:
@@ -61,7 +61,7 @@ services:
     networks:
       - senex_network
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-senex_user} -d ${DB_NAME:-senex_trader}"]
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-senex_user} -d ${DB_NAME:-senextrader}"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -107,7 +107,7 @@ services:
       APP_BASE_URL: ${APP_BASE_URL}
 
       # Database
-      DB_NAME: ${DB_NAME:-senex_trader}
+      DB_NAME: ${DB_NAME:-senextrader}
       DB_USER: ${DB_USER:-senex_user}
       DB_PASSWORD: ${DB_PASSWORD}
       DB_HOST: postgres
@@ -138,7 +138,7 @@ services:
       # Monitoring (optional)
       SENTRY_DSN: ${SENTRY_DSN:-}
     volumes:
-      - logs:/var/log/senex_trader
+      - logs:/var/log/senextrader
       - staticfiles:/app/staticfiles
     networks:
       - senex_network
@@ -172,7 +172,7 @@ services:
       FIELD_ENCRYPTION_KEY: ${FIELD_ENCRYPTION_KEY}
 
       # Database
-      DB_NAME: ${DB_NAME:-senex_trader}
+      DB_NAME: ${DB_NAME:-senextrader}
       DB_USER: ${DB_USER:-senex_user}
       DB_PASSWORD: ${DB_PASSWORD}
       DB_HOST: postgres
@@ -188,7 +188,7 @@ services:
       TASTYTRADE_CLIENT_SECRET: ${TASTYTRADE_CLIENT_SECRET}
       TASTYTRADE_BASE_URL: ${TASTYTRADE_BASE_URL:-}
     volumes:
-      - logs:/var/log/senex_trader
+      - logs:/var/log/senextrader
     networks:
       - senex_network
     depends_on:
@@ -215,7 +215,7 @@ services:
       FIELD_ENCRYPTION_KEY: ${FIELD_ENCRYPTION_KEY}
 
       # Database
-      DB_NAME: ${DB_NAME:-senex_trader}
+      DB_NAME: ${DB_NAME:-senextrader}
       DB_USER: ${DB_USER:-senex_user}
       DB_PASSWORD: ${DB_PASSWORD}
       DB_HOST: postgres
@@ -231,7 +231,7 @@ services:
       TASTYTRADE_CLIENT_SECRET: ${TASTYTRADE_CLIENT_SECRET}
       TASTYTRADE_BASE_URL: ${TASTYTRADE_BASE_URL:-}
     volumes:
-      - logs:/var/log/senex_trader
+      - logs:/var/log/senextrader
       - celerybeat_schedule:/app
     networks:
       - senex_network
@@ -300,7 +300,7 @@ services:
     command: python manage.py runserver 0.0.0.0:8000
     environment:
       ENVIRONMENT: development
-      DJANGO_SETTINGS_MODULE: senex_trader.settings.development
+      DJANGO_SETTINGS_MODULE: senextrader.settings.development
       SECRET_KEY: django-insecure-dev-key-for-local-only
       FIELD_ENCRYPTION_KEY: dev-encryption-key-local-only
       ALLOWED_HOSTS: localhost,127.0.0.1
@@ -325,7 +325,7 @@ services:
       - "8000:8000"  # Expose for direct access
     volumes:
       - .:/app  # Mount source code for live reload
-      - ./logs:/var/log/senex_trader
+      - ./logs:/var/log/senextrader
     depends_on:
       - redis
     healthcheck:
@@ -337,10 +337,10 @@ services:
       context: .
       dockerfile: docker/Dockerfile.dev
     container_name: senex_celery_worker_dev
-    command: celery -A senex_trader worker --loglevel=debug --queues=celery,accounts,trading
+    command: celery -A senextrader worker --loglevel=debug --queues=celery,accounts,trading
     environment:
       ENVIRONMENT: development
-      DJANGO_SETTINGS_MODULE: senex_trader.settings.development
+      DJANGO_SETTINGS_MODULE: senextrader.settings.development
       SECRET_KEY: django-insecure-dev-key-for-local-only
       FIELD_ENCRYPTION_KEY: dev-encryption-key-local-only
 
@@ -355,7 +355,7 @@ services:
       TASTYTRADE_BASE_URL: https://api.cert.tastyworks.com
     volumes:
       - .:/app  # Mount source code for live reload
-      - ./logs:/var/log/senex_trader
+      - ./logs:/var/log/senextrader
     depends_on:
       - redis
 
@@ -365,10 +365,10 @@ services:
       context: .
       dockerfile: docker/Dockerfile.dev
     container_name: senex_celery_beat_dev
-    command: celery -A senex_trader beat --loglevel=debug
+    command: celery -A senextrader beat --loglevel=debug
     environment:
       ENVIRONMENT: development
-      DJANGO_SETTINGS_MODULE: senex_trader.settings.development
+      DJANGO_SETTINGS_MODULE: senextrader.settings.development
       SECRET_KEY: django-insecure-dev-key-for-local-only
       FIELD_ENCRYPTION_KEY: dev-encryption-key-local-only
 
@@ -383,7 +383,7 @@ services:
       TASTYTRADE_BASE_URL: https://api.cert.tastyworks.com
     volumes:
       - .:/app  # Mount source code for live reload
-      - ./logs:/var/log/senex_trader
+      - ./logs:/var/log/senextrader
     depends_on:
       - redis
 ```
@@ -499,7 +499,7 @@ volumes:
 #### PostgreSQL
 ```yaml
 healthcheck:
-  test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-senex_user} -d ${DB_NAME:-senex_trader}"]
+  test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-senex_user} -d ${DB_NAME:-senextrader}"]
   interval: 10s
   timeout: 5s
   retries: 5
@@ -603,7 +603,7 @@ volumes:
 #### Application Logs
 ```yaml
 volumes:
-  - logs:/var/log/senex_trader
+  - logs:/var/log/senextrader
 ```
 **Purpose**: Centralized logging across all services
 
@@ -649,7 +649,7 @@ networks:
 
 **Example Connection String**:
 ```
-postgresql://senex_user:password@postgres:5432/senex_trader
+postgresql://senex_user:password@postgres:5432/senextrader
 ```
 
 ---
@@ -942,20 +942,20 @@ podman-compose up -d
 
 ```bash
 # Backup to file
-podman-compose exec -T postgres pg_dump -U senex_user senex_trader > backup.sql
+podman-compose exec -T postgres pg_dump -U senex_user senextrader > backup.sql
 
 # Backup with compression
-podman-compose exec -T postgres pg_dump -U senex_user senex_trader | gzip > backup.sql.gz
+podman-compose exec -T postgres pg_dump -U senex_user senextrader | gzip > backup.sql.gz
 ```
 
 ### Restore PostgreSQL
 
 ```bash
 # Restore from file
-cat backup.sql | podman-compose exec -T postgres psql -U senex_user senex_trader
+cat backup.sql | podman-compose exec -T postgres psql -U senex_user senextrader
 
 # Restore from compressed
-gunzip -c backup.sql.gz | podman-compose exec -T postgres psql -U senex_user senex_trader
+gunzip -c backup.sql.gz | podman-compose exec -T postgres psql -U senex_user senextrader
 ```
 
 ### Backup Volumes
@@ -1005,7 +1005,7 @@ services:
 ### 3. Scan Images for Vulnerabilities
 
 ```bash
-podman scout cves senex_trader:latest
+podman scout cves senextrader:latest
 ```
 
 ### 4. Use Read-Only Root Filesystem
@@ -1016,7 +1016,7 @@ services:
     read_only: true
     tmpfs:
       - /tmp
-      - /var/log/senex_trader
+      - /var/log/senextrader
 ```
 
 ### 5. Drop Capabilities

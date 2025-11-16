@@ -272,19 +272,19 @@ podman-compose --env-file .env.production up -d
 
 **Basic Build**:
 ```bash
-podman build -t senex_trader:latest .
+podman build -t senextrader:latest .
 ```
 
 **Multi-Architecture Build**:
 ```bash
-podman build --platform linux/amd64,linux/arm64 -t senex_trader:latest .
+podman build --platform linux/amd64,linux/arm64 -t senextrader:latest .
 ```
 
 **Build with Secrets** (BuildKit syntax):
 ```bash
 podman build \
   --secret id=tastytrade_secret,src=.secrets/tastytrade.key \
-  -t senex_trader:latest .
+  -t senextrader:latest .
 ```
 
 ### Build Cache
@@ -292,7 +292,7 @@ podman build \
 **Local Cache**:
 ```bash
 # Enable layer caching
-podman build --layers -t senex_trader:latest .
+podman build --layers -t senextrader:latest .
 ```
 
 **Cache Export/Import**:
@@ -301,7 +301,7 @@ podman build --layers -t senex_trader:latest .
 
 ```bash
 # Recommended: Use --layers for built-in caching
-podman build --layers -t senex_trader:latest .
+podman build --layers -t senextrader:latest .
 
 # Advanced: Export/import cache (Podman 4.4+ only)
 podman build --cache-to type=local,dest=/tmp/buildcache .
@@ -326,7 +326,7 @@ podman pull quay.io/podman/stable
 
 **Private Registry**:
 ```bash
-podman pull myregistry.com/senex_trader:latest
+podman pull myregistry.com/senextrader:latest
 ```
 
 ### Pushing Images
@@ -340,16 +340,16 @@ podman login myregistry.com
 
 **Push Image**:
 ```bash
-podman push myregistry.com/senex_trader:latest
+podman push myregistry.com/senextrader:latest
 ```
 
 **Push Multiple Tags**:
 ```bash
-podman tag senex_trader:latest myregistry.com/senex_trader:1.0.0
-podman tag senex_trader:latest myregistry.com/senex_trader:latest
+podman tag senextrader:latest myregistry.com/senextrader:1.0.0
+podman tag senextrader:latest myregistry.com/senextrader:latest
 
-podman push myregistry.com/senex_trader:1.0.0
-podman push myregistry.com/senex_trader:latest
+podman push myregistry.com/senextrader:1.0.0
+podman push myregistry.com/senextrader:latest
 ```
 
 ---
@@ -370,7 +370,7 @@ podman push myregistry.com/senex_trader:latest
 **Single Container**:
 ```bash
 # Start container
-podman run -d --name senex_web senex_trader:latest
+podman run -d --name senex_web senextrader:latest
 
 # Generate systemd unit file
 podman generate systemd --name senex_web --files --new
@@ -443,7 +443,7 @@ ExecStart=/usr/bin/podman run \
     --name senex_web \
     -d \
     --env-file /etc/senex-trader/.env \
-    senex_trader:latest
+    senextrader:latest
 ExecStop=/usr/bin/podman stop --ignore --cidfile=%t/%n.ctr-id
 ExecStopPost=/usr/bin/podman rm -f --ignore --cidfile=%t/%n.ctr-id
 Type=notify
@@ -492,7 +492,7 @@ podman run -d --pod senex-trader \
   --name web \
   -e DB_HOST=localhost \
   -e REDIS_URL=redis://localhost:6379/0 \
-  senex_trader:latest
+  senextrader:latest
 ```
 
 **Benefits in Pod**:
@@ -639,8 +639,8 @@ loginctl enable-linger senex-app
 
 ```bash
 # Clone repository
-git clone https://github.com/yourusername/senex_trader.git
-cd senex_trader
+git clone https://github.com/yourusername/senextrader.git
+cd senextrader
 
 # Create .env file
 cp .env.production.example .env.production

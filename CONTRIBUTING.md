@@ -17,7 +17,7 @@ Before contributing, please:
 1. **Clone the repository**
    ```bash
    git clone <repository-url>
-   cd senex_trader
+   cd senextrader
    ```
 
 2. **Set up Python environment**

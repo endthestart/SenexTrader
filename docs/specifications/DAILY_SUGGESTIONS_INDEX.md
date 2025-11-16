@@ -50,7 +50,7 @@ This documentation suite provides the comprehensive plan and implementation deta
 
 ### Epic 24 Planning Documentation
 
-**Location**: `/path/to/senex_trader_docs/planning/24-daily-suggestions/`
+**Location**: `/path/to/senextrader_docs/planning/24-daily-suggestions/`
 
 **Files**:
 - `README.md` - Epic overview and task status (ALL COMPLETE ✅)
@@ -62,7 +62,7 @@ This documentation suite provides the comprehensive plan and implementation deta
 - `task-004-enhanced-email-template.md` - Complete
 - `task-005-testing-edge-cases.md` - Complete
 
-## Files Modified in senex_trader Repository
+## Files Modified in senextrader Repository
 
 1. **`services/strategy_selector.py`** - Added suggestion_mode + a_select_top_suggestions()
 2. **`services/strategies/credit_spread_base.py`** - Added suggestion_mode parameter
@@ -155,12 +155,12 @@ RECOMMENDED TRADES (Top 3)
 
 ## Related Documentation
 
-### In senex_trader Repository
+### In senextrader Repository
 - `AI.md` - Project architecture and conventions
 - `CLAUDE.md` - AI assistant guidelines (strict no-legacy-code policy)
 - `AGENTS.md` - Specialized agents
 
-### In senex_trader_docs Repository
+### In senextrader_docs Repository
 - `planning/24-daily-suggestions/` - Complete epic planning and status
 - `specifications/` (this directory) - Technical specifications
 - `planning/05-market-indicators/` - Market analysis infrastructure
@@ -396,14 +396,14 @@ RECOMMENDED TRADES (Top 3)
 
 ## Related Documentation
 
-### Internal (senex_trader repo)
+### Internal (senextrader repo)
 - [`AI.md`](../AI.md) - Project architecture and conventions
 - [`CLAUDE.md`](../CLAUDE.md) - AI assistant guidelines
 - [`AGENTS.md`](../AGENTS.md) - Specialized agents
 - This directory (`docs/`) - Quick reference documentation
 
-### Epic 24 Official Documentation (senex_trader_docs repo)
-**Primary Location**: `/path/to/senex_trader_docs/planning/24-daily-suggestions/`
+### Epic 24 Official Documentation (senextrader_docs repo)
+**Primary Location**: `/path/to/senextrader_docs/planning/24-daily-suggestions/`
 
 Epic documentation has been migrated to the proper location:
 - `README.md` - Epic overview and summary
@@ -414,7 +414,7 @@ Epic documentation has been migrated to the proper location:
 - `task-004-enhanced-email-template.md` - Implementation task 4
 - `task-005-testing-edge-cases.md` - Implementation task 5
 
-### Related Epics (senex_trader_docs repo)
+### Related Epics (senextrader_docs repo)
 - `planning/05-market-indicators/` - Market analysis infrastructure (complete)
 - `planning/22-strategy-expansion/` - Strategy expansion epic (in progress)
 - `planning/23-portfolio-hedging/` - Portfolio hedging strategies

@@ -482,7 +482,7 @@ The profit target management system is **performant at current scale**. All iden
 - `services/notification_service.py:26-57` - Notification service
 - `services/validation/profit_target_validator.py:32-35` - MAX_TARGETS constant
 - `docs/PROFIT_TARGET_LIFECYCLE.md` - Architecture documentation
-- `/path/to/senex_trader_docs/planning/profit-management/CODE_REVIEW.md` - Performance issues mention
+- `/path/to/senextrader_docs/planning/profit-management/CODE_REVIEW.md` - Performance issues mention
 
 ---
 

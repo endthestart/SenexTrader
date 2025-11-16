@@ -83,7 +83,7 @@ CONTAINER_MODE = os.environ.get("CONTAINER_MODE", "false").lower() == "true"
 DATABASES = {
     "default": {
         "ENGINE": "django.db.backends.postgresql",
-        "NAME": os.environ.get("DB_NAME", "senex_trader"),
+        "NAME": os.environ.get("DB_NAME", "senextrader"),
         "USER": os.environ.get("DB_USER", "senex_user"),
         "PASSWORD": os.environ.get("DB_PASSWORD"),
         "HOST": os.environ.get("DB_HOST", "localhost"),
@@ -173,7 +173,7 @@ CHANNEL_LAYERS = {
 }
 
 # Production WebSocket settings
-ASGI_APPLICATION = "senex_trader.asgi.application"
+ASGI_APPLICATION = "senextrader.asgi.application"
 
 # ================================================================================
 # STATIC AND MEDIA FILES
@@ -248,27 +248,27 @@ if CONTAINER_MODE:
     LOGGING["root"]["handlers"] = ["console"]
     LOGGING["root"]["level"] = "INFO"
 else:
-    # Bare-metal mode: Log to files in /var/log/senex_trader
-    PRODUCTION_LOG_DIR = Path("/var/log/senex_trader")
+    # Bare-metal mode: Log to files in /var/log/senextrader
+    PRODUCTION_LOG_DIR = Path("/var/log/senextrader")
     PRODUCTION_LOG_DIR.mkdir(parents=True, exist_ok=True)
 
     # Override file paths for production
-    LOGGING["handlers"]["file_structured"]["filename"] = "/var/log/senex_trader/application.log"
+    LOGGING["handlers"]["file_structured"]["filename"] = "/var/log/senextrader/application.log"
     LOGGING["handlers"]["file_structured"]["maxBytes"] = 50 * 1024 * 1024  # 50MB
     LOGGING["handlers"]["file_structured"]["backupCount"] = 10
 
-    LOGGING["handlers"]["error_file"]["filename"] = "/var/log/senex_trader/errors.log"
+    LOGGING["handlers"]["error_file"]["filename"] = "/var/log/senextrader/errors.log"
     LOGGING["handlers"]["error_file"]["maxBytes"] = 50 * 1024 * 1024  # 50MB
     LOGGING["handlers"]["error_file"]["backupCount"] = 10
 
-    LOGGING["handlers"]["trading_file"]["filename"] = "/var/log/senex_trader/trading.log"
+    LOGGING["handlers"]["trading_file"]["filename"] = "/var/log/senextrader/trading.log"
     LOGGING["handlers"]["trading_file"]["maxBytes"] = 100 * 1024 * 1024  # 100MB
     LOGGING["handlers"]["trading_file"]["backupCount"] = 20
 
     # Add security file handler for production
     LOGGING["handlers"]["security_file"] = {
         "class": "logging.handlers.RotatingFileHandler",
-        "filename": "/var/log/senex_trader/security.log",
+        "filename": "/var/log/senextrader/security.log",
         "maxBytes": 50 * 1024 * 1024,  # 50MB
         "backupCount": 10,
         "formatter": "structured",

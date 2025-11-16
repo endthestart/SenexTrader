@@ -26,7 +26,7 @@ Reference these documents to understand:
 
 ## Related Documentation
 
-- Implementation: `/path/to/senex_trader/services/risk_manager.py`
+- Implementation: `/path/to/senextrader/services/risk_manager.py`
 - Product specs: `../product/`
 - Architecture: `../architecture/`
 

@@ -21,20 +21,20 @@ help:
 	@printf "\n"
 	@printf "$(YELLOW)Requirements:$(NC)\n"
 	@printf "  - Inventory: config/ansible/inventory/hosts.yml\n"
-	@printf "  - Build config: .senex_trader.json (copy from .senex_trader.json.example)\n"
+	@printf "  - Build config: .senextrader.json (copy from .senextrader.json.example)\n"
 
 setup:
 	@printf "$(CYAN)Validating Senex Trader Configuration...$(NC)\n"
 	@test -f "config/ansible/inventory/hosts.yml" || (printf "$(YELLOW)ERROR: Ansible inventory not found at config/ansible/inventory/hosts.yml$(NC)\n" && exit 1)
-	@test -f ".senex_trader.json" || (printf "$(YELLOW)ERROR: .senex_trader.json not found. Copy from .senex_trader.json.example$(NC)\n" && exit 1)
+	@test -f ".senextrader.json" || (printf "$(YELLOW)ERROR: .senextrader.json not found. Copy from .senextrader.json.example$(NC)\n" && exit 1)
 	@printf "$(GREEN)✓ Configuration validated$(NC)\n"
 	@printf "$(GREEN)✓ Inventory: config/ansible/inventory/hosts.yml$(NC)\n"
-	@printf "$(GREEN)✓ Build config: .senex_trader.json$(NC)\n"
+	@printf "$(GREEN)✓ Build config: .senextrader.json$(NC)\n"
 
 check-config: setup
 	@printf "$(CYAN)Current Configuration:$(NC)\n"
 	@printf "  Inventory:   config/ansible/inventory/hosts.yml\n"
-	@printf "  Build config: .senex_trader.json\n"
+	@printf "  Build config: .senextrader.json\n"
 	@printf "\n"
 	@printf "$(CYAN)Available Hosts:$(NC)\n"
 	@cd deployment/ansible && ansible-inventory -i ../../config/ansible/inventory --list -y | head -20

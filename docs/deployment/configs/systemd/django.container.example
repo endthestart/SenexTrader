@@ -44,7 +44,7 @@ ReadOnlyRootfs=false
 NoNewPrivileges=true
 
 # Command to run
-Exec=daphne -b 0.0.0.0 -p 8000 --access-log - --proxy-headers senex_trader.asgi:application
+Exec=daphne -b 0.0.0.0 -p 8000 --access-log - --proxy-headers senextrader.asgi:application
 
 [Service]
 Restart=always

@@ -150,7 +150,7 @@ EOF
 
 # all.yml (non-sensitive)
 cat > inventory/production/group_vars/all.yml << EOF
-app_name: senex_trader
+app_name: senextrader
 domain_name: your-domain.com
 django_image: YOUR_REGISTRY/senex-trader
 django_version: latest
@@ -276,7 +276,7 @@ systemctl --user start celery-worker.service
 systemctl --user start celery-beat.service
 
 # Verify workers
-podman exec django celery -A senex_trader inspect active
+podman exec django celery -A senextrader inspect active
 
 # Check scheduled tasks
 podman exec django python manage.py shell << EOF

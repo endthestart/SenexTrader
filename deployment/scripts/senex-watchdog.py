@@ -28,7 +28,7 @@ MAX_FAILURES = 3  # consecutive failures before restart
 SERVICE_NAME = "web.service"
 SERVICE_USER = "senex"
 STATE_FILE = "/var/lib/senex-watchdog/failures.txt"
-LOG_FILE = "/var/log/senex_trader/watchdog.log"
+LOG_FILE = "/var/log/senextrader/watchdog.log"
 
 
 def log(message: str, level: str = "INFO"):

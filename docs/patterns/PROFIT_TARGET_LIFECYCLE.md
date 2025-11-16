@@ -536,9 +536,9 @@ position.profit_target_details = {
 
 ### Planning Documents
 
-- `/path/to/senex_trader_docs/planning/profit-management/PHASE_3_PROFIT_TARGET_MONITORING.md`
-- `/path/to/senex_trader_docs/planning/profit-management/CODE_REVIEW.md`
-- `/path/to/senex_trader_docs/planning/profit-management/IMPLEMENTATION_CHECKLIST.md`
+- `/path/to/senextrader_docs/planning/profit-management/PHASE_3_PROFIT_TARGET_MONITORING.md`
+- `/path/to/senextrader_docs/planning/profit-management/CODE_REVIEW.md`
+- `/path/to/senextrader_docs/planning/profit-management/IMPLEMENTATION_CHECKLIST.md`
 
 ### Related Commits
 
@@ -561,4 +561,4 @@ This architecture maximizes realized P&L opportunities while maintaining safety 
 
 ---
 
-*For implementation details, see Phase 3-6 planning documents in `/path/to/senex_trader_docs/planning/profit-management/`*
+*For implementation details, see Phase 3-6 planning documents in `/path/to/senextrader_docs/planning/profit-management/`*

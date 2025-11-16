@@ -55,8 +55,8 @@ sudo dnf install -y git python3.12 podman podman-compose
 cd ~/Development  # or wherever you keep projects
 
 # Clone the repository
-git clone https://github.com/yourusername/senex_trader.git
-cd senex_trader
+git clone https://github.com/endthestart/senextrader.git
+cd senextrader
 
 # Check what branch you're on
 git branch
@@ -139,7 +139,7 @@ Successfully tagged redis:7-alpine
 Building web
 Step 1/15 : FROM python:3.12-slim-bookworm
 ...
-Successfully tagged senex_trader:dev
+Successfully tagged senextrader:dev
 Building celery_worker
 ...
 Build complete!
@@ -278,7 +278,7 @@ You now have Senex Trader running locally in Docker containers!
 
 ```bash
 # Navigate to project
-cd ~/Development/senex_trader
+cd ~/Development/senextrader
 
 # Start services
 podman-compose -f docker-compose.yml -f docker-compose.dev.yml up -d
@@ -335,7 +335,7 @@ podman-compose exec web python manage.py makemigrations
 podman-compose exec web python manage.py migrate
 
 # Access PostgreSQL directly (dev uses SQLite, but for reference)
-podman-compose exec postgres psql -U senex_user -d senex_trader
+podman-compose exec postgres psql -U senex_user -d senextrader
 ```
 
 ### Viewing Logs
@@ -429,10 +429,10 @@ exit
 
 ```bash
 # View active tasks
-podman-compose exec celery_worker celery -A senex_trader inspect active
+podman-compose exec celery_worker celery -A senextrader inspect active
 
 # View scheduled tasks
-podman-compose exec celery_beat celery -A senex_trader inspect scheduled
+podman-compose exec celery_beat celery -A senextrader inspect scheduled
 
 # Restart worker (picks up code changes)
 podman-compose restart celery_worker
@@ -542,7 +542,7 @@ curl http://127.0.0.1:8000/health/
 3. **Test database issues**
    ```bash
    # Django creates test database automatically, but may need permissions
-   # Check test settings in senex_trader/settings/development.py
+   # Check test settings in senextrader/settings/development.py
    ```
 
 ### Build Fails
@@ -608,7 +608,7 @@ code .
 **Python interpreter**: Point to Python inside container
 1. Ctrl+Shift+P → "Python: Select Interpreter"
 2. Choose "Docker" option
-3. Select `senex_trader:dev`
+3. Select `senextrader:dev`
 
 ### PyCharm Integration
 
@@ -743,7 +743,7 @@ podman-compose exec web python manage.py my_command
 Now that you're set up:
 
 1. **Read the codebase**:
-   - `senex_trader/` - Django project settings
+   - `senextrader/` - Django project settings
    - `accounts/` - User authentication
    - `trading/` - Trading logic
    - `services/` - Business logic
@@ -772,12 +772,12 @@ Now that you're set up:
 
 ```bash
 # Senex Trader shortcuts
-alias st-start='cd ~/Development/senex_trader && podman-compose -f docker-compose.yml -f docker-compose.dev.yml up -d'
-alias st-stop='cd ~/Development/senex_trader && podman-compose down'
-alias st-logs='cd ~/Development/senex_trader && podman-compose logs -f'
-alias st-shell='cd ~/Development/senex_trader && podman-compose exec web python manage.py shell'
-alias st-test='cd ~/Development/senex_trader && podman-compose exec web pytest'
-alias st-migrate='cd ~/Development/senex_trader && podman-compose exec web python manage.py migrate'
+alias st-start='cd ~/Development/senextrader && podman-compose -f docker-compose.yml -f docker-compose.dev.yml up -d'
+alias st-stop='cd ~/Development/senextrader && podman-compose down'
+alias st-logs='cd ~/Development/senextrader && podman-compose logs -f'
+alias st-shell='cd ~/Development/senextrader && podman-compose exec web python manage.py shell'
+alias st-test='cd ~/Development/senextrader && podman-compose exec web pytest'
+alias st-migrate='cd ~/Development/senextrader && podman-compose exec web python manage.py migrate'
 
 # Docker/Podman
 alias docker='podman'

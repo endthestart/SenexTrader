@@ -43,7 +43,7 @@ This is the most common source of confusion for AI assistants working on this co
 ## Full Documentation
 
 For complete technical details, see:
-- **[senex_trader_docs/specifications/SENEX_TRIDENT_STRATEGY_DEFINITION.md](../senex_trader_docs/specifications/SENEX_TRIDENT_STRATEGY_DEFINITION.md)**
+- **[senextrader_docs/specifications/SENEX_TRIDENT_STRATEGY_DEFINITION.md](../senextrader_docs/specifications/SENEX_TRIDENT_STRATEGY_DEFINITION.md)**
 
 ## Code References
 

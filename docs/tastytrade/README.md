@@ -26,7 +26,7 @@ Reference these documents when:
 
 ## Related Documentation
 
-- Implementation: `/path/to/senex_trader/services/brokers/`
+- Implementation: `/path/to/senextrader/services/brokers/`
 - SDK patterns: `../optimization/TASTYTRADE_SDK_ADOPTION_OPPORTUNITIES.md`
 - Concepts: `../tastytrade_concepts_strategies/`
 

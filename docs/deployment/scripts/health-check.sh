@@ -59,7 +59,7 @@ echo ""
 
 # Check Celery workers
 echo "5. Celery Workers:"
-ACTIVE_WORKERS=$(podman exec django celery -A senex_trader inspect active 2>/dev/null | grep -c "celery@" || echo "0")
+ACTIVE_WORKERS=$(podman exec django celery -A senextrader inspect active 2>/dev/null | grep -c "celery@" || echo "0")
 if [ "$ACTIVE_WORKERS" -gt 0 ]; then
     echo -e "  ${GREEN}✓${NC} Celery workers active: $ACTIVE_WORKERS"
 else

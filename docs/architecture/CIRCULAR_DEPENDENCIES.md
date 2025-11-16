@@ -521,7 +521,7 @@ def test_no_circular_imports():
 
 ### Investigation: Unused `trading.css` File
 
-**File**: `/path/to/senex_trader/static/css/trading.css`
+**File**: `/path/to/senextrader/static/css/trading.css`
 
 **Findings**:
 1. ✅ **File exists** with 344 lines of comprehensive trading interface styles
@@ -566,7 +566,7 @@ def test_no_circular_imports():
 5. If specific styles are needed later, can extract relevant pieces from this file
 
 **Action Items**:
-- [ ] Delete `/path/to/senex_trader/static/css/trading.css`
+- [ ] Delete `/path/to/senextrader/static/css/trading.css`
 - [ ] Verify trading page still displays correctly
 - [ ] If any styles are needed, add them to `dark-theme.css` instead
 
@@ -574,7 +574,7 @@ def test_no_circular_imports():
 
 ### Investigation: Dead Code in `strategy_selector.py`
 
-**File**: `/path/to/senex_trader/services/strategy_selector.py`
+**File**: `/path/to/senextrader/services/strategy_selector.py`
 **Lines**: 68-90
 **Property**: `StrategySelector.streamer`
 

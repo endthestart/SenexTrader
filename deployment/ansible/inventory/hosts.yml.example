@@ -36,7 +36,7 @@ all:
         app_directory: /opt/senex-trader    # Where to install the application
 
         # Database Configuration (password goes in vault)
-        db_name: senex_trader
+        db_name: senextrader
         db_user: senex_user
 
         # Optional: SSL/TLS (Let's Encrypt)
@@ -67,7 +67,7 @@ all:
         ws_allowed_origins: "https://staging.example.com"
         app_user: senex
         app_directory: /opt/senex-trader
-        db_name: senex_trader_staging
+        db_name: senextrader_staging
         db_user: senex_user_staging
         enable_ssl: false
         backup_enabled: false

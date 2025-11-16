@@ -20,8 +20,8 @@ rm -f celerybeat-schedule.dir celerybeat-schedule-shm celerybeat-schedule-wal
 # Listen to all application queues: default celery queue + routed queues
 QUEUES="${CELERY_QUEUES:-celery,accounts,trading}"
 
-WORKER_CMD=(celery -A senex_trader worker --loglevel=info --queues="$QUEUES")
-BEAT_CMD=(celery -A senex_trader beat --loglevel=info)
+WORKER_CMD=(celery -A senextrader worker --loglevel=info --queues="$QUEUES")
+BEAT_CMD=(celery -A senextrader beat --loglevel=info)
 
 echo "Starting Celery worker (queues: $QUEUES)"
 echo "Starting Celery beat scheduler"

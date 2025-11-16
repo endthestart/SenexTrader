@@ -48,7 +48,7 @@ The **Automated Daily Trading Cycle** is a Celery periodic task that automatical
 
 ### Celery Beat Schedule
 
-**File**: `senex_trader/settings/base.py:153-159`
+**File**: `senextrader/settings/base.py:153-159`
 
 ```python
 "automated-daily-trade-cycle": {
@@ -497,7 +497,7 @@ adjusted = max(adjusted, natural_credit)
 
 ### System-Level Settings
 
-**File**: `senex_trader/settings/base.py`
+**File**: `senextrader/settings/base.py`
 
 | Setting | Value | Purpose |
 |---------|-------|---------|
@@ -566,7 +566,7 @@ ssh root@your-domain.com
 su - senex -c 'podman ps | grep celery_beat'
 
 # Check beat schedule
-su - senex -c 'podman exec celery_beat celery -A senex_trader inspect scheduled'
+su - senex -c 'podman exec celery_beat celery -A senextrader inspect scheduled'
 ```
 
 #### 2. View Logs
@@ -705,7 +705,7 @@ for trade in trades:
 systemctl --user -M senex@ status celery-beat.service
 
 # Verify schedule
-podman exec celery_beat celery -A senex_trader inspect scheduled
+podman exec celery_beat celery -A senextrader inspect scheduled
 
 # Check account settings
 podman exec web python manage.py shell -c "

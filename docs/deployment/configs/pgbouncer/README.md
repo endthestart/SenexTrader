@@ -50,7 +50,7 @@ echo "\"${DB_USER}\" \"md5${HASH}\"" | sudo tee -a /etc/pgbouncer/userlist.txt
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.postgresql',
-        'NAME': 'senex_trader',
+        'NAME': 'senextrader',
         'USER': 'senex_user',
         'PASSWORD': os.environ['DB_PASSWORD'],
         'HOST': 'localhost',
@@ -87,7 +87,7 @@ sudo journalctl -u pgbouncer -f
 
 ```bash
 # Connect through PgBouncer
-psql -h localhost -p 6432 -U senex_user -d senex_trader
+psql -h localhost -p 6432 -U senex_user -d senextrader
 
 # Should connect successfully
 ```
@@ -119,7 +119,7 @@ SHOW CONFIG;
 ```
  database     | user       | cl_active | cl_waiting | sv_active | sv_idle | sv_used | sv_tested | sv_login | maxwait | pool_mode
 --------------+------------+-----------+------------+-----------+---------+---------+-----------+----------+---------+-----------
- senex_trader | senex_user |         5 |          0 |         3 |       2 |       0 |         0 |        0 |       0 | transaction
+ senextrader | senex_user |         5 |          0 |         3 |       2 |       0 |         0 |        0 |       0 | transaction
 ```
 
 **Key metrics**:

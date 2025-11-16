@@ -21,13 +21,13 @@ Senex Trader requires a multi-container architecture with five services orchestr
 - `postgres_data:/var/lib/postgresql/data` (persistent storage)
 
 **Environment Variables**:
-- `POSTGRES_DB=senex_trader`
+- `POSTGRES_DB=senextrader`
 - `POSTGRES_USER=senex_user`
 - `POSTGRES_PASSWORD=${DB_PASSWORD}` (from secret)
 
 **Health Check**:
 ```bash
-pg_isready -U senex_user -d senex_trader
+pg_isready -U senex_user -d senextrader
 ```
 
 **Resource Recommendations**:
@@ -74,18 +74,18 @@ redis-cli ping
 
 **Purpose**: HTTP/WebSocket server for user interface and API
 
-**Image**: `senex_trader:latest` (custom build)
+**Image**: `senextrader:latest` (custom build)
 
 **Exposed Ports**:
 - `8000:8000` (HTTP/WebSocket - behind reverse proxy in production)
 
 **Volumes**:
-- `logs:/var/log/senex_trader` (application logs)
+- `logs:/var/log/senextrader` (application logs)
 - `staticfiles:/app/staticfiles` (optional - collected static files)
 
 **Command**:
 ```bash
-daphne -b 0.0.0.0 -p 8000 senex_trader.asgi:application
+daphne -b 0.0.0.0 -p 8000 senextrader.asgi:application
 ```
 
 **Dependencies**:
@@ -111,16 +111,16 @@ curl -f http://localhost:8000/health/ || exit 1
 
 **Purpose**: Background task execution (order monitoring, position sync, reconciliation)
 
-**Image**: `senex_trader:latest` (same as web)
+**Image**: `senextrader:latest` (same as web)
 
 **Exposed Ports**: None
 
 **Volumes**:
-- `logs:/var/log/senex_trader` (application logs)
+- `logs:/var/log/senextrader` (application logs)
 
 **Command**:
 ```bash
-celery -A senex_trader worker \
+celery -A senextrader worker \
   --loglevel=info \
   --queues=celery,accounts,trading \
   --concurrency=4 \
@@ -133,7 +133,7 @@ celery -A senex_trader worker \
 
 **Health Check**:
 ```bash
-celery -A senex_trader inspect ping -d celery@$HOSTNAME
+celery -A senextrader inspect ping -d celery@$HOSTNAME
 ```
 
 **Environment Variables**: See `environment-variables.md`
@@ -155,17 +155,17 @@ celery -A senex_trader inspect ping -d celery@$HOSTNAME
 
 **Purpose**: Schedule periodic tasks (position sync, reconciliation, trading cycles)
 
-**Image**: `senex_trader:latest` (same as web)
+**Image**: `senextrader:latest` (same as web)
 
 **Exposed Ports**: None
 
 **Volumes**:
-- `logs:/var/log/senex_trader` (application logs)
+- `logs:/var/log/senextrader` (application logs)
 - `celerybeat_schedule:/app` (scheduler state persistence)
 
 **Command**:
 ```bash
-celery -A senex_trader beat \
+celery -A senextrader beat \
   --loglevel=info \
   --pidfile=/tmp/celerybeat.pid \
   --schedule=/app/celerybeat-schedule
@@ -366,7 +366,7 @@ celery -A senex_trader beat \
 
 **Type**: Named volume
 
-**Mount Point**: `/var/log/senex_trader`
+**Mount Point**: `/var/log/senextrader`
 
 **Purpose**: Structured application logs from all services
 
@@ -424,7 +424,7 @@ celery -A senex_trader beat \
 **Django Web → PostgreSQL**:
 - Connection pool (CONN_MAX_AGE=600 seconds)
 - SSL required in production (`sslmode=require`)
-- Connection string: `postgresql://senex_user:${DB_PASSWORD}@postgres:5432/senex_trader`
+- Connection string: `postgresql://senex_user:${DB_PASSWORD}@postgres:5432/senextrader`
 
 **Celery Worker → PostgreSQL**:
 - Same connection pool settings as web
@@ -541,7 +541,7 @@ celery -A senex_trader beat \
 
 **PostgreSQL**:
 ```bash
-pg_isready -U senex_user -d senex_trader
+pg_isready -U senex_user -d senextrader
 ```
 
 **Redis**:
@@ -556,7 +556,7 @@ curl -f http://localhost:8000/health/ || exit 1
 
 **Celery Worker**:
 ```bash
-celery -A senex_trader inspect ping -d celery@$HOSTNAME
+celery -A senextrader inspect ping -d celery@$HOSTNAME
 ```
 
 ### Logging

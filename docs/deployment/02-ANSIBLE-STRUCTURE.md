@@ -141,7 +141,7 @@ all:
 **inventory/production/group_vars/all.yml**:
 ```yaml
 # Application configuration
-app_name: senex_trader
+app_name: senextrader
 app_user: senex
 app_dir: /opt/senex-trader
 config_dir: /etc/senex-trader
@@ -152,7 +152,7 @@ domain_name: your-domain.com
 allowed_hosts: "your-domain.com,www.your-domain.com"
 
 # Django settings
-django_settings_module: senex_trader.settings.production
+django_settings_module: senextrader.settings.production
 django_image: "registry.example.com/senex-trader"
 django_version: "{{ lookup('env', 'IMAGE_TAG') | default('latest', true) }}"
 
@@ -172,7 +172,7 @@ podman_network_subnet: "172.20.0.0/16"
 vault_secret_key: "django-insecure-CHANGE-THIS-IN-PRODUCTION"
 vault_field_encryption_key: "FERNET-KEY-GENERATED-WITH-CRYPTOGRAPHY"
 
-vault_db_name: senex_trader
+vault_db_name: senextrader
 vault_db_user: senex_user
 vault_db_password: "STRONG-DB-PASSWORD"
 
@@ -414,7 +414,7 @@ ContainerName=celery-worker
 Network={{ podman_network_name }}
 EnvironmentFile={{ config_dir }}/.env
 
-Exec=celery -A senex_trader worker \
+Exec=celery -A senextrader worker \
     -Q trading,accounts,services \
     -l info \
     --concurrency=4 \

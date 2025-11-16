@@ -12,14 +12,14 @@ This document defines the complete workflow for building, tagging, testing, and 
 
 **Minimal Build**:
 ```bash
-podman build -t senex_trader:latest .
+podman build -t senextrader:latest .
 ```
 
 **Production Build** (from project root):
 ```bash
 podman build \
   -f docker/Dockerfile \
-  -t senex_trader:latest \
+  -t senextrader:latest \
   .
 ```
 
@@ -27,7 +27,7 @@ podman build \
 ```bash
 podman build \
   -f docker/Dockerfile.dev \
-  -t senex_trader:dev \
+  -t senextrader:dev \
   .
 ```
 
@@ -35,7 +35,7 @@ podman build \
 
 **Enable Layer Caching**:
 ```bash
-podman build --layers -t senex_trader:latest .
+podman build --layers -t senextrader:latest .
 ```
 
 **Note**: Podman's support for `--cache-to` and `--cache-from` flags varies by version. These are BuildKit features that may require Podman 4.4+ with Buildah backend.
@@ -43,10 +43,10 @@ podman build --layers -t senex_trader:latest .
 **Alternative: Use `--layers` for built-in caching** (recommended for Podman):
 ```bash
 # Podman caches layers automatically with --layers flag
-podman build --layers -t senex_trader:latest .
+podman build --layers -t senextrader:latest .
 
 # Subsequent builds reuse cached layers automatically
-podman build --layers -t senex_trader:latest .
+podman build --layers -t senextrader:latest .
 ```
 
 **Advanced: External Cache** (if using Podman 4.4+):
@@ -55,14 +55,14 @@ podman build --layers -t senex_trader:latest .
 podman build \
   --layers \
   --cache-to type=local,dest=/tmp/buildcache \
-  -t senex_trader:latest \
+  -t senextrader:latest \
   .
 
 # Import cache
 podman build \
   --layers \
   --cache-from type=local,src=/tmp/buildcache \
-  -t senex_trader:latest \
+  -t senextrader:latest \
   .
 ```
 
@@ -79,7 +79,7 @@ podman --version
 ```bash
 podman build \
   --build-arg PYTHON_VERSION=3.12 \
-  -t senex_trader:latest \
+  -t senextrader:latest \
   .
 ```
 
@@ -87,7 +87,7 @@ podman build \
 ```bash
 podman build \
   --build-arg ENVIRONMENT=production \
-  -t senex_trader:latest \
+  -t senextrader:latest \
   .
 ```
 
@@ -95,7 +95,7 @@ podman build \
 
 **Force Rebuild** (ignore all cache):
 ```bash
-podman build --no-cache -t senex_trader:latest .
+podman build --no-cache -t senextrader:latest .
 ```
 
 **Note**: Podman does not support `--no-cache-filter` for rebuilding specific stages (Docker BuildKit feature). To rebuild from a specific stage, use `--no-cache` to rebuild everything.
@@ -119,22 +119,22 @@ podman build --no-cache -t senex_trader:latest .
 **Multiple Tags for Single Image**:
 ```bash
 # Build with specific version
-podman build -t senex_trader:1.2.3 .
+podman build -t senextrader:1.2.3 .
 
 # Add latest tag
-podman tag senex_trader:1.2.3 senex_trader:latest
+podman tag senextrader:1.2.3 senextrader:latest
 
 # Add minor version tag (1.2)
-podman tag senex_trader:1.2.3 senex_trader:1.2
+podman tag senextrader:1.2.3 senextrader:1.2
 
 # Add major version tag (1)
-podman tag senex_trader:1.2.3 senex_trader:1
+podman tag senextrader:1.2.3 senextrader:1
 
 # Add git commit SHA
-podman tag senex_trader:1.2.3 senex_trader:$(git rev-parse --short HEAD)
+podman tag senextrader:1.2.3 senextrader:$(git rev-parse --short HEAD)
 
 # Add date tag
-podman tag senex_trader:1.2.3 senex_trader:$(date +%Y%m%d)
+podman tag senextrader:1.2.3 senextrader:$(date +%Y%m%d)
 ```
 
 **Result**: Single image with multiple tags for different use cases
@@ -143,29 +143,29 @@ podman tag senex_trader:1.2.3 senex_trader:$(date +%Y%m%d)
 
 | Tag Pattern | Use Case | Example |
 |-------------|----------|---------|
-| `latest` | Latest stable release | `senex_trader:latest` |
-| `1.2.3` | Specific version | `senex_trader:1.2.3` |
-| `1.2` | Latest patch of minor | `senex_trader:1.2` |
-| `1` | Latest minor of major | `senex_trader:1` |
-| `abc123f` | Git commit SHA | `senex_trader:abc123f` |
-| `20250115` | Build date | `senex_trader:20250115` |
-| `dev` | Development builds | `senex_trader:dev` |
-| `staging` | Staging builds | `senex_trader:staging` |
-| `pr-123` | Pull request builds | `senex_trader:pr-123` |
+| `latest` | Latest stable release | `senextrader:latest` |
+| `1.2.3` | Specific version | `senextrader:1.2.3` |
+| `1.2` | Latest patch of minor | `senextrader:1.2` |
+| `1` | Latest minor of major | `senextrader:1` |
+| `abc123f` | Git commit SHA | `senextrader:abc123f` |
+| `20250115` | Build date | `senextrader:20250115` |
+| `dev` | Development builds | `senextrader:dev` |
+| `staging` | Staging builds | `senextrader:staging` |
+| `pr-123` | Pull request builds | `senextrader:pr-123` |
 
 ### Registry Tagging
 
 **Full Registry Path**:
 ```bash
 # Local build
-podman build -t senex_trader:1.2.3 .
+podman build -t senextrader:1.2.3 .
 
 # Tag for registry
-podman tag senex_trader:1.2.3 myregistry.com/senex_trader:1.2.3
-podman tag senex_trader:1.2.3 myregistry.com/senex_trader:latest
+podman tag senextrader:1.2.3 myregistry.com/senextrader:1.2.3
+podman tag senextrader:1.2.3 myregistry.com/senextrader:latest
 
 # Or build with full path directly
-podman build -t myregistry.com/senex_trader:1.2.3 .
+podman build -t myregistry.com/senextrader:1.2.3 .
 ```
 
 ---
@@ -177,21 +177,21 @@ podman build -t myregistry.com/senex_trader:1.2.3 .
 #### 1. Verify Image Exists
 
 ```bash
-podman images | grep senex_trader
-# senex_trader  latest  abc123  2 minutes ago  450 MB
+podman images | grep senextrader
+# senextrader  latest  abc123  2 minutes ago  450 MB
 ```
 
 #### 2. Check Image Size
 
 ```bash
-podman images senex_trader:latest --format "{{.Size}}"
+podman images senextrader:latest --format "{{.Size}}"
 # 450 MB (target: <500 MB)
 ```
 
 #### 3. Inspect Image Metadata
 
 ```bash
-podman inspect senex_trader:latest | jq '.[0].Config.Labels'
+podman inspect senextrader:latest | jq '.[0].Config.Labels'
 # {
 #   "org.opencontainers.image.version": "1.2.3",
 #   "org.opencontainers.image.created": "2025-01-15T10:30:00Z",
@@ -205,7 +205,7 @@ podman inspect senex_trader:latest | jq '.[0].Config.Labels'
 podman run --rm \
   -e SECRET_KEY=test-secret-key \
   -e FIELD_ENCRYPTION_KEY=test-encryption-key \
-  senex_trader:latest \
+  senextrader:latest \
   python manage.py check
 # System check identified no issues (0 silenced).
 ```
@@ -216,7 +216,7 @@ podman run --rm \
 podman run --rm \
   -e SECRET_KEY=test-secret-key \
   -e FIELD_ENCRYPTION_KEY=test-encryption-key \
-  senex_trader:latest \
+  senextrader:latest \
   python manage.py migrate --plan
 # Planned operations:
 # ...
@@ -226,19 +226,19 @@ podman run --rm \
 
 **Test web service**:
 ```bash
-podman run --rm senex_trader:latest web --help
+podman run --rm senextrader:latest web --help
 # Usage: daphne [OPTIONS] application
 ```
 
 **Test celery worker**:
 ```bash
-podman run --rm senex_trader:latest celery-worker --help
+podman run --rm senextrader:latest celery-worker --help
 # Usage: celery [OPTIONS] worker [WORKER_OPTIONS]
 ```
 
 **Test celery beat**:
 ```bash
-podman run --rm senex_trader:latest celery-beat --help
+podman run --rm senextrader:latest celery-beat --help
 # Usage: celery [OPTIONS] beat [BEAT_OPTIONS]
 ```
 
@@ -258,7 +258,7 @@ VERSION := $(shell git describe --tags --always --dirty)
 COMMIT := $(shell git rev-parse --short HEAD)
 DATE := $(shell date +%Y%m%d)
 REGISTRY := myregistry.com
-IMAGE := senex_trader
+IMAGE := senextrader
 
 # Build production image
 build:
@@ -357,14 +357,14 @@ make clean
 
 **Step 1: Create Manifest**:
 ```bash
-podman manifest create senex_trader:latest
+podman manifest create senextrader:latest
 ```
 
 **Step 2: Build for AMD64**:
 ```bash
 podman build \
   --platform linux/amd64 \
-  --manifest senex_trader:latest \
+  --manifest senextrader:latest \
   .
 ```
 
@@ -372,13 +372,13 @@ podman build \
 ```bash
 podman build \
   --platform linux/arm64 \
-  --manifest senex_trader:latest \
+  --manifest senextrader:latest \
   .
 ```
 
 **Step 4: Verify Manifest**:
 ```bash
-podman manifest inspect senex_trader:latest
+podman manifest inspect senextrader:latest
 ```
 
 **Expected Output**:
@@ -403,7 +403,7 @@ podman manifest inspect senex_trader:latest
 
 **Step 5: Push Multi-Arch Manifest**:
 ```bash
-podman manifest push senex_trader:latest docker://myregistry.com/senex_trader:latest
+podman manifest push senextrader:latest docker://myregistry.com/senextrader:latest
 ```
 
 ---
@@ -437,7 +437,7 @@ podman login ghcr.io
 
 **Single Tag**:
 ```bash
-podman push myregistry.com/senex_trader:1.2.3
+podman push myregistry.com/senextrader:1.2.3
 ```
 
 **Multiple Tags** (script):
@@ -445,7 +445,7 @@ podman push myregistry.com/senex_trader:1.2.3
 #!/bin/bash
 VERSION="1.2.3"
 REGISTRY="myregistry.com"
-IMAGE="senex_trader"
+IMAGE="senextrader"
 
 tags=("$VERSION" "latest" "$(git rev-parse --short HEAD)")
 
@@ -459,13 +459,13 @@ done
 
 **From Registry**:
 ```bash
-podman pull myregistry.com/senex_trader:1.2.3
+podman pull myregistry.com/senextrader:1.2.3
 ```
 
 **Verify Signature** (if using signed images):
 ```bash
 podman pull --signature-policy /etc/containers/policy.json \
-  myregistry.com/senex_trader:1.2.3
+  myregistry.com/senextrader:1.2.3
 ```
 
 ---
@@ -614,12 +614,12 @@ sudo apt-get update
 sudo apt-get install trivy
 
 # Scan image
-trivy image senex_trader:latest
+trivy image senextrader:latest
 ```
 
 **Using Podman Scout** (if available):
 ```bash
-podman scout cves senex_trader:latest
+podman scout cves senextrader:latest
 ```
 
 ### Fix Vulnerabilities
@@ -649,14 +649,14 @@ pip install --upgrade package-name
 #### 1. Check Current Size
 
 ```bash
-podman images senex_trader:latest --format "{{.Size}}"
+podman images senextrader:latest --format "{{.Size}}"
 # 650 MB
 ```
 
 #### 2. Analyze Layers
 
 ```bash
-podman history senex_trader:latest
+podman history senextrader:latest
 ```
 
 **Output**:
@@ -679,7 +679,7 @@ wget https://github.com/wagoodman/dive/releases/download/v0.10.0/dive_0.10.0_lin
 sudo dpkg -i dive_0.10.0_linux_amd64.deb
 
 # Analyze image
-dive senex_trader:latest
+dive senextrader:latest
 ```
 
 #### 4. Optimize
@@ -723,7 +723,7 @@ git checkout v1.2.3
 
 # Build with tag version
 VERSION=$(git describe --tags)
-podman build -t senex_trader:$VERSION .
+podman build -t senextrader:$VERSION .
 ```
 
 ### Automated Versioning
@@ -745,15 +745,15 @@ echo "Building Senex Trader $VERSION"
 podman build \
   --layers \
   -f docker/Dockerfile \
-  -t senex_trader:$VERSION \
-  -t senex_trader:$COMMIT \
-  -t senex_trader:latest \
+  -t senextrader:$VERSION \
+  -t senextrader:$COMMIT \
+  -t senextrader:latest \
   --label org.opencontainers.image.version=$VERSION \
   --label org.opencontainers.image.revision=$COMMIT \
   --label org.opencontainers.image.created=$(date -u +%Y-%m-%dT%H:%M:%SZ) \
   .
 
-echo "Build complete: senex_trader:$VERSION"
+echo "Build complete: senextrader:$VERSION"
 ```
 
 **Usage**:
@@ -770,14 +770,14 @@ chmod +x scripts/build.sh
 
 **Get Digest**:
 ```bash
-podman images --digests senex_trader
+podman images --digests senextrader
 # REPOSITORY    TAG     DIGEST                                                                   IMAGE ID
-# senex_trader  1.2.3   sha256:abc123...                                                        def456
+# senextrader  1.2.3   sha256:abc123...                                                        def456
 ```
 
 **Pull by Digest** (immutable):
 ```bash
-podman pull myregistry.com/senex_trader@sha256:abc123...
+podman pull myregistry.com/senextrader@sha256:abc123...
 ```
 
 **Benefit**: Exact image, immune to tag updates
@@ -788,17 +788,17 @@ podman pull myregistry.com/senex_trader@sha256:abc123...
 ```bash
 # Current version
 podman ps | grep senex_web
-# senex_web  myregistry.com/senex_trader:1.2.3
+# senex_web  myregistry.com/senextrader:1.2.3
 
 # Rollback to previous version
 podman-compose down
-podman pull myregistry.com/senex_trader:1.2.2
-podman tag myregistry.com/senex_trader:1.2.2 senex_trader:latest
+podman pull myregistry.com/senextrader:1.2.2
+podman tag myregistry.com/senextrader:1.2.2 senextrader:latest
 podman-compose up -d
 
 # Verify
 podman ps | grep senex_web
-# senex_web  myregistry.com/senex_trader:1.2.2
+# senex_web  myregistry.com/senextrader:1.2.2
 ```
 
 ---

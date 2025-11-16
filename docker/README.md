@@ -10,7 +10,7 @@ Container build system for Senex Trader using Podman with multi-stage optimizati
 - **Container Engine:** Podman 5.x (rootless-compatible)
 - **Base Image:** python:3.12-slim-bookworm
 - **Build Strategy:** Multi-stage (base → dependencies → runtime)
-- **Registry:** Private container registry (configure in .senex_trader.json)
+- **Registry:** Private container registry (configure in .senextrader.json)
 
 ### Multi-Stage Build Benefits
 1. **Base Stage** - System dependencies and user setup
@@ -52,7 +52,7 @@ make build TAG=v1.0.0
 
 ## ⚙️ Configuration
 
-### Build Configuration (.senex_trader.json)
+### Build Configuration (.senextrader.json)
 
 **Location**: Project root (gitignored)
 
@@ -68,7 +68,7 @@ make build TAG=v1.0.0
 
 **Setup:**
 ```bash
-cp .senex_trader.json.example .senex_trader.json
+cp .senextrader.json.example .senextrader.json
 # Edit with your registry details
 ```
 

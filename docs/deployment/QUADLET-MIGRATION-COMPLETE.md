@@ -44,7 +44,7 @@ Created production-ready Quadlet .container files:
 - `deployment/ENVIRONMENT_DIFFERENCES.md` - Staging vs production (175 lines)
 - `deployment/quadlet/README.md` - Quadlet usage guide
 
-**Updated**: All deployment docs in senex_trader_docs/deployment/
+**Updated**: All deployment docs in senextrader_docs/deployment/
 
 ### 4. Environment Handling
 
@@ -170,11 +170,11 @@ Implement market indicators (NEXT_IMPLEMENTATION_PLAN.md):
 **Main Guides**:
 - deployment/README.md - Quick start and operations
 - deployment/ENVIRONMENT_DIFFERENCES.md - Staging vs production
-- senex_trader_docs/deployment/COMPLETION-STATUS.md - Overall status
+- senextrader_docs/deployment/COMPLETION-STATUS.md - Overall status
 
 **Planning Docs**:
-- senex_trader_docs/deployment/ - 10 comprehensive guides
-- senex_trader_docs/deployment/FINAL-COMPLETION-REPORT.md - Full details
+- senextrader_docs/deployment/ - 10 comprehensive guides
+- senextrader_docs/deployment/FINAL-COMPLETION-REPORT.md - Full details
 
 ---
 

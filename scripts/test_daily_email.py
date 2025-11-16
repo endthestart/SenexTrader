@@ -11,7 +11,7 @@ import django
 
 # Setup Django
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-os.environ.setdefault("DJANGO_SETTINGS_MODULE", "senex_trader.settings.development")
+os.environ.setdefault("DJANGO_SETTINGS_MODULE", "senextrader.settings.development")
 django.setup()
 
 from datetime import date, timedelta

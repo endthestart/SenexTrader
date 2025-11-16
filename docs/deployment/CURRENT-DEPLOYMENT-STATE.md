@@ -258,7 +258,7 @@ sudo -u senex podman exec postgres pg_dump -U senex senex | gzip > /opt/senex-tr
 **Function**: Monitors `/health/simple/` endpoint
 **Action**: Restarts web service after 3 consecutive failures
 **Notifications**: Email on restart
-**Log**: `/var/log/senex_trader/watchdog.log`
+**Log**: `/var/log/senextrader/watchdog.log`
 
 **Managed By**: Likely systemd timer or cron (requires verification)
 
@@ -272,7 +272,7 @@ sudo -u senex podman exec postgres pg_dump -U senex senex | gzip > /opt/senex-tr
 | **PostgreSQL** | `journalctl --user -M senex@ -u postgres.service` |
 | **Redis** | `journalctl --user -M senex@ -u redis.service` |
 | **Nginx** | `/var/log/nginx/access.log`, `/var/log/nginx/error.log` |
-| **Watchdog** | `/var/log/senex_trader/watchdog.log` |
+| **Watchdog** | `/var/log/senextrader/watchdog.log` |
 
 ## Deployment Workflow
 
@@ -283,7 +283,7 @@ The actual deployment process (as of Oct 30, 2025) is:
 1. **Build Container Image**
    ```bash
    # From local development machine
-   cd ~/Development/senex_trader_project/senex_trader/
+   cd ~/Development/senextrader_project/senextrader/
    ./build.py --tag pre-deploy-$(date +%Y-%m-%d-%H%M%S)
    ```
 
@@ -326,7 +326,7 @@ The actual deployment process (as of Oct 30, 2025) is:
 
 ### Configuration Management
 
-**Quadlet Files**: Managed in `senex_trader_config` repository
+**Quadlet Files**: Managed in `senextrader_config` repository
 **Deployment**: Manual copy to `/opt/senex-trader/.config/containers/systemd/`
 **Secrets**: Stored in `.env` file (not in version control)
 

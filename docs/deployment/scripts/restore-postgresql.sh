@@ -6,12 +6,12 @@ set -euo pipefail
 
 if [ $# -lt 1 ]; then
     echo "Usage: $0 <backup-file.backup.gz>"
-    echo "Example: $0 /var/backups/postgresql/senex_trader_20251008_020000.backup.gz"
+    echo "Example: $0 /var/backups/postgresql/senextrader_20251008_020000.backup.gz"
     exit 1
 fi
 
 BACKUP_FILE="$1"
-DB_NAME="senex_trader"
+DB_NAME="senextrader"
 DB_USER="senex_user"
 
 if [ ! -f "$BACKUP_FILE" ]; then

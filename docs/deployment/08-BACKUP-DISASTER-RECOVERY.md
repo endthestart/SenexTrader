@@ -93,7 +93,7 @@ cat > "${BACKUP_DIR}/manifest.txt" << EOF
 Backup Date: $(date -Iseconds)
 Backup Type: pg_basebackup
 PostgreSQL Version: $(podman exec postgres psql -U postgres -t -c 'SELECT version();')
-Database Size: $(podman exec postgres psql -U postgres -t -c "SELECT pg_size_pretty(pg_database_size('senex_trader'));")
+Database Size: $(podman exec postgres psql -U postgres -t -c "SELECT pg_size_pretty(pg_database_size('senextrader'));")
 WAL Archive Location: ${WAL_ARCHIVE_DIR}
 EOF
 
@@ -436,7 +436,7 @@ podman stop postgres
     /var/backups/postgresql/base_backups/latest
 
 # 3. Verify data integrity
-podman exec postgres psql -U senex_user -d senex_trader -c "SELECT COUNT(*) FROM trading_position;"
+podman exec postgres psql -U senex_user -d senextrader -c "SELECT COUNT(*) FROM trading_position;"
 
 # 4. Restart services
 systemctl --user start django celery-worker celery-beat

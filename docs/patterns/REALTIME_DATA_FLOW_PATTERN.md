@@ -510,7 +510,7 @@ def persist_my_metric():
 
 **In celery beat schedule:**
 ```python
-# senex_trader/celery.py
+# senextrader/celery.py
 app.conf.beat_schedule = {
     'persist-my-metric': {
         'task': 'trading.tasks.persist_my_metric',

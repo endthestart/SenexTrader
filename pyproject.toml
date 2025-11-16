@@ -72,7 +72,7 @@ unfixable = []
 [tool.ruff.lint.isort]
 # Django-specific import ordering
 section-order = ["future", "standard-library", "django", "third-party", "first-party", "local-folder"]
-known-first-party = ["senex_trader", "trading", "accounts", "services", "streaming"]
+known-first-party = ["senextrader", "trading", "accounts", "services", "streaming"]
 
 [tool.ruff.lint.isort.sections]
 # Recognize Django as separate section
@@ -101,7 +101,7 @@ extend-exclude = '''
 profile = "black"
 line_length = 100
 known_django = ["django"]
-known_first_party = ["senex_trader", "trading", "accounts", "services", "streaming"]
+known_first_party = ["senextrader", "trading", "accounts", "services", "streaming"]
 sections = ["FUTURE", "STDLIB", "DJANGO", "THIRDPARTY", "FIRSTPARTY", "LOCALFOLDER"]
 skip = [".venv", "venv", "migrations", "node_modules"]
 
@@ -141,10 +141,10 @@ module = [
 ignore_missing_imports = true
 
 [tool.django-stubs]
-django_settings_module = "senex_trader.settings"
+django_settings_module = "senextrader.settings"
 
 [tool.pytest.ini_options]
-DJANGO_SETTINGS_MODULE = "senex_trader.settings"
+DJANGO_SETTINGS_MODULE = "senextrader.settings"
 python_files = ["test_*.py", "*_test.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]

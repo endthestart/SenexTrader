@@ -7,5 +7,5 @@ handled by manage.py, wsgi.py, and asgi.py.
 
 # This file intentionally left mostly empty to avoid circular imports
 # and double initialization. Settings are loaded through explicit module paths:
-# - senex_trader.settings.development
-# - senex_trader.settings.production
+# - senextrader.settings.development
+# - senextrader.settings.production

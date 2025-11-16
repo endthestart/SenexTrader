@@ -358,8 +358,8 @@ openssl rand -base64 24
 podman exec -it postgres psql -U postgres
 
 -- Revoke unnecessary privileges
-REVOKE ALL ON DATABASE senex_trader FROM PUBLIC;
-GRANT CONNECT ON DATABASE senex_trader TO senex_user;
+REVOKE ALL ON DATABASE senextrader FROM PUBLIC;
+GRANT CONNECT ON DATABASE senextrader TO senex_user;
 
 -- Grant only needed privileges
 GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO senex_user;

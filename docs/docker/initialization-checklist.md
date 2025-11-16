@@ -84,11 +84,11 @@ podman-compose -f docker-compose.yml -f docker-compose.dev.yml build
 Building redis
 Successfully tagged senex_redis:dev
 Building web
-Successfully tagged senex_trader:dev
+Successfully tagged senextrader:dev
 Building celery_worker
-Successfully tagged senex_trader:dev
+Successfully tagged senextrader:dev
 Building celery_beat
-Successfully tagged senex_trader:dev
+Successfully tagged senextrader:dev
 ```
 
 ### Step 3: Start Development Services
@@ -180,8 +180,8 @@ loginctl enable-linger senex-app
 
 ```bash
 cd ~
-git clone https://github.com/yourusername/senex_trader.git
-cd senex_trader
+git clone https://github.com/yourusername/senextrader.git
+cd senextrader
 ```
 
 ### Step 3: Create Production Environment File
@@ -206,7 +206,7 @@ WS_ALLOWED_ORIGINS=https://your-domain.com,https://api.your-domain.com
 APP_BASE_URL=https://your-domain.com
 
 # Database
-DB_NAME=senex_trader
+DB_NAME=senextrader
 DB_USER=senex_user
 DB_HOST=postgres
 
@@ -240,11 +240,11 @@ Successfully tagged postgres:16-alpine
 Building redis
 Successfully tagged redis:7-alpine
 Building web
-Successfully tagged senex_trader:latest
+Successfully tagged senextrader:latest
 Building celery_worker
-Successfully tagged senex_trader:latest
+Successfully tagged senextrader:latest
 Building celery_beat
-Successfully tagged senex_trader:latest
+Successfully tagged senextrader:latest
 ```
 
 ### Step 5: Create Volumes (Explicit Creation)
@@ -382,7 +382,7 @@ Location: /admin/login/?next=/admin/
 
 **Generate systemd unit files**:
 ```bash
-cd ~/senex_trader
+cd ~/senextrader
 
 # Generate for all services
 podman generate systemd \
@@ -508,7 +508,7 @@ Cache-Control: public, max-age=31536000, immutable
 ### Check Celery Worker Status
 
 ```bash
-podman-compose exec celery_worker celery -A senex_trader inspect active
+podman-compose exec celery_worker celery -A senextrader inspect active
 ```
 
 **Expected Output**:
@@ -521,7 +521,7 @@ podman-compose exec celery_worker celery -A senex_trader inspect active
 ### Check Celery Beat Schedule
 
 ```bash
-podman-compose exec celery_beat celery -A senex_trader inspect scheduled
+podman-compose exec celery_beat celery -A senextrader inspect scheduled
 ```
 
 **Expected Output**:
@@ -592,7 +592,7 @@ DBSIZE
 ### Check Database Connection
 
 ```bash
-podman-compose exec postgres psql -U senex_user -d senex_trader -c "SELECT 1;"
+podman-compose exec postgres psql -U senex_user -d senextrader -c "SELECT 1;"
 ```
 
 **Expected Output**:
@@ -606,7 +606,7 @@ podman-compose exec postgres psql -U senex_user -d senex_trader -c "SELECT 1;"
 ### Check Tables Created
 
 ```bash
-podman-compose exec postgres psql -U senex_user -d senex_trader -c "\dt"
+podman-compose exec postgres psql -U senex_user -d senextrader -c "\dt"
 ```
 
 **Expected Output** (partial):
@@ -631,7 +631,7 @@ podman volume inspect logs | jq -r '.[0].Mountpoint'
 sudo ls -la <mountpoint-path>
 
 # Or view directly
-podman-compose exec web ls -la /var/log/senex_trader/
+podman-compose exec web ls -la /var/log/senextrader/
 ```
 
 **Expected Files**:
@@ -643,7 +643,7 @@ podman-compose exec web ls -la /var/log/senex_trader/
 ### Tail Logs
 
 ```bash
-podman-compose exec web tail -f /var/log/senex_trader/application.log
+podman-compose exec web tail -f /var/log/senextrader/application.log
 ```
 
 ---
@@ -801,12 +801,12 @@ podman-compose restart celery_worker
 
 **Create backup**:
 ```bash
-podman-compose exec -T postgres pg_dump -U senex_user senex_trader | gzip > backup_$(date +%Y%m%d).sql.gz
+podman-compose exec -T postgres pg_dump -U senex_user senextrader | gzip > backup_$(date +%Y%m%d).sql.gz
 ```
 
 **Restore backup**:
 ```bash
-gunzip -c backup_20250115.sql.gz | podman-compose exec -T postgres psql -U senex_user senex_trader
+gunzip -c backup_20250115.sql.gz | podman-compose exec -T postgres psql -U senex_user senextrader
 ```
 
 ### Volume Backup

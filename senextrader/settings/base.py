@@ -51,7 +51,7 @@ MIDDLEWARE = [
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
 ]
 
-ROOT_URLCONF = "senex_trader.urls"
+ROOT_URLCONF = "senextrader.urls"
 
 TEMPLATES = [
     {
@@ -65,15 +65,15 @@ TEMPLATES = [
                 "django.contrib.auth.context_processors.auth",
                 "django.contrib.messages.context_processors.messages",
                 "accounts.context_processors.broker_account_status",
-                "senex_trader.context_processors.dry_run_mode",
-                "senex_trader.context_processors.privacy_mode",
+                "senextrader.context_processors.dry_run_mode",
+                "senextrader.context_processors.privacy_mode",
             ],
         },
     },
 ]
 
-WSGI_APPLICATION = "senex_trader.wsgi.application"
-ASGI_APPLICATION = "senex_trader.asgi.application"
+WSGI_APPLICATION = "senextrader.wsgi.application"
+ASGI_APPLICATION = "senextrader.asgi.application"
 
 # ================================================================================
 # AUTHENTICATION AND AUTHORIZATION

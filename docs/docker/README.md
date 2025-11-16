@@ -44,7 +44,7 @@ Reference these documents when:
 
 - Deployment procedures: `../deployment/`
 - Architecture decisions: `../architecture/`
-- Main project: `/path/to/senex_trader/`
+- Main project: `/path/to/senextrader/`
 
 ## Note
 

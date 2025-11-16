@@ -1,4 +1,4 @@
-"""URL configuration for senex_trader project."""
+"""URL configuration for senextrader project."""
 
 from django.conf import settings
 from django.conf.urls.static import static

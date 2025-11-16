@@ -14,7 +14,7 @@ import django
 import pytest
 
 # Configure Django before any imports
-os.environ.setdefault("DJANGO_SETTINGS_MODULE", "senex_trader.settings.development")
+os.environ.setdefault("DJANGO_SETTINGS_MODULE", "senextrader.settings.development")
 # Set test encryption key for encrypted fields
 if "FIELD_ENCRYPTION_KEY" not in os.environ:
     from cryptography.fernet import Fernet

@@ -17,9 +17,9 @@ def main():
     # This ensures commands run in production containers use production settings
     environment = os.environ.get("ENVIRONMENT", "development")
     if environment in ["production", "staging"]:
-        settings_module = f"senex_trader.settings.{environment}"
+        settings_module = f"senextrader.settings.{environment}"
     else:
-        settings_module = "senex_trader.settings.development"
+        settings_module = "senextrader.settings.development"
 
     os.environ.setdefault("DJANGO_SETTINGS_MODULE", settings_module)
     try:

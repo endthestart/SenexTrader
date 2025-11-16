@@ -1,5 +1,5 @@
 {
-  "_comment": "Senex Trader build configuration - copy to .senex_trader.json and customize",
+  "_comment": "Senex Trader build configuration - copy to .senextrader.json and customize",
   "registry": "registry.example.com",
   "owner": "username",
   "image_name": "senex-trader",

@@ -297,7 +297,7 @@ location /ws/ {
 
 ### Django Channels Configuration
 
-**ASGI routing** (senex_trader/asgi.py):
+**ASGI routing** (senextrader/asgi.py):
 
 ```python
 from channels.routing import ProtocolTypeRouter, URLRouter

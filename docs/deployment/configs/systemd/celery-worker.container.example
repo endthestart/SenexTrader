@@ -18,7 +18,7 @@ Network=senex_net.network
 EnvironmentFile=/etc/senex-trader/.env
 
 # Celery worker command
-Exec=celery -A senex_trader worker \
+Exec=celery -A senextrader worker \
     -Q trading,accounts,services \
     -l info \
     --concurrency=4 \

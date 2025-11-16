@@ -5,7 +5,7 @@ Pytest configuration for streaming tests.
 import os
 
 # Configure Django settings BEFORE any Django imports
-os.environ.setdefault("DJANGO_SETTINGS_MODULE", "senex_trader.settings.development")
+os.environ.setdefault("DJANGO_SETTINGS_MODULE", "senextrader.settings.development")
 
 # Set test encryption key for encrypted fields
 if "FIELD_ENCRYPTION_KEY" not in os.environ:

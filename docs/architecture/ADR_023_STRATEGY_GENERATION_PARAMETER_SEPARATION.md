@@ -251,7 +251,7 @@ If critical issues found:
 
 ## Related Documents
 
-- **Epic**: `senex_trader_docs/planning/EPIC_STRATEGY_GENERATION_SEPARATION.md`
+- **Epic**: `senextrader_docs/planning/EPIC_STRATEGY_GENERATION_SEPARATION.md`
 - **Analysis**: `/tmp/architecture_analysis.md` (detailed coupling research)
 - **Current Code**: 
   - `services/strategy_selector.py:285` - `_generate_forced()`

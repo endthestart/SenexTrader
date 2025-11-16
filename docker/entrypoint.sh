@@ -24,7 +24,7 @@ import time
 import os
 import django
 
-os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'senex_trader.settings.${ENVIRONMENT:-production}')
+os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'senextrader.settings.${ENVIRONMENT:-production}')
 django.setup()
 
 from django.db import connection
@@ -88,9 +88,9 @@ echo "Environment: ${ENVIRONMENT:-production}"
 
 # Set Django settings module based on environment (must match celery.py logic)
 if [ "${ENVIRONMENT}" = "production" ] || [ "${ENVIRONMENT}" = "staging" ]; then
-    export DJANGO_SETTINGS_MODULE="senex_trader.settings.${ENVIRONMENT}"
+    export DJANGO_SETTINGS_MODULE="senextrader.settings.${ENVIRONMENT}"
 else
-    export DJANGO_SETTINGS_MODULE="senex_trader.settings.development"
+    export DJANGO_SETTINGS_MODULE="senextrader.settings.development"
 fi
 echo "Django settings: ${DJANGO_SETTINGS_MODULE}"
 
@@ -116,12 +116,12 @@ fi
 case "$SERVICE_TYPE" in
     web|daphne)
         echo -e "${GREEN}Starting Daphne ASGI server...${NC}"
-        exec daphne -b 0.0.0.0 -p 8000 senex_trader.asgi:application
+        exec daphne -b 0.0.0.0 -p 8000 senextrader.asgi:application
         ;;
 
     celery-worker|celery_worker|worker)
         echo -e "${GREEN}Starting Celery worker...${NC}"
-        exec celery -A senex_trader worker \
+        exec celery -A senextrader worker \
             --loglevel=info \
             --queues=celery,accounts,trading \
             --concurrency=4 \
@@ -134,7 +134,7 @@ case "$SERVICE_TYPE" in
         mkdir -p /tmp/celerybeat
         # Clean up old schedule files (they can become corrupted)
         rm -f /tmp/celerybeat/celerybeat-schedule*
-        exec celery -A senex_trader beat \
+        exec celery -A senextrader beat \
             --loglevel=info \
             --pidfile=/tmp/celerybeat.pid \
             --schedule=/tmp/celerybeat/celerybeat-schedule

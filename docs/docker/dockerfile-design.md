@@ -105,8 +105,8 @@ RUN groupadd --gid 1000 senex && \
     useradd --uid 1000 --gid senex --shell /bin/bash --create-home senex
 
 # Create application directories
-RUN mkdir -p /app /app/logs /app/staticfiles /app/media /var/log/senex_trader && \
-    chown -R senex:senex /app /var/log/senex_trader
+RUN mkdir -p /app /app/logs /app/staticfiles /app/media /var/log/senextrader && \
+    chown -R senex:senex /app /var/log/senextrader
 
 # Set working directory
 WORKDIR /app
@@ -347,7 +347,7 @@ RUN groupadd --gid 1000 senex && \
 
 **Ownership**:
 ```dockerfile
-RUN chown -R senex:senex /app /var/log/senex_trader
+RUN chown -R senex:senex /app /var/log/senextrader
 ```
 
 **Switching**:
@@ -371,7 +371,7 @@ if [ "$(id -u)" = "0" ] && [ -n "$PUID" ] && [ -n "$PGID" ]; then
     echo "Modifying senex user to PUID=$PUID, PGID=$PGID"
     groupmod -o -g "$PGID" senex
     usermod -o -u "$PUID" senex
-    chown -R senex:senex /app /var/log/senex_trader
+    chown -R senex:senex /app /var/log/senextrader
 
     # Drop privileges and execute command as senex
     exec gosu senex "$@"
@@ -420,7 +420,7 @@ import time
 import os
 import django
 
-os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'senex_trader.settings.${ENVIRONMENT:-production}')
+os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'senextrader.settings.${ENVIRONMENT:-production}')
 django.setup()
 
 from django.db import connection
@@ -503,12 +503,12 @@ fi
 case "$SERVICE_TYPE" in
     web|daphne)
         echo -e "${GREEN}Starting Daphne ASGI server...${NC}"
-        exec daphne -b 0.0.0.0 -p 8000 senex_trader.asgi:application
+        exec daphne -b 0.0.0.0 -p 8000 senextrader.asgi:application
         ;;
 
     gunicorn)
         echo -e "${GREEN}Starting Gunicorn WSGI server (WebSockets not supported)...${NC}"
-        exec gunicorn senex_trader.wsgi:application \
+        exec gunicorn senextrader.wsgi:application \
             --bind 0.0.0.0:8000 \
             --workers 4 \
             --timeout 120 \
@@ -520,7 +520,7 @@ case "$SERVICE_TYPE" in
 
     celery-worker|celery_worker|worker)
         echo -e "${GREEN}Starting Celery worker...${NC}"
-        exec celery -A senex_trader worker \
+        exec celery -A senextrader worker \
             --loglevel=info \
             --queues=celery,accounts,trading \
             --concurrency=4 \
@@ -531,7 +531,7 @@ case "$SERVICE_TYPE" in
         echo -e "${GREEN}Starting Celery beat scheduler...${NC}"
         # Clean up old schedule files (they can become corrupted)
         rm -f /app/celerybeat-schedule*
-        exec celery -A senex_trader beat \
+        exec celery -A senextrader beat \
             --loglevel=info \
             --pidfile=/tmp/celerybeat.pid \
             --schedule=/app/celerybeat-schedule
@@ -586,7 +586,7 @@ FROM python:${PYTHON_VERSION}-slim-bookworm
 
 **Example**:
 ```dockerfile
-ENV DJANGO_SETTINGS_MODULE=senex_trader.settings.production
+ENV DJANGO_SETTINGS_MODULE=senextrader.settings.production
 ENV PYTHONUNBUFFERED=1
 ```
 
@@ -651,7 +651,7 @@ def health_check(request):
 
 **URL Configuration**:
 ```python
-# senex_trader/urls.py
+# senextrader/urls.py
 urlpatterns = [
     path('health/', health_check, name='health'),
     # ... other patterns
@@ -675,7 +675,7 @@ LABEL org.opencontainers.image.title="Senex Trader" \
       org.opencontainers.image.version="1.0.0" \
       org.opencontainers.image.authors="Senex Trading <[email protected]>" \
       org.opencontainers.image.url="https://your-domain.com" \
-      org.opencontainers.image.source="https://github.com/yourusername/senex_trader" \
+      org.opencontainers.image.source="https://github.com/yourusername/senextrader" \
       org.opencontainers.image.licenses="MIT" \
       org.opencontainers.image.created="2025-01-15T00:00:00Z"
 ```
@@ -686,7 +686,7 @@ podman build \
   --label org.opencontainers.image.version="$(git describe --tags)" \
   --label org.opencontainers.image.revision="$(git rev-parse HEAD)" \
   --label org.opencontainers.image.created="$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
-  -t senex_trader:latest .
+  -t senextrader:latest .
 ```
 
 ---
@@ -719,7 +719,7 @@ podman build \
 
 **Podman Command**:
 ```bash
-podman build --squash -t senex_trader:latest .
+podman build --squash -t senextrader:latest .
 ```
 
 **Tradeoff**: Lose layer caching (slower subsequent builds)
@@ -762,7 +762,7 @@ podman build --squash -t senex_trader:latest .
 **Cache Export/Import**: `--cache-to`/`--cache-from` requires Podman 4.4+ (check your version)
 ```bash
 # Recommended: Use --layers for automatic caching
-podman build --layers -t senex_trader:latest .
+podman build --layers -t senextrader:latest .
 
 # Advanced (Podman 4.4+): External cache
 podman build --layers --cache-to type=local,dest=/tmp/buildcache .
@@ -799,7 +799,7 @@ podman-compose up -d
 FROM python:3.12-slim-bookworm
 
 ENV PYTHONUNBUFFERED=1 \
-    DJANGO_SETTINGS_MODULE=senex_trader.settings.development
+    DJANGO_SETTINGS_MODULE=senextrader.settings.development
 
 # Install all dependencies (including dev tools)
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -867,10 +867,10 @@ RUN python manage.py collectstatic --noinput
 **Recommended: Built-in Layer Caching**:
 ```bash
 # Podman caches layers automatically with --layers
-podman build --layers -t senex_trader:latest .
+podman build --layers -t senextrader:latest .
 
 # Subsequent builds reuse cached layers
-podman build --layers -t senex_trader:latest .
+podman build --layers -t senextrader:latest .
 ```
 
 **Advanced: External Cache** (Podman 4.4+ only):
@@ -889,10 +889,10 @@ podman build --layers --cache-from type=local,src=/tmp/buildcache .
 **Registry-based Cache** (if supported):
 ```bash
 # Push cache to registry
-podman build --cache-to type=registry,ref=myregistry.com/senex_trader:buildcache .
+podman build --cache-to type=registry,ref=myregistry.com/senextrader:buildcache .
 
 # Pull cache from registry
-podman build --cache-from type=registry,ref=myregistry.com/senex_trader:buildcache .
+podman build --cache-from type=registry,ref=myregistry.com/senextrader:buildcache .
 ```
 
 **Alternative**: Use `--layers` and let Podman's built-in caching handle it (more reliable).
@@ -904,13 +904,13 @@ podman build --cache-from type=registry,ref=myregistry.com/senex_trader:buildcac
 ### Build Test
 
 ```bash
-podman build -t senex_trader:test .
+podman build -t senextrader:test .
 ```
 
 ### Size Test
 
 ```bash
-podman images senex_trader:test
+podman images senextrader:test
 # Verify size < 500MB
 ```
 
@@ -920,7 +920,7 @@ podman images senex_trader:test
 podman run --rm \
   -e SECRET_KEY=test-secret-key \
   -e FIELD_ENCRYPTION_KEY=test-encryption-key \
-  senex_trader:test python manage.py check
+  senextrader:test python manage.py check
 ```
 
 ### Health Check Test
@@ -931,7 +931,7 @@ podman run -d --name senex_test \
   -e FIELD_ENCRYPTION_KEY=test-encryption-key \
   -e DB_NAME=test \
   -p 8000:8000 \
-  senex_trader:test
+  senextrader:test
 
 # Wait for startup
 sleep 10

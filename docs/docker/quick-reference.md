@@ -8,19 +8,19 @@
 
 ```bash
 # Build production image
-podman build -t senex_trader:latest .
+podman build -t senextrader:latest .
 
 # Build with specific Dockerfile
-podman build -f docker/Dockerfile -t senex_trader:latest .
+podman build -f docker/Dockerfile -t senextrader:latest .
 
 # Build with cache
-podman build --layers -t senex_trader:latest .
+podman build --layers -t senextrader:latest .
 
 # Build without cache
-podman build --no-cache -t senex_trader:latest .
+podman build --no-cache -t senextrader:latest .
 
 # Build and tag multiple versions
-podman build -t senex_trader:1.0.0 -t senex_trader:latest .
+podman build -t senextrader:1.0.0 -t senextrader:latest .
 ```
 
 ---
@@ -83,22 +83,22 @@ podman-compose up -d --scale web=3 --scale celery_worker=4
 podman images
 
 # Tag image
-podman tag senex_trader:latest myregistry.com/senex_trader:1.0.0
+podman tag senextrader:latest myregistry.com/senextrader:1.0.0
 
 # Push to registry
-podman push myregistry.com/senex_trader:1.0.0
+podman push myregistry.com/senextrader:1.0.0
 
 # Pull from registry
-podman pull myregistry.com/senex_trader:1.0.0
+podman pull myregistry.com/senextrader:1.0.0
 
 # Remove image
-podman rmi senex_trader:latest
+podman rmi senextrader:latest
 
 # Remove all dangling images
 podman image prune -f
 
 # Check image size
-podman images senex_trader:latest --format "{{.Size}}"
+podman images senextrader:latest --format "{{.Size}}"
 ```
 
 ---
@@ -161,19 +161,19 @@ podman-compose exec web python manage.py check
 
 ```bash
 # Connect to PostgreSQL
-podman-compose exec postgres psql -U senex_user -d senex_trader
+podman-compose exec postgres psql -U senex_user -d senextrader
 
 # Backup database
-podman-compose exec -T postgres pg_dump -U senex_user senex_trader | gzip > backup.sql.gz
+podman-compose exec -T postgres pg_dump -U senex_user senextrader | gzip > backup.sql.gz
 
 # Restore database
-gunzip -c backup.sql.gz | podman-compose exec -T postgres psql -U senex_user senex_trader
+gunzip -c backup.sql.gz | podman-compose exec -T postgres psql -U senex_user senextrader
 
 # List tables
-podman-compose exec postgres psql -U senex_user -d senex_trader -c "\dt"
+podman-compose exec postgres psql -U senex_user -d senextrader -c "\dt"
 
 # Check database connection
-podman-compose exec postgres pg_isready -U senex_user -d senex_trader
+podman-compose exec postgres pg_isready -U senex_user -d senextrader
 ```
 
 ---
@@ -200,10 +200,10 @@ podman-compose exec redis redis-cli FLUSHALL
 
 ```bash
 # Check Celery worker status
-podman-compose exec celery_worker celery -A senex_trader inspect active
+podman-compose exec celery_worker celery -A senextrader inspect active
 
 # Check scheduled tasks
-podman-compose exec celery_beat celery -A senex_trader inspect scheduled
+podman-compose exec celery_beat celery -A senextrader inspect scheduled
 
 # Restart Celery worker
 podman-compose restart celery_worker
@@ -305,7 +305,7 @@ podman-compose exec web nc -zv redis 6379
 podman-compose exec web /bin/bash
 
 # Run container with custom command
-podman run -it --rm senex_trader:latest /bin/bash
+podman run -it --rm senextrader:latest /bin/bash
 ```
 
 ---
@@ -369,10 +369,10 @@ ab -n 1000 -c 10 http://localhost:8000/health/
 podman stats
 
 # Check image layers
-podman history senex_trader:latest
+podman history senextrader:latest
 
 # Analyze image with dive
-dive senex_trader:latest
+dive senextrader:latest
 ```
 
 ---
@@ -382,21 +382,21 @@ dive senex_trader:latest
 ```bash
 # Build with version from git
 VERSION=$(git describe --tags --always)
-podman build -t senex_trader:$VERSION .
+podman build -t senextrader:$VERSION .
 
 # Tag with multiple tags
-podman tag senex_trader:1.0.0 senex_trader:1.0
-podman tag senex_trader:1.0.0 senex_trader:1
-podman tag senex_trader:1.0.0 senex_trader:latest
+podman tag senextrader:1.0.0 senextrader:1.0
+podman tag senextrader:1.0.0 senextrader:1
+podman tag senextrader:1.0.0 senextrader:latest
 
 # Push all tags
-podman push senex_trader:1.0.0
-podman push senex_trader:1.0
-podman push senex_trader:1
-podman push senex_trader:latest
+podman push senextrader:1.0.0
+podman push senextrader:1.0
+podman push senextrader:1
+podman push senextrader:latest
 
 # Scan for vulnerabilities
-trivy image senex_trader:latest
+trivy image senextrader:latest
 ```
 
 ---
@@ -430,7 +430,7 @@ REDIS_URL=redis://redis:6379/0
 /app/staticfiles/
 
 # Logs
-/var/log/senex_trader/
+/var/log/senextrader/
 
 # Media files
 /app/media/
@@ -501,13 +501,13 @@ podman-compose down
 podman-compose up -d
 
 # ROLLBACK TO PREVIOUS VERSION
-podman pull myregistry.com/senex_trader:1.0.0
-podman tag myregistry.com/senex_trader:1.0.0 senex_trader:latest
+podman pull myregistry.com/senextrader:1.0.0
+podman tag myregistry.com/senextrader:1.0.0 senextrader:latest
 podman-compose up -d --force-recreate
 
 # RESTORE DATABASE FROM BACKUP
 podman-compose down
-gunzip -c backup.sql.gz | podman-compose exec -T postgres psql -U senex_user senex_trader
+gunzip -c backup.sql.gz | podman-compose exec -T postgres psql -U senex_user senextrader
 podman-compose up -d
 
 # CLEAR ALL DATA AND START FRESH (WARNING: DESTRUCTIVE)
@@ -564,7 +564,7 @@ senex-test          # Run tests
 - `celery_beat` - Celery beat scheduler
 
 **Example connection strings**:
-- Database: `postgresql://senex_user:password@postgres:5432/senex_trader`
+- Database: `postgresql://senex_user:password@postgres:5432/senextrader`
 - Redis: `redis://redis:6379/0`
 
 ---

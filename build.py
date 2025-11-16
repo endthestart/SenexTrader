@@ -26,10 +26,10 @@ from zoneinfo import ZoneInfo
 
 def load_developer_config(project_dir: Path | None = None) -> dict:
     """
-    Load developer-specific configuration from .senex_trader.json
+    Load developer-specific configuration from .senextrader.json
 
     This configuration is REQUIRED. The build will fail if the config file
-    doesn't exist. Copy .senex_trader.json.example to .senex_trader.json
+    doesn't exist. Copy .senextrader.json.example to .senextrader.json
     and customize for your environment.
 
     Args:
@@ -45,7 +45,7 @@ def load_developer_config(project_dir: Path | None = None) -> dict:
         # Config is in same directory as build.py (monorepo structure)
         project_dir = Path(__file__).parent
 
-    config_path = project_dir / ".senex_trader.json"
+    config_path = project_dir / ".senextrader.json"
 
     if not config_path.exists():
         print("❌ ERROR: Configuration file not found!")
@@ -53,7 +53,7 @@ def load_developer_config(project_dir: Path | None = None) -> dict:
         print()
         print("📝 Setup instructions:")
         print(f"   1. Copy the example config:")
-        print(f"      cp {project_dir}/.senex_trader.json.example {config_path}")
+        print(f"      cp {project_dir}/.senextrader.json.example {config_path}")
         print(f"   2. Edit {config_path} with your settings")
         print(f"   3. Run build.py again")
         print()
@@ -332,7 +332,7 @@ class PodmanBuilder:
                 return False
             print(f"🎉 Successfully built and pushed {self.full_image_name}:{final_tag}")
             print("\n📝 Next steps:")
-            print("   Deploy using instructions in senex_trader_docs/deployment")
+            print("   Deploy using instructions in senextrader_docs/deployment")
         else:
             print(f"🎉 Successfully built {self.full_image_name}:{final_tag} (not pushed)")
             print("\n💡 To push manually:")
@@ -358,7 +358,7 @@ Examples:
   python build.py --no-cache              # Build without using cache
 
 Config File:
-  Copy .senex_trader.json.example to .senex_trader.json and customize.
+  Copy .senextrader.json.example to .senextrader.json and customize.
   Command-line arguments override config file values.
         """,
     )
@@ -418,13 +418,13 @@ Config File:
 
     # Validate required config values
     if not args.registry:
-        print("❌ ERROR: 'registry' must be set in .senex_trader.json")
+        print("❌ ERROR: 'registry' must be set in .senextrader.json")
         sys.exit(1)
     if not args.owner:
-        print("❌ ERROR: 'owner' must be set in .senex_trader.json")
+        print("❌ ERROR: 'owner' must be set in .senextrader.json")
         sys.exit(1)
     if not args.image_name:
-        print("❌ ERROR: 'image_name' must be set in .senex_trader.json")
+        print("❌ ERROR: 'image_name' must be set in .senextrader.json")
         sys.exit(1)
 
     # Create builder instance

@@ -14,7 +14,7 @@ This setup is **only for building and pushing containers**. Deployment is handle
 
 ### Phase 2: Deployment (Separate)
 - **Purpose**: Deploy containers to production servers
-- **Location**: `senex_trader_docs/deployment/`
+- **Location**: `senextrader_docs/deployment/`
 - **Tools**: Ansible, docker-compose, systemd
 - **Scope**: Infrastructure and orchestration
 
@@ -89,7 +89,7 @@ podman-compose -f docker-compose.yml -f docker-compose.prod.yml up
 2. **Build locally** to test: `python build.py --no-push`
 3. **Test with compose**: `cd docker && podman-compose -f docker-compose.yml -f docker-compose.dev.yml up`
 4. **Push to registry**: `python build.py --tag v1.x.x`
-5. **Deploy** (handled by deployment scripts in senex_trader_docs)
+5. **Deploy** (handled by deployment scripts in senextrader_docs)
 
 ## 🎯 Image Registry
 
@@ -119,7 +119,7 @@ All services have health checks:
 
 1. **Never commit** `.env.production` (contains secrets)
 2. **Build script** only builds and pushes - no deployment
-3. **Deployment** is handled separately (see senex_trader_docs/deployment)
+3. **Deployment** is handled separately (see senextrader_docs/deployment)
 4. **Daphne ASGI** is required (not optional) - WebSockets needed for real-time market data
 5. **PostgreSQL 15 & Redis 7** match production versions (Debian 12 compatibility)
 6. **Celery Beat** must run as single instance (not scalable)
@@ -127,6 +127,6 @@ All services have health checks:
 
 ## 🔗 See Also
 
-- **Deployment**: `senex_trader_docs/deployment/` - Production deployment guides
-- **Planning**: `senex_trader_docs/docker/` - Containerization research and planning
+- **Deployment**: `senextrader_docs/deployment/` - Production deployment guides
+- **Planning**: `senextrader_docs/docker/` - Containerization research and planning
 - **Reference**: `~/Development/options_strategy_trader/` - Reference implementation

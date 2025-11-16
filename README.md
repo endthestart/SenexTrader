@@ -54,8 +54,8 @@ Multi-strategy trading platform with intelligent strategy selection, real-time m
 
 1. **Clone the repository**
    ```bash
-   git clone <senex_trader-url> senex_trader
-   cd senex_trader
+   git clone <senextrader-url> senextrader
+   cd senextrader
    ```
 
 2. **Install Podman and podman-compose** (if not already installed)
@@ -132,8 +132,8 @@ python manage.py runserver
 ./run_celery.sh  # Runs both worker and beat, cleans stale schedule files
 
 # Alternative: Run Celery manually
-# Terminal 2: celery -A senex_trader worker -l info
-# Terminal 3: celery -A senex_trader beat -l info
+# Terminal 2: celery -A senextrader worker -l info
+# Terminal 3: celery -A senextrader beat -l info
 ```
 
 **Note**: Redis should already be running from step 3. If you need to restart it:
@@ -155,7 +155,7 @@ podman-compose -f docker-compose.dev.yml restart
 ## Project Structure
 
 ```
-senex_trader/
+senextrader/
 ├── accounts/           # User auth, broker OAuth, account settings
 ├── trading/            # Trading logic, positions, orders
 ├── streaming/          # Real-time WebSocket consumers

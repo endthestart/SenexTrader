@@ -8,7 +8,7 @@ services:
       dockerfile: docker/Dockerfile.dev
     environment:
       ENVIRONMENT: development
-      DJANGO_SETTINGS_MODULE: senex_trader.settings.development
+      DJANGO_SETTINGS_MODULE: senextrader.settings.development
       # Use SQLite for development (no PostgreSQL needed)
       DB_HOST: ""
     volumes:
@@ -23,7 +23,7 @@ services:
       dockerfile: docker/Dockerfile.dev
     environment:
       ENVIRONMENT: development
-      DJANGO_SETTINGS_MODULE: senex_trader.settings.development
+      DJANGO_SETTINGS_MODULE: senextrader.settings.development
       DB_HOST: ""
     volumes:
       - .:/app:z
@@ -33,7 +33,7 @@ services:
       dockerfile: docker/Dockerfile.dev
     environment:
       ENVIRONMENT: development
-      DJANGO_SETTINGS_MODULE: senex_trader.settings.development
+      DJANGO_SETTINGS_MODULE: senextrader.settings.development
       DB_HOST: ""
     volumes:
       - .:/app:z

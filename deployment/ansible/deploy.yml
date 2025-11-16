@@ -291,7 +291,7 @@
     - name: Stop any legacy podman-compose containers
       shell: |
         # Check if any containers are running with legacy names
-        OLD_CONTAINERS=$(podman ps -a --format "{{ '{{.Names}}' }}" | grep -E '^senex_trader_' || true)
+        OLD_CONTAINERS=$(podman ps -a --format "{{ '{{.Names}}' }}" | grep -E '^senextrader_' || true)
         if [ -n "$OLD_CONTAINERS" ]; then
           echo "Stopping legacy containers: $OLD_CONTAINERS"
           podman stop $OLD_CONTAINERS || true

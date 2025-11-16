@@ -89,7 +89,7 @@ def main():
     BASE_DIR = Path(__file__).resolve().parent
     load_dotenv(BASE_DIR / ".env")
 
-    os.environ.setdefault("DJANGO_SETTINGS_MODULE", "senex_trader.settings.development")
+    os.environ.setdefault("DJANGO_SETTINGS_MODULE", "senextrader.settings.development")
 ```
 
 ## When to Use Each Pattern

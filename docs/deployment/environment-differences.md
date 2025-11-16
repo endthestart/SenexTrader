@@ -53,7 +53,7 @@ when:
 
 | Setting | Staging | Production |
 |---------|---------|------------|
-| **Settings Module** | `senex_trader.settings.staging` | `senex_trader.settings.production` |
+| **Settings Module** | `senextrader.settings.staging` | `senextrader.settings.production` |
 | **ALLOWED_HOSTS** | `your-app.example.com,10.0.0.100,localhost,127.0.0.1` | `your-domain.com,www.your-domain.com` |
 | **WS_ALLOWED_ORIGINS** | `https://your-app.example.com` | `https://your-domain.com,https://www.your-domain.com` |
 | **APP_BASE_URL** | `https://your-app.example.com` | `https://your-domain.com` |
@@ -166,7 +166,7 @@ curl -I https://your-domain.com/health/
 - **Staging Vault:** `deployment/ansible/inventory/staging-vault.yml` (encrypted)
 - **Production Vault:** `deployment/ansible/inventory/production-vault.yml` (encrypted)
 - **Main Playbook:** `deployment/ansible/deploy.yml`
-- **Django Settings:** `senex_trader/settings/{staging,production}.py`
+- **Django Settings:** `senextrader/settings/{staging,production}.py`
 
 ---
 

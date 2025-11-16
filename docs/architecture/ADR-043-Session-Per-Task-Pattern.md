@@ -166,7 +166,7 @@ journalctl CONTAINER_NAME=celery_worker -f -p err
 ## References
 
 - [CLAUDE.md](/CLAUDE.md) - Project guidelines (KISS, DRY, YAGNI)
-- [Production Operations Guide](/senex_trader_docs/operations/production-operations-guide.md)
+- [Production Operations Guide](/senextrader_docs/operations/production-operations-guide.md)
 - Research: Internal investigation report (2025-10-31)
 - Related Issue: Position at 7 DTE (order 410555945) not processed
 

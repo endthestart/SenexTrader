@@ -69,7 +69,7 @@ The watchdog service monitors the web application health and automatically resta
 - Checks `/health/simple/` endpoint every 60 seconds
 - Restarts web service after 3 consecutive failures (3 minutes)
 - Sends email notification on restart
-- Logs all actions to `/var/log/senex_trader/watchdog.log`
+- Logs all actions to `/var/log/senextrader/watchdog.log`
 
 **Files:**
 - Script: `/opt/senex-trader/scripts/senex-watchdog.py`
@@ -97,7 +97,7 @@ sudo systemctl status senex-watchdog.timer
 sudo systemctl list-timers senex-watchdog.timer
 
 # View watchdog logs
-sudo tail -f /var/log/senex_trader/watchdog.log
+sudo tail -f /var/log/senextrader/watchdog.log
 
 # Check failure count
 cat /var/lib/senex-watchdog/failures.txt
@@ -176,7 +176,7 @@ mail_admins('Production Monitoring Test', 'Monitoring deployed successfully')
 \""
 
 # 4. View recent watchdog checks
-tail -20 /var/log/senex_trader/watchdog.log
+tail -20 /var/log/senextrader/watchdog.log
 ```
 
 ## What Notifications You'll Receive
@@ -250,7 +250,7 @@ If the watchdog is restarting the service too frequently:
 
 ## Related Documentation
 
-- Email settings: `senex_trader/settings/production.py` lines 255-333
+- Email settings: `senextrader/settings/production.py` lines 255-333
 - Watchdog script: `deployment/scripts/senex-watchdog.py`
 - Ansible deployment: `deployment/ansible/deploy.yml`
 - Vault configuration: `deployment/ansible/inventory/production-vault.yml`

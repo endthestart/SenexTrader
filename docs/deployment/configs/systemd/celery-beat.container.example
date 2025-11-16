@@ -19,7 +19,7 @@ Network=senex_net.network
 EnvironmentFile=/etc/senex-trader/.env
 
 # Celery beat command (uses database scheduler)
-Exec=celery -A senex_trader beat \
+Exec=celery -A senextrader beat \
     -l info \
     --scheduler django_celery_beat.schedulers:DatabaseScheduler
 

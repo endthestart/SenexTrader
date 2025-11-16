@@ -49,7 +49,7 @@ HealthInterval=30s
 Memory=1536M
 CPUQuota=100%
 
-Exec=daphne -b 0.0.0.0 -p 8000 --access-log - senex_trader.asgi:application
+Exec=daphne -b 0.0.0.0 -p 8000 --access-log - senextrader.asgi:application
 
 [Service]
 Restart=always
@@ -119,7 +119,7 @@ sudo apt install pgbouncer
 
 ```ini
 [databases]
-senex_trader = host=localhost port=5432 dbname=senex_trader user=senex_user
+senextrader = host=localhost port=5432 dbname=senextrader user=senex_user
 
 [pgbouncer]
 listen_addr = 127.0.0.1
@@ -190,7 +190,7 @@ sudo systemctl enable pgbouncer
 sudo systemctl start pgbouncer
 
 # Test connection
-psql -h localhost -p 6432 -U senex_user senex_trader
+psql -h localhost -p 6432 -U senex_user senextrader
 ```
 
 **Monitor PgBouncer**:
@@ -262,7 +262,7 @@ psql -U postgres -c "SELECT now() - pg_last_xact_replay_timestamp() AS replicati
 **4. Django database router**:
 
 ```python
-# senex_trader/db_router.py
+# senextrader/db_router.py
 class ReplicaRouter:
     def db_for_read(self, model, **hints):
         """Route reads to replica"""
@@ -293,7 +293,7 @@ DATABASES = {
     }
 }
 
-DATABASE_ROUTERS = ['senex_trader.db_router.ReplicaRouter']
+DATABASE_ROUTERS = ['senextrader.db_router.ReplicaRouter']
 ```
 
 ## Redis Scaling
@@ -422,7 +422,7 @@ systemctl --user start celery-worker-general.service
 ```ini
 # celery-worker-trading.container
 [Container]
-Exec=celery -A senex_trader worker \
+Exec=celery -A senextrader worker \
     --queue=trading \
     --concurrency=8 \
     --loglevel=info \

@@ -321,7 +321,7 @@ Default: admin / CHANGE_ME
 
 ```yaml
 groups:
-  - name: senex_trader_alerts
+  - name: senextrader_alerts
     interval: 30s
     rules:
       # High error rate
