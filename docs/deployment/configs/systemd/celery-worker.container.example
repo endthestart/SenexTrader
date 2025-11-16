@@ -1,0 +1,42 @@
+# Systemd Quadlet file for Celery worker
+# Location: ~/.config/containers/systemd/celery-worker.container
+
+[Unit]
+Description=Celery Worker - Senex Trader
+After=redis.service django.service
+Requires=redis.service
+
+[Container]
+Image=registry.example.com/senex-trader:latest
+ContainerName=celery-worker
+AutoUpdate=registry
+
+# Network configuration
+Network=senex_net.network
+
+# Environment variables
+EnvironmentFile=/etc/senex-trader/.env
+
+# Celery worker command
+Exec=celery -A senex_trader worker \
+    -Q trading,accounts,services \
+    -l info \
+    --concurrency=4 \
+    --max-tasks-per-child=100 \
+    --time-limit=3600 \
+    --soft-time-limit=1800
+
+# Resource limits
+Memory=2G
+CPUQuota=200%
+
+[Service]
+Restart=always
+RestartSec=10
+TimeoutStopSec=300
+
+# Graceful shutdown
+ExecStop=/usr/bin/podman stop -t 300 celery-worker
+
+[Install]
+WantedBy=default.target

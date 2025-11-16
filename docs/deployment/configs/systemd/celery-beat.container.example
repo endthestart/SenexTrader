@@ -1,0 +1,34 @@
+# Systemd Quadlet file for Celery beat scheduler
+# Location: ~/.config/containers/systemd/celery-beat.container
+# WARNING: Only run ONE instance of celery-beat!
+
+[Unit]
+Description=Celery Beat Scheduler - Senex Trader
+After=redis.service django.service
+Requires=redis.service
+
+[Container]
+Image=registry.example.com/senex-trader:latest
+ContainerName=celery-beat
+AutoUpdate=registry
+
+# Network configuration
+Network=senex_net.network
+
+# Environment variables
+EnvironmentFile=/etc/senex-trader/.env
+
+# Celery beat command (uses database scheduler)
+Exec=celery -A senex_trader beat \
+    -l info \
+    --scheduler django_celery_beat.schedulers:DatabaseScheduler
+
+# Resource limits (beat is lightweight)
+Memory=256M
+
+[Service]
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=default.target

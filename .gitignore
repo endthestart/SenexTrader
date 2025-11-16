@@ -1,0 +1,125 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyo
+*.pyd
+.Python
+
+# Environments
+.venv/
+venv/
+env/
+ENV/
+.env/
+
+# Clutter (old symlink pattern - docs now version controlled)
+# docs/ is now a real directory in the monorepo
+
+# Private configuration (not version controlled - monorepo structure)
+config/
+.claude
+
+# Django
+db.sqlite3
+db.sqlite3-journal
+local_settings.py
+media/
+staticfiles/
+*.sqlite
+*.sqlite3
+
+# Logs
+*.log
+logs/
+*.log.*
+
+# Unit test / coverage
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+.tox/
+.nox/
+selenium_failures/
+
+# Packaging / build
+build/
+dist/
+*.egg-info/
+pip-wheel-metadata/
+
+# IDE/editor
+.idea/
+.vscode/
+
+# AI Assistant Configuration (now version controlled in monorepo)
+# AI files are now part of the main repo, not symlinks
+
+# OS files
+.DS_Store
+Thumbs.db
+*~
+*.swp
+*.swo
+*.swn
+.*.swp
+.*.swo
+.*.swn
+
+# Env files
+.env
+
+# Encryption keys (do NOT commit)
+keys/
+*.key
+*.pem
+
+# Reference Application
+ref_app
+
+# Redis
+dump.rdb
+redis.log
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+*.temp
+*.bak
+*.backup
+*.old
+
+# Celery beat schedule files
+celerybeat*
+*.pidoptions_strategy_trader/
+
+# Docker / Podman / Container files
+.env.production
+.env.local
+.env.*.local
+postgres_data/
+redis_data/
+
+# Deployment / Ansible
+# Deployment secrets and personal configs
+deployment/ansible/inventory/*-vault.yml
+!deployment/ansible/inventory/*-vault.yml.example
+deployment/ansible/inventory/hosts.yml
+!deployment/ansible/inventory/hosts.yml.example
+.vault_pass*
+
+# Build configuration symlinks (from senex_trader_config)
+build.py
+deployment/ansible/inventory/production-vault.yml
+deployment/ansible/inventory/staging-vault.yml
+deployment/quadlet/*.container
+
+# Developer-specific build configuration
+.senex_trader.json
+!.senex_trader.json.example
+*.pdf

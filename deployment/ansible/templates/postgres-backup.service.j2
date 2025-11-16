@@ -1,0 +1,28 @@
+# PostgreSQL Backup Service for Senex Trader
+# Managed by Ansible - DO NOT EDIT MANUALLY
+#
+# This service runs the PostgreSQL backup script.
+# Triggered by postgres-backup.timer or manually via systemctl.
+
+[Unit]
+Description=PostgreSQL Backup for Senex Trader
+After=postgres.service
+Requires=postgres.service
+
+[Service]
+Type=oneshot
+ExecStart={{ app_directory }}/bin/postgres-backup.sh
+User={{ app_user }}
+Group={{ app_user }}
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=postgres-backup
+
+# Security
+PrivateTmp=true
+NoNewPrivileges=true
+
+[Install]
+WantedBy=multi-user.target

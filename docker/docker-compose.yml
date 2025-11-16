@@ -1,0 +1,213 @@
+# Docker Compose configuration for Senex Trader
+# Base configuration with PostgreSQL 15 and Redis 7 (matches production)
+#
+# Note: Uses ${APP_DIR:-.} for bind mount paths
+# - Local dev: defaults to current directory (.)
+# - Production: set APP_DIR=/opt/senex-trader in .env
+
+services:
+  # PostgreSQL 15 Database (matches production)
+  postgres:
+    image: postgres:15-alpine
+    container_name: senex_trader_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${DB_NAME:-senex_trader}
+      POSTGRES_USER: ${DB_USER:-senex_user}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      TZ: America/New_York
+    volumes:
+      - ${APP_DIR:-.}/data/postgres:/var/lib/postgresql/data
+    networks:
+      - senex_network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-senex_user} -d ${DB_NAME:-senex_trader}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Redis 7 for Cache, Celery Broker, and Channels (matches production)
+  redis:
+    image: redis:7-alpine
+    container_name: senex_trader_redis
+    restart: unless-stopped
+    command: redis-server --maxmemory 512mb --maxmemory-policy allkeys-lru --stop-writes-on-bgsave-error no
+    environment:
+      TZ: America/New_York
+    volumes:
+      - ${APP_DIR:-.}/data/redis:/data
+    networks:
+      - senex_network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Django Web Application (Daphne ASGI server)
+  web:
+    image: ${GITEA_REGISTRY:-registry.example.com}/${IMAGE_NAME:-your-username/senex-trader}:${IMAGE_TAG:-v0.1.0}
+    container_name: senex_trader_web
+    restart: unless-stopped
+    command: web
+    environment:
+      # Container mode
+      CONTAINER_MODE: "true"
+      ENVIRONMENT: ${ENVIRONMENT:-production}
+      TZ: America/New_York
+
+      # Django Core
+      SECRET_KEY: ${SECRET_KEY}
+      FIELD_ENCRYPTION_KEY: ${FIELD_ENCRYPTION_KEY}
+      ALLOWED_HOSTS: ${ALLOWED_HOSTS:-localhost,127.0.0.1}
+      WS_ALLOWED_ORIGINS: ${WS_ALLOWED_ORIGINS:-http://localhost:8000}
+      APP_BASE_URL: ${APP_BASE_URL:-http://localhost:8000}
+
+      # Database (PostgreSQL 18)
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: ${DB_NAME:-senex_trader}
+      DB_USER: ${DB_USER:-senex_user}
+      DB_PASSWORD: ${DB_PASSWORD}
+
+      # Redis 8.2
+      REDIS_URL: redis://redis:6379/0
+      CHANNELS_REDIS_URL: redis://redis:6379/1
+      CELERY_BROKER_URL: redis://redis:6379/2
+      CELERY_RESULT_BACKEND: redis://redis:6379/3
+
+      # TastyTrade API
+      TASTYTRADE_CLIENT_ID: ${TASTYTRADE_CLIENT_ID}
+      TASTYTRADE_CLIENT_SECRET: ${TASTYTRADE_CLIENT_SECRET}
+      TASTYTRADE_SCOPES: ${TASTYTRADE_SCOPES:-read trade openid}
+
+      # Email Configuration
+      EMAIL_BACKEND: ${EMAIL_BACKEND:-django.core.mail.backends.smtp.EmailBackend}
+      EMAIL_HOST: ${EMAIL_HOST:-localhost}
+      EMAIL_PORT: ${EMAIL_PORT:-25}
+      EMAIL_USE_TLS: ${EMAIL_USE_TLS:-false}
+      EMAIL_USE_SSL: ${EMAIL_USE_SSL:-false}
+      EMAIL_HOST_USER: ${EMAIL_HOST_USER:-}
+      EMAIL_HOST_PASSWORD: ${EMAIL_HOST_PASSWORD:-}
+      DEFAULT_FROM_EMAIL: ${DEFAULT_FROM_EMAIL:-noreply@example.com}
+    volumes:
+      - ${APP_DIR:-.}/data/logs:/var/log/senex_trader
+      - ${APP_DIR:-.}/data/staticfiles:/app/staticfiles
+    ports:
+      - "0.0.0.0:8000:8000"
+    networks:
+      - senex_network
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  # Celery Worker
+  celery_worker:
+    image: ${GITEA_REGISTRY:-registry.example.com}/${IMAGE_NAME:-your-username/senex-trader}:${IMAGE_TAG:-v0.1.0}
+    container_name: senex_trader_celery_worker
+    restart: unless-stopped
+    command: celery-worker
+    environment:
+      # Container mode
+      CONTAINER_MODE: "true"
+      ENVIRONMENT: ${ENVIRONMENT:-production}
+      TZ: America/New_York
+
+      # Django Core
+      SECRET_KEY: ${SECRET_KEY}
+      FIELD_ENCRYPTION_KEY: ${FIELD_ENCRYPTION_KEY}
+
+      # Database
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: ${DB_NAME:-senex_trader}
+      DB_USER: ${DB_USER:-senex_user}
+      DB_PASSWORD: ${DB_PASSWORD}
+
+      # Redis
+      REDIS_URL: redis://redis:6379/0
+      CHANNELS_REDIS_URL: redis://redis:6379/1
+      CELERY_BROKER_URL: redis://redis:6379/2
+      CELERY_RESULT_BACKEND: redis://redis:6379/3
+
+      # TastyTrade API
+      TASTYTRADE_CLIENT_ID: ${TASTYTRADE_CLIENT_ID}
+      TASTYTRADE_CLIENT_SECRET: ${TASTYTRADE_CLIENT_SECRET}
+
+      # Email Configuration
+      EMAIL_BACKEND: ${EMAIL_BACKEND:-django.core.mail.backends.smtp.EmailBackend}
+      EMAIL_HOST: ${EMAIL_HOST:-localhost}
+      EMAIL_PORT: ${EMAIL_PORT:-25}
+      EMAIL_USE_TLS: ${EMAIL_USE_TLS:-false}
+      EMAIL_USE_SSL: ${EMAIL_USE_SSL:-false}
+      EMAIL_HOST_USER: ${EMAIL_HOST_USER:-}
+      EMAIL_HOST_PASSWORD: ${EMAIL_HOST_PASSWORD:-}
+      DEFAULT_FROM_EMAIL: ${DEFAULT_FROM_EMAIL:-noreply@example.com}
+    volumes:
+      - ${APP_DIR:-.}/data/logs:/var/log/senex_trader
+    networks:
+      - senex_network
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  # Celery Beat Scheduler
+  celery_beat:
+    image: ${GITEA_REGISTRY:-registry.example.com}/${IMAGE_NAME:-your-username/senex-trader}:${IMAGE_TAG:-v0.1.0}
+    container_name: senex_trader_celery_beat
+    restart: unless-stopped
+    command: celery-beat
+    environment:
+      # Container mode
+      CONTAINER_MODE: "true"
+      ENVIRONMENT: ${ENVIRONMENT:-production}
+      TZ: America/New_York
+
+      # Django Core
+      SECRET_KEY: ${SECRET_KEY}
+      FIELD_ENCRYPTION_KEY: ${FIELD_ENCRYPTION_KEY}
+
+      # Database
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: ${DB_NAME:-senex_trader}
+      DB_USER: ${DB_USER:-senex_user}
+      DB_PASSWORD: ${DB_PASSWORD}
+
+      # Redis
+      REDIS_URL: redis://redis:6379/0
+      CHANNELS_REDIS_URL: redis://redis:6379/1
+      CELERY_BROKER_URL: redis://redis:6379/2
+      CELERY_RESULT_BACKEND: redis://redis:6379/3
+
+      # TastyTrade API
+      TASTYTRADE_CLIENT_ID: ${TASTYTRADE_CLIENT_ID}
+      TASTYTRADE_CLIENT_SECRET: ${TASTYTRADE_CLIENT_SECRET}
+
+      # Email Configuration
+      EMAIL_BACKEND: ${EMAIL_BACKEND:-django.core.mail.backends.smtp.EmailBackend}
+      EMAIL_HOST: ${EMAIL_HOST:-localhost}
+      EMAIL_PORT: ${EMAIL_PORT:-25}
+      EMAIL_USE_TLS: ${EMAIL_USE_TLS:-false}
+      EMAIL_USE_SSL: ${EMAIL_USE_SSL:-false}
+      EMAIL_HOST_USER: ${EMAIL_HOST_USER:-}
+      EMAIL_HOST_PASSWORD: ${EMAIL_HOST_PASSWORD:-}
+      DEFAULT_FROM_EMAIL: ${DEFAULT_FROM_EMAIL:-noreply@example.com}
+    volumes:
+      - ${APP_DIR:-.}/data/logs:/var/log/senex_trader
+    networks:
+      - senex_network
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+# Internal network
+networks:
+  senex_network:
+    driver: bridge

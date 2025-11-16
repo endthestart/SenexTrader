@@ -1,0 +1,220 @@
+---
+# Debian Upgrade Playbook for Senex Trader
+# Upgrades Debian 12 (bookworm) to Debian 13 (trixie) for Podman 5.x support
+#
+# Usage:
+#   ansible-playbook debian-upgrade.yml --limit staging
+#   ansible-playbook debian-upgrade.yml --limit production
+#
+# WARNING: This will perform a major OS upgrade. Ensure you have:
+#   1. Full system backup
+#   2. Console access (in case SSH breaks)
+#   3. Scheduled maintenance window
+#   4. Tested on staging first
+
+- name: Upgrade Debian to version 13 (trixie) for Podman 5.x support
+  hosts: all
+  become: yes
+  gather_facts: yes
+
+  tasks:
+    # =========================================================================
+    # 1. Pre-upgrade checks
+    # =========================================================================
+    - name: Check current Debian version
+      set_fact:
+        debian_version: "{{ ansible_facts['distribution_version'] }}"
+
+    - name: Display current Debian version
+      debug:
+        msg: "Current Debian version: {{ ansible_facts['distribution'] }} {{ debian_version }} ({{ ansible_facts['distribution_release'] }})"
+
+    - name: Check if Debian upgrade is needed
+      set_fact:
+        needs_debian_upgrade: "{{ debian_version is version('13', '<') }}"
+
+    - name: Exit if already on Debian 13+
+      meta: end_play
+      when: not needs_debian_upgrade | bool
+
+    - name: Confirm upgrade is needed
+      debug:
+        msg: "System needs upgrade from Debian {{ debian_version }} to Debian 13"
+
+    # =========================================================================
+    # 2. Clean up old Podman packages
+    # =========================================================================
+    - name: Fix broken package dependencies (if any)
+      shell: |
+        apt --fix-broken install -y || true
+        dpkg --configure -a || true
+      changed_when: false
+      ignore_errors: yes
+
+    - name: Remove ALL conflicting container packages from failed upgrades
+      apt:
+        name:
+          - buildah
+          - podman
+          - containers-common
+          - golang-github-containers-common
+          - golang-github-containers-image
+          - criu
+          - libcriu2
+          - conmon
+          - crun
+          - slirp4netns
+          - fuse-overlayfs
+          - containernetworking-plugins
+          - podman-plugins
+          - podman-machine-cni
+          - containers-storage
+        state: absent
+        purge: yes
+      ignore_errors: yes
+
+    - name: Remove third-party repository files (Kubic, testing)
+      file:
+        path: "{{ item }}"
+        state: absent
+      loop:
+        - /etc/apt/sources.list.d/kubic.list
+        - /etc/apt/sources.list.d/debian-testing.list
+        - /etc/apt/preferences.d/podman-testing
+        - /usr/share/keyrings/kubic-archive-keyring.gpg
+      ignore_errors: yes
+
+    - name: Clean apt cache after package removal
+      apt:
+        autoclean: yes
+        autoremove: yes
+        update_cache: yes
+
+    # =========================================================================
+    # 3. Perform Debian upgrade
+    # =========================================================================
+    - name: Upgrade to Debian 13 (trixie)
+      block:
+        - name: Backup current sources.list
+          copy:
+            src: /etc/apt/sources.list
+            dest: /etc/apt/sources.list.backup-{{ ansible_date_time.epoch }}
+            remote_src: yes
+
+        - name: Update sources.list to Debian 13 (trixie)
+          replace:
+            path: /etc/apt/sources.list
+            regexp: "{{ ansible_facts['distribution_release'] }}"
+            replace: 'trixie'
+
+        - name: Display updated sources.list
+          shell: cat /etc/apt/sources.list
+          register: sources_list_content
+          changed_when: false
+
+        - name: Show sources.list after update
+          debug:
+            msg: "{{ sources_list_content.stdout_lines }}"
+
+        - name: Update apt cache with new sources
+          apt:
+            update_cache: yes
+
+        - name: Check what packages would be upgraded
+          shell: apt list --upgradable 2>/dev/null | head -20
+          register: upgradable_packages
+          changed_when: false
+
+        - name: Display sample of upgradable packages
+          debug:
+            msg: "{{ upgradable_packages.stdout_lines }}"
+
+        - name: Perform distribution upgrade to Debian 13
+          apt:
+            upgrade: dist
+            update_cache: yes
+          register: dist_upgrade_result
+
+        - name: Display upgrade result summary
+          debug:
+            msg: "Dist-upgrade completed. Changed: {{ dist_upgrade_result.changed }}"
+
+        - name: Check if reboot is required
+          stat:
+            path: /var/run/reboot-required
+          register: reboot_required_file
+
+        - name: Reboot server if kernel was upgraded
+          reboot:
+            msg: "Rebooting after Debian 13 upgrade"
+            connect_timeout: 5
+            reboot_timeout: 300
+            pre_reboot_delay: 0
+            post_reboot_delay: 30
+            test_command: uptime
+          when: reboot_required_file.stat.exists
+
+        - name: Re-gather facts after upgrade
+          setup:
+
+        - name: Display Debian version after upgrade
+          debug:
+            msg: "Debian version after upgrade: {{ ansible_facts['distribution'] }} {{ ansible_facts['distribution_version'] }} ({{ ansible_facts['distribution_release'] }})"
+
+        - name: Verify Debian 13 installation
+          assert:
+            that:
+              - ansible_facts['distribution_version'] is version('13', '>=')
+            fail_msg: "Debian upgrade failed - still on version {{ ansible_facts['distribution_version'] }}"
+            success_msg: "Successfully upgraded to Debian {{ ansible_facts['distribution_version'] }}"
+      when:
+        - ansible_facts['distribution'] == 'Debian'
+        - needs_debian_upgrade | bool
+
+    # =========================================================================
+    # 4. Verify Podman 5.x installation
+    # =========================================================================
+    - name: Install Podman and dependencies
+      apt:
+        name:
+          - podman
+          - curl
+          - git
+          - iptables
+          - uidmap
+          - passt
+          - aardvark-dns
+        state: present
+        update_cache: yes
+
+    - name: Verify Podman installation and version
+      shell: podman --version
+      register: podman_version_result
+      changed_when: false
+
+    - name: Display Podman version
+      debug:
+        msg: "Podman installed: {{ podman_version_result.stdout }}"
+
+    - name: Extract Podman version number
+      shell: podman --version | grep -oP '\d+\.\d+' | head -1
+      register: final_podman_version
+      changed_when: false
+
+    - name: Verify Quadlet support is available
+      assert:
+        that:
+          - final_podman_version.stdout is version('4.4', '>=')
+        fail_msg: "Podman {{ final_podman_version.stdout }} is too old. Quadlet requires Podman 4.4+"
+        success_msg: "Podman {{ final_podman_version.stdout }} has Quadlet support"
+
+    - name: Display upgrade summary
+      debug:
+        msg:
+          - "Upgrade complete!"
+          - "Debian version: {{ ansible_facts['distribution'] }} {{ ansible_facts['distribution_version'] }}"
+          - "Podman version: {{ podman_version_result.stdout }}"
+          - ""
+          - "Next steps:"
+          - "  1. Test basic system functionality"
+          - "  2. Run deploy.yml to deploy the application"

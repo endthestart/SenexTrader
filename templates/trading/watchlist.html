@@ -1,0 +1,544 @@
+{% extends "base/base.html" %}
+
+{% block title %}{{ page_title }} - Senex Trader{% endblock %}
+
+{% block extra_css %}
+<style>
+.watchlist-container {
+    max-width: 900px;
+    margin: 0 auto;
+}
+
+.page-header {
+    margin-bottom: 2rem;
+}
+
+.page-header h1 {
+    color: var(--accent-color, #64B5F6);
+    margin-bottom: 0.5rem;
+}
+
+.help-text {
+    color: #9e9e9e;
+    font-size: 0.9rem;
+}
+
+.search-section {
+    margin-bottom: 2rem;
+    position: relative;
+}
+
+.search-box {
+    position: relative;
+}
+
+#symbol-search {
+    width: 100%;
+    padding: 0.75rem 1rem;
+    background-color: #2d2d2d;
+    border: 1px solid #444;
+    border-radius: 0.375rem;
+    color: #fff;
+    font-size: 1rem;
+}
+
+#symbol-search:focus {
+    outline: none;
+    border-color: var(--accent-color, #64B5F6);
+    box-shadow: 0 0 0 0.2rem rgba(100, 181, 246, 0.25);
+}
+
+.search-results {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    background-color: #2d2d2d;
+    border: 1px solid #444;
+    border-top: none;
+    border-radius: 0 0 0.375rem 0.375rem;
+    max-height: 300px;
+    overflow-y: auto;
+    z-index: 1000;
+    margin-top: -0.375rem;
+}
+
+.search-result-item {
+    padding: 0.75rem 1rem;
+    cursor: pointer;
+    border-bottom: 1px solid #383838;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.search-result-item:hover {
+    background-color: #383838;
+}
+
+.search-result-item .symbol {
+    font-weight: bold;
+    color: var(--accent-color, #64B5F6);
+    margin-right: 1rem;
+    min-width: 60px;
+}
+
+.search-result-item .description {
+    color: #ccc;
+    flex: 1;
+}
+
+.no-results {
+    padding: 1rem;
+    text-align: center;
+    color: #888;
+}
+
+.watchlist-header {
+    display: grid;
+    grid-template-columns: 100px 1fr 120px;
+    gap: 1rem;
+    padding: 0.75rem 1rem;
+    background-color: #2d2d2d;
+    border: 1px solid #444;
+    border-radius: 0.375rem 0.375rem 0 0;
+    font-weight: bold;
+    color: var(--accent-color, #64B5F6);
+}
+
+#watchlist-list {
+    border: 1px solid #444;
+    border-top: none;
+    border-radius: 0 0 0.375rem 0.375rem;
+    background-color: #1e1e1e;
+}
+
+.watchlist-item {
+    display: grid;
+    grid-template-columns: 100px 1fr 120px;
+    gap: 1rem;
+    padding: 0.75rem 1rem;
+    border-bottom: 1px solid #383838;
+}
+
+.watchlist-item:last-child {
+    border-bottom: none;
+}
+
+.watchlist-item .col-symbol {
+    font-weight: bold;
+    color: var(--accent-color, #64B5F6);
+}
+
+.watchlist-item .col-description {
+    color: #ccc;
+}
+
+.btn-remove {
+    background-color: #dc3545;
+    color: white;
+    border: none;
+    padding: 0.4rem 1rem;
+    border-radius: 0.25rem;
+    cursor: pointer;
+    font-size: 0.9rem;
+}
+
+.btn-remove:hover {
+    background-color: #c82333;
+}
+
+.empty-state {
+    padding: 3rem 1rem;
+    text-align: center;
+    color: #888;
+}
+
+.empty-state p {
+    margin-bottom: 0.5rem;
+}
+
+.hidden {
+    display: none;
+}
+
+.toast-container {
+    position: fixed;
+    top: 80px;
+    right: 20px;
+    z-index: 2000;
+}
+
+.toast {
+    background-color: #2d2d2d;
+    border: 1px solid #444;
+    border-radius: 0.375rem;
+    padding: 1rem;
+    margin-bottom: 0.5rem;
+    min-width: 250px;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+    animation: slideIn 0.3s ease-out;
+}
+
+@keyframes slideIn {
+    from {
+        transform: translateX(100%);
+        opacity: 0;
+    }
+    to {
+        transform: translateX(0);
+        opacity: 1;
+    }
+}
+
+.toast.success {
+    border-left: 4px solid #28a745;
+}
+
+.toast.error {
+    border-left: 4px solid #dc3545;
+}
+
+.watchlist-count {
+    color: #888;
+    font-size: 0.9rem;
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="watchlist-container">
+    <div class="page-header">
+        <h1><i class="bi bi-star"></i> My Watchlist</h1>
+        <p class="help-text">
+            Track equities for daily trade suggestions and portfolio monitoring.
+            <span id="count-display" class="watchlist-count">Maximum 20 symbols.</span>
+        </p>
+    </div>
+
+    <!-- Symbol Search -->
+    <div class="search-section">
+        <div class="search-box">
+            <input
+                type="text"
+                id="symbol-search"
+                placeholder="Search symbols (e.g., AAPL, SPY)..."
+                autocomplete="off"
+            >
+            <div id="search-results" class="search-results hidden">
+                <!-- Results populated via JS -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Watchlist Items -->
+    <div class="watchlist-items">
+        <div class="watchlist-header">
+            <span class="col-symbol">Symbol</span>
+            <span class="col-description">Description</span>
+            <span class="col-actions">Actions</span>
+        </div>
+
+        <div id="watchlist-list">
+            <div class="empty-state" id="empty-state">
+                <p><i class="bi bi-inbox" style="font-size: 2rem; color: #555;"></i></p>
+                <p>Your watchlist is empty.</p>
+                <p class="help-text">Search for symbols above to get started.</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Toast container for notifications -->
+<div class="toast-container" id="toast-container"></div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// Toast notification system
+function showToast(message, type = 'success') {
+    const container = document.getElementById('toast-container');
+    const toast = document.createElement('div');
+    toast.className = `toast ${type}`;
+    toast.textContent = message;
+    container.appendChild(toast);
+
+    setTimeout(() => {
+        toast.style.animation = 'slideIn 0.3s ease-out reverse';
+        setTimeout(() => toast.remove(), 300);
+    }, 3000);
+}
+
+// XSS-safe DOM creation helpers
+// XSS-safe text escaping (not currently used - kept for reference)
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+function createSearchResultItem(symbol, description) {
+    const item = document.createElement('div');
+    item.className = 'search-result-item';
+    item.dataset.symbol = symbol;
+    item.dataset.description = description || '';
+
+    const symbolSpan = document.createElement('span');
+    symbolSpan.className = 'symbol';
+    symbolSpan.textContent = symbol;
+
+    const descSpan = document.createElement('span');
+    descSpan.className = 'description';
+    descSpan.textContent = description || '';
+
+    item.appendChild(symbolSpan);
+    item.appendChild(descSpan);
+
+    item.addEventListener('click', () => addToWatchlist(symbol, description));
+
+    return item;
+}
+
+function createWatchlistItem(item) {
+    const container = document.createElement('div');
+    container.className = 'watchlist-item';
+    container.dataset.id = item.id;
+
+    const symbolSpan = document.createElement('span');
+    symbolSpan.className = 'col-symbol';
+    symbolSpan.textContent = item.symbol;
+
+    const descSpan = document.createElement('span');
+    descSpan.className = 'col-description';
+    descSpan.textContent = item.description || '';
+
+    const actionsSpan = document.createElement('span');
+    actionsSpan.className = 'col-actions';
+
+    const removeBtn = document.createElement('button');
+    removeBtn.className = 'btn-remove';
+    removeBtn.textContent = 'Remove';
+    removeBtn.addEventListener('click', () => removeFromWatchlist(item.id, item.symbol));
+
+    actionsSpan.appendChild(removeBtn);
+
+    container.appendChild(symbolSpan);
+    container.appendChild(descSpan);
+    container.appendChild(actionsSpan);
+
+    return container;
+}
+
+// Symbol search with debouncing
+let searchTimeout;
+const searchInput = document.getElementById('symbol-search');
+const searchResults = document.getElementById('search-results');
+
+searchInput.addEventListener('input', (e) => {
+    clearTimeout(searchTimeout);
+    const query = e.target.value.trim();
+
+    if (query.length < 1) {
+        searchResults.classList.add('hidden');
+        return;
+    }
+
+    searchTimeout = setTimeout(() => searchSymbols(query), 300);
+});
+
+async function searchSymbols(query) {
+    try {
+        const response = await fetch(`/trading/api/watchlist/search/?q=${encodeURIComponent(query)}`);
+        const data = await response.json();
+
+        // Clear previous results using safe DOM removal
+        while (searchResults.firstChild) {
+            searchResults.removeChild(searchResults.firstChild);
+        }
+
+        if (data.error) {
+            const noResults = document.createElement('div');
+            noResults.className = 'no-results';
+            noResults.textContent = data.error;
+            searchResults.appendChild(noResults);
+            searchResults.classList.remove('hidden');
+            return;
+        }
+
+        if (data.results && data.results.length > 0) {
+            data.results.forEach(r => {
+                const resultItem = createSearchResultItem(r.symbol, r.description);
+                searchResults.appendChild(resultItem);
+            });
+            searchResults.classList.remove('hidden');
+        } else {
+            const noResults = document.createElement('div');
+            noResults.className = 'no-results';
+            noResults.textContent = 'No symbols found';
+            searchResults.appendChild(noResults);
+            searchResults.classList.remove('hidden');
+        }
+    } catch (error) {
+        console.error('Search error:', error);
+        showToast('Search failed', 'error');
+    }
+}
+
+async function addToWatchlist(symbol, description) {
+    try {
+        const response = await fetch('/trading/api/watchlist/', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCsrfToken()
+            },
+            body: JSON.stringify({ symbol, description })
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+            showToast(`${symbol} added to watchlist`);
+            searchInput.value = '';
+            searchResults.classList.add('hidden');
+            loadWatchlist();
+        } else {
+            showToast(data.error || 'Failed to add symbol', 'error');
+        }
+    } catch (error) {
+        console.error('Add error:', error);
+        showToast('Failed to add symbol', 'error');
+    }
+}
+
+async function removeFromWatchlist(itemId, symbol) {
+    // Use centralized confirmation modal
+    return new Promise((resolve) => {
+        window.showConfirmModal(
+            'Remove Symbol',
+            `Remove ${symbol} from watchlist?`,
+            async () => {
+                await performRemoval(itemId, symbol);
+                resolve();
+            },
+            'Remove',
+            'btn-danger'
+        );
+    });
+}
+
+async function performRemoval(itemId, symbol) {
+    try {
+        const response = await fetch(`/trading/api/watchlist/${itemId}/`, {
+            method: 'DELETE',
+            headers: {
+                'X-CSRFToken': getCsrfToken()
+            }
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+            showToast(`${symbol} removed from watchlist`);
+            loadWatchlist();
+        } else {
+            showToast(data.error || 'Failed to remove symbol', 'error');
+        }
+    } catch (error) {
+        console.error('Remove error:', error);
+        showToast('Failed to remove symbol', 'error');
+    }
+}
+
+async function loadWatchlist() {
+    try {
+        const response = await fetch('/trading/api/watchlist/');
+        const data = await response.json();
+
+        const listContainer = document.getElementById('watchlist-list');
+        const countDisplay = document.getElementById('count-display');
+
+        // Clear existing content using safe DOM removal
+        while (listContainer.firstChild) {
+            listContainer.removeChild(listContainer.firstChild);
+        }
+
+        if (data.items && data.items.length === 0) {
+            // Create empty state
+            const emptyState = document.createElement('div');
+            emptyState.className = 'empty-state';
+            emptyState.id = 'empty-state';
+
+            const icon = document.createElement('p');
+            const iconEl = document.createElement('i');
+            iconEl.className = 'bi bi-inbox';
+            iconEl.style.fontSize = '2rem';
+            iconEl.style.color = '#555';
+            icon.appendChild(iconEl);
+
+            const message = document.createElement('p');
+            message.textContent = 'Your watchlist is empty.';
+
+            const helpText = document.createElement('p');
+            helpText.className = 'help-text';
+            helpText.textContent = 'Search for symbols above to get started.';
+
+            emptyState.appendChild(icon);
+            emptyState.appendChild(message);
+            emptyState.appendChild(helpText);
+
+            listContainer.appendChild(emptyState);
+
+            countDisplay.textContent = 'Maximum 20 symbols.';
+            searchInput.disabled = false;
+            searchInput.placeholder = 'Search symbols (e.g., AAPL, SPY)...';
+            return;
+        }
+
+        // Create watchlist items using safe DOM creation
+        data.items.forEach(item => {
+            const watchlistItem = createWatchlistItem(item);
+            listContainer.appendChild(watchlistItem);
+        });
+
+        // Update count display
+        const count = data.count;
+        const maxCount = 20;
+        countDisplay.textContent = `${count}/${maxCount} symbols`;
+
+        // Disable search if at max
+        if (count >= maxCount) {
+            searchInput.disabled = true;
+            searchInput.placeholder = `Maximum ${maxCount} symbols reached`;
+        } else {
+            searchInput.disabled = false;
+            searchInput.placeholder = `Search symbols (${count}/${maxCount})...`;
+        }
+
+    } catch (error) {
+        console.error('Load error:', error);
+        showToast('Failed to load watchlist', 'error');
+    }
+}
+
+// Load watchlist on page load
+document.addEventListener('DOMContentLoaded', function() {
+    loadWatchlist();
+});
+
+// Hide search results when clicking outside
+document.addEventListener('click', (e) => {
+    if (!searchResults.contains(e.target) && e.target !== searchInput) {
+        searchResults.classList.add('hidden');
+    }
+});
+
+// Show search results when focusing on input (if there's content)
+searchInput.addEventListener('focus', (e) => {
+    if (searchResults.children.length > 0 && !searchResults.classList.contains('hidden')) {
+        searchResults.classList.remove('hidden');
+    }
+});
+</script>
+{% endblock %}

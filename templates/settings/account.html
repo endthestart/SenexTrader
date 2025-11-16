@@ -1,0 +1,87 @@
+{% extends 'settings/base.html' %}
+{% block title %}Account Settings - Senex Trader{% endblock %}
+
+{% block settings_content %}
+<!-- Account Information Card -->
+<div class="card bg-dark border-secondary mb-4">
+  <div class="card-body">
+    <h5 class="mb-3">Account Information</h5>
+    <div class="mb-3">
+      <label class="form-label text-muted">Email</label>
+      <p class="mb-0">{{ request.user.email }}</p>
+    </div>
+    <div class="mb-3">
+      <label class="form-label text-muted">Full Name</label>
+      <p class="mb-0">{{ request.user.full_name|default:"Not set" }}</p>
+    </div>
+    <div class="mb-3">
+      <label class="form-label text-muted">Member Since</label>
+      <p class="mb-0">{{ request.user.date_joined|date:"F d, Y" }}</p>
+    </div>
+  </div>
+</div>
+
+<!-- Password Change Card -->
+<div class="card bg-dark border-secondary mb-4">
+  <div class="card-body">
+    <h5 class="mb-3">Change Password</h5>
+    <form method="post" action="{% url 'accounts:password_change' %}" id="password-change-form">
+      {% csrf_token %}
+      <div class="mb-3">
+        <label for="old_password" class="form-label">Current Password</label>
+        <input type="password" class="form-control bg-dark text-light" id="old_password" name="old_password" required>
+      </div>
+      <div class="mb-3">
+        <label for="new_password1" class="form-label">New Password</label>
+        <input type="password" class="form-control bg-dark text-light" id="new_password1" name="new_password1" required>
+        <div class="form-text text-muted small">
+          Your password must contain at least 8 characters and cannot be entirely numeric.
+        </div>
+      </div>
+      <div class="mb-3">
+        <label for="new_password2" class="form-label">Confirm New Password</label>
+        <input type="password" class="form-control bg-dark text-light" id="new_password2" name="new_password2" required>
+      </div>
+      <button type="submit" class="btn btn-primary">Change Password</button>
+    </form>
+  </div>
+</div>
+
+<!-- Profile Settings Card -->
+<div class="card bg-dark border-secondary mb-4">
+  <div class="card-body">
+    <h5 class="mb-3">Profile Settings</h5>
+    <form method="post" action="{% url 'accounts:profile_update' %}" id="profile-update-form">
+      {% csrf_token %}
+      <div class="mb-3">
+        <label for="full_name" class="form-label">Full Name</label>
+        <input type="text" class="form-control bg-dark text-light" id="full_name" name="full_name"
+               value="{{ request.user.full_name }}" maxlength="255">
+      </div>
+      <button type="submit" class="btn btn-primary">Update Profile</button>
+    </form>
+  </div>
+</div>
+
+<script>
+// Form validation for password change
+document.getElementById('password-change-form')?.addEventListener('submit', function(e) {
+    const newPassword1 = document.getElementById('new_password1').value;
+    const newPassword2 = document.getElementById('new_password2').value;
+
+    if (newPassword1 !== newPassword2) {
+        e.preventDefault();
+        window.showResultModal('warning', 'Password Mismatch', 'New passwords do not match. Please try again.');
+        return false;
+    }
+
+    if (newPassword1.length < 8) {
+        e.preventDefault();
+        window.showResultModal('warning', 'Password Too Short', 'Password must be at least 8 characters long.');
+        return false;
+    }
+
+    return true;
+});
+</script>
+{% endblock %}

@@ -1,0 +1,71 @@
+# Production overrides for Docker Compose
+# Usage: podman-compose --env-file .env.production -f docker-compose.yml -f docker-compose.prod.yml up
+
+services:
+  # PostgreSQL with resource limits
+  postgres:
+    environment:
+      TZ: America/New_York
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 4G
+        reservations:
+          cpus: '1'
+          memory: 2G
+
+  # Redis with resource limits
+  redis:
+    environment:
+      TZ: America/New_York
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 1G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+
+  # Django Web - scalable
+  web:
+    environment:
+      TZ: America/New_York
+    deploy:
+      replicas: 1  # Run 1 replica (increased resources to compensate)
+      resources:
+        limits:
+          cpus: '2'
+          memory: 2G
+        reservations:
+          cpus: '1'
+          memory: 1G
+
+  # Celery Worker - scalable
+  celery_worker:
+    environment:
+      TZ: America/New_York
+    deploy:
+      replicas: 1  # Run 1 worker (increased resources to compensate)
+      resources:
+        limits:
+          cpus: '2'
+          memory: 2G
+        reservations:
+          cpus: '1'
+          memory: 1G
+
+  # Celery Beat - single instance only
+  celery_beat:
+    environment:
+      TZ: America/New_York
+    deploy:
+      replicas: 1  # Must be 1 (scheduler)
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 256M

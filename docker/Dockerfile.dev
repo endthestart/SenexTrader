@@ -1,0 +1,37 @@
+# Development Dockerfile for Senex Trader
+# Simplified single-stage build for fast iteration
+
+FROM python:3.12-slim-bookworm
+
+# Set Python environment variables
+ENV PYTHONUNBUFFERED=1 \
+    DJANGO_SETTINGS_MODULE=senex_trader.settings.development
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libpq-dev \
+    gcc \
+    build-essential \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Create non-root user
+RUN groupadd --gid 1000 senex && \
+    useradd --uid 1000 --gid senex --shell /bin/bash --create-home senex
+
+# Set working directory
+WORKDIR /app
+
+# Install Python packages (dev requirements)
+COPY requirements.txt /tmp/
+RUN pip install --no-cache-dir -r /tmp/requirements.txt
+
+# Switch to non-root user
+USER senex
+
+# Expose port
+EXPOSE 8000
+
+# No code copy (use volume mount for live reload)
+# Default command for development
+CMD ["python", "manage.py", "runserver", "0.0.0.0:8000"]

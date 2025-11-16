@@ -1,0 +1,27 @@
+# Staging Vault Example
+# Copy this to staging-vault.yml and encrypt with: ansible-vault encrypt staging-vault.yml
+# Then fill in real values
+
+---
+# Django Core
+secret_key: "django-insecure-CHANGE-THIS-GENERATE-WITH-get_random_secret_key"
+field_encryption_key: "FERNET-KEY-GENERATE-WITH-cryptography-Fernet-generate_key"
+
+# Database
+db_name: "senex_trader"
+db_user: "senex_user"
+db_password: "CHANGE-THIS-STRONG-PASSWORD"
+
+# TastyTrade API
+tastytrade_client_id: "YOUR-TASTYTRADE-CLIENT-ID"
+tastytrade_client_secret: "YOUR-TASTYTRADE-CLIENT-SECRET"
+
+# Gitea Registry (for pulling images)
+gitea_username: "your-username"
+gitea_token: "YOUR-GITEA-ACCESS-TOKEN"
+
+# Optional: Email configuration (for testing)
+# email_backend: "django.core.mail.backends.console.EmailBackend"
+
+# Optional: Logging
+log_level: "DEBUG"

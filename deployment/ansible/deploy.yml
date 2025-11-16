@@ -1,0 +1,1019 @@
+---
+# Senex Trader Deployment Playbook
+# Quadlet-based container orchestration with systemd
+#
+# Usage:
+#   Staging:    ansible-playbook deploy.yml --limit staging
+#   Production: ansible-playbook deploy.yml --limit production
+#
+# Config location: Uses local config/ directory in repository root
+
+- name: Deploy Senex Trader
+  hosts: all
+  become: yes
+  gather_facts: yes
+  vars:
+    # Use local config directory (../../config from deployment/ansible/)
+    # playbook_dir is already absolute, so we need to go up two levels
+    config_path: "{{ playbook_dir | dirname | dirname }}/config"
+
+  tasks:
+    # Load vault variables first (now that django_env is available from inventory)
+    # Note: These tasks run on localhost (Ansible controller) where the vault file exists
+    # No sudo needed for file operations on localhost
+    - name: Debug config path
+      debug:
+        msg: "config_path resolved to: {{ config_path }}"
+      delegate_to: localhost
+      become: no
+      tags: always
+
+    - name: Verify vault file exists
+      stat:
+        path: "{{ config_path }}/ansible/vault/{{ django_env }}-vault.yml"
+      register: vault_file
+      delegate_to: localhost
+      become: no
+      tags: always
+
+    - name: Fail if vault file is missing
+      fail:
+        msg: "Vault file not found at: {{ config_path }}/ansible/vault/{{ django_env }}-vault.yml. Please ensure the file exists and the path is correct. playbook_dir is: {{ playbook_dir }}"
+      when: not vault_file.stat.exists
+      delegate_to: localhost
+      become: no
+      tags: always
+
+    - name: Load vault variables
+      include_vars:
+        file: "{{ config_path }}/ansible/vault/{{ django_env }}-vault.yml"
+      delegate_to: localhost
+      become: no
+      tags: always
+
+    - name: Verify required vault variables exist
+      fail:
+        msg: "Missing required variable '{{ item }}' in vault file. Please ensure your vault file contains all required variables. See deployment/ansible/inventory/{{ django_env }}-vault.yml.example for reference."
+      when: vars[item] is not defined
+      loop:
+        - secret_key
+        - field_encryption_key
+        - db_password
+        - tastytrade_client_id
+        - tastytrade_client_secret
+      delegate_to: localhost
+      become: no
+      tags: always
+    # =========================================================================
+    # 1. System Preparation
+    # =========================================================================
+    - name: Install sudo (required for become_user operations)
+      apt:
+        name: sudo
+        state: present
+        update_cache: yes
+      become: yes
+
+    - name: Update system packages
+      apt:
+        upgrade: dist
+        update_cache: yes
+        cache_valid_time: 3600
+      when: ansible_os_family == "Debian"
+
+    # =========================================================================
+    # 2. Create Application User
+    # =========================================================================
+    - name: Create application user
+      user:
+        name: "{{ app_user }}"
+        home: "{{ app_directory }}"
+        shell: /bin/bash
+        system: yes
+        create_home: yes
+      when: app_user != 'root'
+
+    - name: Create application directories
+      file:
+        path: "{{ item }}"
+        state: directory
+        owner: "{{ app_user }}"
+        group: "{{ app_user }}"
+        mode: '0755'
+      loop:
+        - "{{ app_directory }}"
+        - "{{ app_directory }}/docker"
+        - "{{ app_directory }}/logs"
+        - "{{ app_directory }}/data"
+
+    - name: Create PostgreSQL and Redis data directories
+      file:
+        path: "{{ app_directory }}/data/{{ item }}"
+        state: directory
+        owner: "{{ app_user }}"
+        group: "{{ app_user }}"
+        mode: '0755'
+      loop:
+        - postgres
+        - redis
+
+    - name: Create application data directories (writable by container user)
+      file:
+        path: "{{ app_directory }}/data/{{ item }}"
+        state: directory
+        owner: "{{ app_user }}"
+        group: "{{ app_user }}"
+        mode: '0777'
+      loop:
+        - logs
+        - staticfiles
+
+    # =========================================================================
+    # 3. Install Podman and Dependencies
+    # =========================================================================
+    # Quadlet requires Podman 4.4+
+    # Debian 13 ships with Podman 5.x which includes Quadlet support
+    # =========================================================================
+
+    - name: Install required packages
+      apt:
+        name:
+          - podman
+          - curl
+          - git
+          - iptables
+          - uidmap
+          - passt
+          - aardvark-dns
+          - ufw
+        state: present
+        update_cache: yes
+
+    - name: Configure Podman registries
+      copy:
+        dest: /etc/containers/registries.conf.d/00-unqualified-search.conf
+        content: |
+          unqualified-search-registries = ["docker.io"]
+        mode: '0644'
+
+    - name: Verify Podman installation and version
+      shell: podman --version
+      register: podman_version_result
+      changed_when: false
+
+    - name: Display Podman version
+      debug:
+        msg: "Podman installed: {{ podman_version_result.stdout }}"
+
+    - name: Extract Podman version number
+      shell: podman --version | grep -oP '\d+\.\d+' | head -1
+      register: podman_version
+      changed_when: false
+
+    - name: Fail if Podman version is too old for Quadlet
+      fail:
+        msg: "Podman {{ podman_version.stdout }} is too old. Quadlet requires Podman 4.4+. Please run debian-upgrade.yml first."
+      when: podman_version.stdout is version('4.4', '<')
+
+    # =========================================================================
+    # 3b. Configure UFW Firewall
+    # =========================================================================
+    - name: Set UFW default policies
+      community.general.ufw:
+        direction: "{{ item.direction }}"
+        policy: "{{ item.policy }}"
+      loop:
+        - { direction: 'incoming', policy: 'deny' }
+        - { direction: 'outgoing', policy: 'allow' }
+      when: ansible_facts['distribution'] == 'Debian' or ansible_facts['distribution'] == 'Ubuntu'
+
+    - name: Allow SSH access
+      community.general.ufw:
+        rule: allow
+        port: '22'
+        proto: tcp
+      when: ansible_facts['distribution'] == 'Debian' or ansible_facts['distribution'] == 'Ubuntu'
+
+    - name: Allow HTTP access
+      community.general.ufw:
+        rule: allow
+        port: '80'
+        proto: tcp
+      when: ansible_facts['distribution'] == 'Debian' or ansible_facts['distribution'] == 'Ubuntu'
+
+    - name: Allow HTTPS access
+      community.general.ufw:
+        rule: allow
+        port: '443'
+        proto: tcp
+      when: ansible_facts['distribution'] == 'Debian' or ansible_facts['distribution'] == 'Ubuntu'
+
+    - name: Allow Podman network internal traffic (for DNS)
+      community.general.ufw:
+        rule: allow
+        from_ip: 10.89.0.0/24
+      when: ansible_facts['distribution'] == 'Debian' or ansible_facts['distribution'] == 'Ubuntu'
+
+    - name: Allow port forwarding to application port (staging only - for nginx proxy)
+      community.general.ufw:
+        rule: allow
+        route: yes
+        from_ip: 10.0.0.0/24
+        to_port: "{{ expose_port }}"
+      when:
+        - ansible_facts['distribution'] == 'Debian' or ansible_facts['distribution'] == 'Ubuntu'
+        - django_env == 'staging'
+
+    - name: Enable UFW with logging
+      community.general.ufw:
+        state: enabled
+        logging: 'on'
+      when: ansible_facts['distribution'] == 'Debian' or ansible_facts['distribution'] == 'Ubuntu'
+
+    # =========================================================================
+    # 3c. Configure Rootless Podman (for non-root users)
+    # =========================================================================
+    - name: Get user info for non-root users
+      shell: id -u {{ app_user }}
+      register: app_user_uid
+      changed_when: false
+      when: app_user != 'root'
+
+    - name: Configure subuid for rootless Podman
+      lineinfile:
+        path: /etc/subuid
+        line: "{{ app_user }}:100000:65536"
+        create: yes
+        mode: '0644'
+      when: app_user != 'root'
+
+    - name: Configure subgid for rootless Podman
+      lineinfile:
+        path: /etc/subgid
+        line: "{{ app_user }}:100000:65536"
+        create: yes
+        mode: '0644'
+      when: app_user != 'root'
+
+    - name: Enable lingering for application user
+      shell: loginctl enable-linger {{ app_user }}
+      when: app_user != 'root'
+      changed_when: false
+
+    - name: Initialize Podman for non-root user
+      shell: podman system migrate
+      become_user: "{{ app_user }}"
+      when: app_user != 'root'
+      ignore_errors: yes
+
+    # =========================================================================
+    # 4. Legacy Cleanup (Remove old podman-compose files)
+    # =========================================================================
+    - name: Check for legacy docker-compose files
+      stat:
+        path: "{{ app_directory }}/{{ item }}"
+      register: compose_files
+      loop:
+        - docker-compose.yml
+        - docker-compose.prod.yml
+        - docker-compose.yml.backup
+        - podman-compose.yml
+
+    - name: Remove legacy docker-compose files
+      file:
+        path: "{{ item.item }}"
+        state: absent
+      when: item.stat.exists
+      loop: "{{ compose_files.results }}"
+      loop_control:
+        label: "{{ item.item }}"
+
+    - name: Stop any legacy podman-compose containers
+      shell: |
+        # Check if any containers are running with legacy names
+        OLD_CONTAINERS=$(podman ps -a --format "{{ '{{.Names}}' }}" | grep -E '^senex_trader_' || true)
+        if [ -n "$OLD_CONTAINERS" ]; then
+          echo "Stopping legacy containers: $OLD_CONTAINERS"
+          podman stop $OLD_CONTAINERS || true
+          podman rm $OLD_CONTAINERS || true
+        else
+          echo "No legacy containers found"
+        fi
+      become_user: "{{ app_user }}"
+      register: legacy_cleanup
+      changed_when: "'Stopping legacy containers' in legacy_cleanup.stdout"
+
+    # =========================================================================
+    # 5. Copy Quadlet Configuration Files
+    # =========================================================================
+    - name: Determine Quadlet directory path
+      set_fact:
+        quadlet_dir: "{% if app_user == 'root' %}/etc/containers/systemd{% else %}{{ app_directory }}/.config/containers/systemd{% endif %}"
+
+    - name: Create Quadlet configuration directory
+      file:
+        path: "{{ quadlet_dir }}"
+        state: directory
+        owner: "{{ app_user }}"
+        group: "{{ app_user }}"
+        mode: '0755'
+
+    - name: Copy Quadlet network configuration
+      copy:
+        src: "{{ playbook_dir }}/../quadlet/senex-network.network"
+        dest: "{{ quadlet_dir }}/senex-network.network"
+        owner: "{{ app_user }}"
+        group: "{{ app_user }}"
+        mode: '0644'
+
+    - name: Template Quadlet container configurations
+      template:
+        src: "{{ lookup('first_found', {
+          'files': [
+            config_path + '/ansible/templates/quadlet/' + item + '.j2',
+            'templates/quadlet/' + item + '.j2'
+          ],
+          'skip': false
+        }) }}"
+        dest: "{{ quadlet_dir }}/{{ item }}"
+        owner: "{{ app_user }}"
+        group: "{{ app_user }}"
+        mode: '0644'
+      loop:
+        - postgres.container
+        - redis.container
+        - web.container
+        - celery-worker.container
+        - celery-beat.container
+
+    # =========================================================================
+    # 6. Create Environment File from Vault
+    # =========================================================================
+    - name: Create .env file from template (for Quadlet)
+      template:
+        src: templates/env.j2
+        dest: "{{ quadlet_dir }}/.env"
+        owner: "{{ app_user }}"
+        group: "{{ app_user }}"
+        mode: '0600'
+
+    # =========================================================================
+    # 6b. Create systemd Drop-in Files for Environment Variables
+    # =========================================================================
+    # These drop-ins make .env variables available for systemd substitution in
+    # the Image= directive and other Quadlet directives that use ${VAR} syntax
+    - name: Create systemd drop-in directories for Quadlet services (rootful)
+      file:
+        path: "/etc/systemd/system/{{ item }}.service.d"
+        state: directory
+        mode: '0755'
+      loop:
+        - web
+        - celery-worker
+        - celery-beat
+        - postgres
+        - redis
+      when: app_user == 'root'
+
+    - name: Create EnvironmentFile drop-ins for Quadlet services (rootful)
+      copy:
+        content: |
+          [Service]
+          EnvironmentFile={{ quadlet_dir }}/.env
+        dest: "/etc/systemd/system/{{ item }}.service.d/override.conf"
+        mode: '0644'
+      loop:
+        - celery-worker
+        - celery-beat
+        - postgres
+        - redis
+      when: app_user == 'root'
+
+    - name: Create enhanced drop-in for web service with auto-restart (rootful)
+      copy:
+        content: |
+          [Service]
+          EnvironmentFile={{ quadlet_dir }}/.env
+          # Auto-restart configuration
+          Restart=on-failure
+          RestartSec=10s
+          StartLimitBurst=5
+          StartLimitIntervalSec=600
+        dest: "/etc/systemd/system/web.service.d/override.conf"
+        mode: '0644'
+      when: app_user == 'root'
+
+    - name: Create systemd drop-in directories for Quadlet services (rootless)
+      file:
+        path: "{{ app_directory }}/.config/systemd/user/{{ item }}.service.d"
+        state: directory
+        owner: "{{ app_user }}"
+        group: "{{ app_user }}"
+        mode: '0755'
+      loop:
+        - web
+        - celery-worker
+        - celery-beat
+        - postgres
+        - redis
+      when: app_user != 'root'
+
+    - name: Create EnvironmentFile drop-ins for Quadlet services (rootless)
+      copy:
+        content: |
+          [Service]
+          EnvironmentFile={{ quadlet_dir }}/.env
+        dest: "{{ app_directory }}/.config/systemd/user/{{ item }}.service.d/override.conf"
+        owner: "{{ app_user }}"
+        group: "{{ app_user }}"
+        mode: '0644'
+      loop:
+        - celery-worker
+        - celery-beat
+        - postgres
+        - redis
+      when: app_user != 'root'
+
+    - name: Create enhanced drop-in for web service with auto-restart (rootless)
+      copy:
+        content: |
+          [Service]
+          EnvironmentFile={{ quadlet_dir }}/.env
+          # Auto-restart configuration
+          Restart=on-failure
+          RestartSec=10s
+          StartLimitBurst=5
+          StartLimitIntervalSec=600
+        dest: "{{ app_directory }}/.config/systemd/user/web.service.d/override.conf"
+        owner: "{{ app_user }}"
+        group: "{{ app_user }}"
+        mode: '0644'
+      when: app_user != 'root'
+
+    # =========================================================================
+    # 7. Docker Registry Authentication
+    # =========================================================================
+    - name: Login to Gitea Docker registry
+      shell: |
+        echo "{{ gitea_token }}" | podman login {{ gitea_registry }} -u "{{ gitea_username }}" --password-stdin
+      become_user: "{{ app_user }}"
+      when: gitea_username is defined and gitea_token is defined
+      register: podman_login_result
+      no_log: true
+
+    - name: Check Podman registry login result
+      debug:
+        msg: "Gitea registry login {{ 'successful' if podman_login_result.rc == 0 else 'failed - may need manual login' }}"
+      when: gitea_username is defined and gitea_token is defined
+
+    - name: Determine auth directory path
+      set_fact:
+        auth_dir: "{% if app_user == 'root' %}/root/.docker{% else %}{{ app_directory }}/.docker{% endif %}"
+
+    - name: Create Podman auth directory
+      file:
+        path: "{{ auth_dir }}"
+        state: directory
+        owner: "{{ app_user }}"
+        group: "{{ app_user }}"
+        mode: '0700'
+      when: gitea_username is defined and gitea_token is defined
+
+    - name: Ensure Podman auth persists across reboots
+      copy:
+        content: |
+          {
+            "auths": {
+              "{{ gitea_registry }}": {
+                "auth": "{{ (gitea_username ~ ':' ~ gitea_token) | b64encode }}"
+              }
+            }
+          }
+        dest: "{{ auth_dir }}/auth.json"
+        owner: "{{ app_user }}"
+        group: "{{ app_user }}"
+        mode: '0600'
+      when: gitea_username is defined and gitea_token is defined
+
+    # =========================================================================
+    # 8. Pull Docker Images
+    # =========================================================================
+    - name: Pull container image
+      shell: |
+        podman pull {{ gitea_registry }}/{{ image_name }}:{{ image_tag }}
+      become_user: "{{ app_user }}"
+      args:
+        chdir: "{{ app_directory }}"
+
+    # =========================================================================
+    # 8a. Pre-Deployment Database Backup
+    # =========================================================================
+    - name: Create backup directory
+      file:
+        path: "{{ app_directory }}/backups"
+        state: directory
+        owner: "{{ app_user }}"
+        group: "{{ app_user }}"
+        mode: '0755'
+      when: backup_enabled | default(true)
+
+    - name: Check if postgres container is running
+      shell: podman ps --filter "name=postgres" --format "{% raw %}{{.Names}}{% endraw %}"
+      become_user: "{{ app_user }}"
+      register: postgres_running
+      changed_when: false
+      ignore_errors: yes
+      when: backup_enabled | default(true)
+
+    - name: Create pre-deployment database backup
+      shell: |
+        TIMESTAMP=$(date +%Y-%m-%d-%H%M%S)
+        {% if backup_compress | default(true) %}
+        podman exec postgres pg_dump -U {{ db_user }} {{ db_name }} | gzip > {{ app_directory }}/backups/pre-deploy-${TIMESTAMP}.sql.gz
+        BACKUP_FILE="{{ app_directory }}/backups/pre-deploy-${TIMESTAMP}.sql.gz"
+        {% else %}
+        podman exec postgres pg_dump -U {{ db_user }} {{ db_name }} > {{ app_directory }}/backups/pre-deploy-${TIMESTAMP}.sql
+        BACKUP_FILE="{{ app_directory }}/backups/pre-deploy-${TIMESTAMP}.sql"
+        {% endif %}
+
+        # Verify backup is not empty
+        if [ ! -s "$BACKUP_FILE" ]; then
+          echo "ERROR: Backup file is empty or was not created!"
+          exit 1
+        fi
+
+        echo "Backup created: $BACKUP_FILE"
+        du -h "$BACKUP_FILE"
+      become_user: "{{ app_user }}"
+      register: pre_deploy_backup
+      when:
+        - backup_enabled | default(true)
+        - postgres_running.stdout | length > 0
+
+    - name: Display pre-deployment backup result
+      debug:
+        msg: "{{ pre_deploy_backup.stdout_lines }}"
+      when:
+        - backup_enabled | default(true)
+        - pre_deploy_backup is defined
+        - pre_deploy_backup.stdout_lines is defined
+
+    # =========================================================================
+    # 9. Deploy Quadlet Services with systemd
+    # =========================================================================
+    - name: Reload systemd daemon to load Quadlet files (rootless)
+      shell: systemctl --user daemon-reload
+      become_user: "{{ app_user }}"
+      when: app_user != 'root'
+      environment:
+        XDG_RUNTIME_DIR: "/run/user/{{ app_user_uid.stdout }}"
+        DBUS_SESSION_BUS_ADDRESS: "unix:path=/run/user/{{ app_user_uid.stdout }}/bus"
+
+    - name: Reload systemd daemon to load Quadlet files (rootful)
+      systemd:
+        daemon_reload: yes
+      when: app_user == 'root'
+
+    - name: Wait for Quadlet to generate service files
+      pause:
+        seconds: 2
+
+    - name: Restart Quadlet services (rootless)
+      shell: |
+        systemctl --user restart postgres.service
+        systemctl --user restart redis.service
+        systemctl --user restart web.service
+        systemctl --user restart celery-worker.service
+        systemctl --user restart celery-beat.service
+      become_user: "{{ app_user }}"
+      when: app_user != 'root'
+      environment:
+        XDG_RUNTIME_DIR: "/run/user/{{ app_user_uid.stdout }}"
+        DBUS_SESSION_BUS_ADDRESS: "unix:path=/run/user/{{ app_user_uid.stdout }}/bus"
+
+    - name: Restart Quadlet services (rootful)
+      shell: |
+        systemctl restart postgres.service || true
+        systemctl restart redis.service || true
+        systemctl restart web.service || true
+        systemctl restart celery-worker.service || true
+        systemctl restart celery-beat.service || true
+      when: app_user == 'root'
+      register: start_services_result
+      changed_when: false
+
+    # =========================================================================
+    # 10. Container Image Cleanup
+    # =========================================================================
+    - name: Get list of container images
+      shell: |
+        podman images --format "{{ '{{.Repository}}:{{.Tag}}' }}" | grep "{{ image_name }}" | grep -v "{{ image_tag }}" || true
+      become_user: "{{ app_user }}"
+      register: old_images
+      changed_when: false
+
+    - name: Display old images to be cleaned
+      debug:
+        msg: "Old images to remove: {{ old_images.stdout_lines | default(['None']) }}"
+
+    - name: Clean up old container images
+      shell: |
+        # Keep only the current version and one previous version
+        CURRENT_TAG="{{ image_tag }}"
+
+        # Get all tags except current, sorted by version
+        OLD_TAGS=$(podman images --format "{{ '{{.Repository}}:{{.Tag}}' }}" | grep "{{ image_name }}" | grep -v "$CURRENT_TAG" | sort -V | head -n -1)
+
+        if [ -n "$OLD_TAGS" ]; then
+          echo "Removing old images: $OLD_TAGS"
+          for IMAGE in $OLD_TAGS; do
+            podman rmi "$IMAGE" || true
+          done
+        else
+          echo "No old images to remove"
+        fi
+
+        # Also remove any dangling images
+        podman image prune -f
+      become_user: "{{ app_user }}"
+      register: image_cleanup
+      changed_when: "'Removing old images' in image_cleanup.stdout"
+
+    - name: Display image cleanup result
+      debug:
+        msg: "{{ image_cleanup.stdout_lines }}"
+      when: image_cleanup.stdout_lines is defined
+
+    # =========================================================================
+    # 11. Wait for Application to Start
+    # =========================================================================
+    - name: Wait for application to start
+      wait_for:
+        port: "{{ expose_port }}"
+        host: localhost
+        delay: 5
+        timeout: 30
+      ignore_errors: yes
+      register: port_wait
+
+    - name: Verify application is responding
+      uri:
+        url: "http://localhost:{{ expose_port }}/health/"
+        method: GET
+        timeout: 10
+        validate_certs: no
+        status_code: [200, 301]  # Accept both OK and SSL redirect
+        headers:
+          Host: "{{ domain_name | default(allowed_hosts.split(',')[0]) }}"
+      retries: 5
+      delay: 10
+      register: health_check
+      ignore_errors: yes
+
+    - name: Display health check result
+      debug:
+        msg: "Health check {{ 'passed' if health_check is succeeded else 'failed - check logs' }}"
+
+    # =========================================================================
+    # 12. Display Deployment Information
+    # =========================================================================
+    - name: Get systemd service status (rootless)
+      shell: systemctl --user status postgres.service redis.service web.service celery-worker.service celery-beat.service --no-pager || true
+      become_user: "{{ app_user }}"
+      register: service_status_rootless
+      changed_when: false
+      when: app_user != 'root'
+      environment:
+        XDG_RUNTIME_DIR: "/run/user/{{ app_user_uid.stdout }}"
+        DBUS_SESSION_BUS_ADDRESS: "unix:path=/run/user/{{ app_user_uid.stdout }}/bus"
+
+    - name: Get systemd service status (rootful)
+      shell: systemctl status postgres.service redis.service web.service celery-worker.service celery-beat.service --no-pager || true
+      register: service_status_rootful
+      changed_when: false
+      when: app_user == 'root'
+
+    - name: Display service status
+      debug:
+        msg: "{{ service_status_rootless.stdout_lines if app_user != 'root' else service_status_rootful.stdout_lines }}"
+
+    - name: Get container status
+      shell: podman ps
+      become_user: "{{ app_user }}"
+      register: container_status
+      changed_when: false
+
+    - name: Display container status
+      debug:
+        msg: "{{ container_status.stdout_lines }}"
+
+    - name: Display Podman disk usage
+      shell: podman system df
+      become_user: "{{ app_user }}"
+      register: podman_df
+      changed_when: false
+
+    - name: Show Podman disk usage
+      debug:
+        msg: "{{ podman_df.stdout_lines }}"
+
+    - name: Display access information
+      debug:
+        msg:
+          - "Deployment complete!"
+          - "Environment: {{ django_env }}"
+          - "Access URL: {{ app_base_url }}"
+          - "Health check: {{ app_base_url }}/health/"
+          - ""
+          - "Next steps:"
+          - "  - Check service status: systemctl {% if app_user != 'root' %}--user {% endif %}status web.service"
+          - "  - Check logs: journalctl {% if app_user != 'root' %}--user {% endif %}-u web.service"
+          - "  - Check containers: podman ps"
+          - "  - Access application: {{ app_base_url }}"
+
+    # =========================================================================
+    # 13. SSL Configuration (Production Only)
+    # =========================================================================
+    - name: Install Nginx and Certbot (Production)
+      apt:
+        name:
+          - nginx
+          - certbot
+          - python3-certbot-nginx
+        state: present
+      when: django_env == 'production' and enable_ssl | default(false)
+
+    - name: Configure Nginx reverse proxy (Production)
+      template:
+        src: templates/nginx-site.j2
+        dest: "/etc/nginx/sites-available/{{ domain_name }}"
+        mode: '0644'
+      when: django_env == 'production' and enable_ssl | default(false)
+      notify: Reload Nginx
+
+    - name: Enable Nginx site (Production)
+      file:
+        src: "/etc/nginx/sites-available/{{ domain_name }}"
+        dest: "/etc/nginx/sites-enabled/{{ domain_name }}"
+        state: link
+      when: django_env == 'production' and enable_ssl | default(false)
+      notify: Reload Nginx
+
+    - name: Remove default Nginx site (Production)
+      file:
+        path: "/etc/nginx/sites-enabled/default"
+        state: absent
+      when: django_env == 'production' and enable_ssl | default(false)
+      notify: Reload Nginx
+
+    - name: Test Nginx configuration
+      shell: nginx -t
+      changed_when: false
+      when: django_env == 'production' and enable_ssl | default(false)
+
+    - name: Obtain SSL certificate with Certbot (Production)
+      shell: |
+        certbot --nginx \
+          -d {{ domain_name }} \
+          -d www.{{ domain_name }} \
+          --agree-tos \
+          --email admin@{{ domain_name }} \
+          --non-interactive \
+          --redirect
+      when: django_env == 'production' and enable_ssl | default(false)
+      register: certbot_result
+
+    - name: Display SSL certificate result
+      debug:
+        msg: "SSL certificate: {{ 'obtained' if certbot_result.rc == 0 else 'failed - may need manual intervention' }}"
+      when: django_env == 'production' and enable_ssl | default(false)
+
+    - name: Deploy optimized SSL configuration (Production)
+      template:
+        src: templates/nginx-site-ssl.j2
+        dest: "/etc/nginx/sites-available/{{ domain_name }}"
+        mode: '0644'
+      when:
+        - django_env == 'production'
+        - enable_ssl | default(false)
+        - certbot_result.rc == 0
+      register: ssl_config_deployed
+
+    - name: Reload Nginx with SSL configuration
+      systemd:
+        name: nginx
+        state: reloaded
+      when:
+        - django_env == 'production'
+        - enable_ssl | default(false)
+        - ssl_config_deployed is changed
+
+    # =========================================================================
+    # 14. Automated Database Backup Setup
+    # =========================================================================
+    - name: Create backup script directory
+      file:
+        path: "{{ app_directory }}/bin"
+        state: directory
+        owner: "{{ app_user }}"
+        group: "{{ app_user }}"
+        mode: '0755'
+      when: backup_enabled | default(true)
+
+    - name: Template backup script
+      template:
+        src: templates/postgres-backup.sh.j2
+        dest: "{{ app_directory }}/bin/postgres-backup.sh"
+        owner: "{{ app_user }}"
+        group: "{{ app_user }}"
+        mode: '0755'
+      when: backup_enabled | default(true)
+
+    - name: Determine systemd unit directory (rootful)
+      set_fact:
+        systemd_unit_dir: "/etc/systemd/system"
+      when:
+        - backup_enabled | default(true)
+        - app_user == 'root'
+
+    - name: Determine systemd unit directory (rootless)
+      set_fact:
+        systemd_unit_dir: "{{ app_directory }}/.config/systemd/user"
+      when:
+        - backup_enabled | default(true)
+        - app_user != 'root'
+
+    - name: Create systemd user unit directory (rootless)
+      file:
+        path: "{{ systemd_unit_dir }}"
+        state: directory
+        owner: "{{ app_user }}"
+        group: "{{ app_user }}"
+        mode: '0755'
+      when:
+        - backup_enabled | default(true)
+        - app_user != 'root'
+
+    - name: Template backup service unit
+      template:
+        src: templates/postgres-backup.service.j2
+        dest: "{{ systemd_unit_dir }}/postgres-backup.service"
+        owner: "{{ 'root' if app_user == 'root' else app_user }}"
+        group: "{{ 'root' if app_user == 'root' else app_user }}"
+        mode: '0644'
+      when: backup_enabled | default(true)
+
+    - name: Template backup timer unit
+      template:
+        src: templates/postgres-backup.timer.j2
+        dest: "{{ systemd_unit_dir }}/postgres-backup.timer"
+        owner: "{{ 'root' if app_user == 'root' else app_user }}"
+        group: "{{ 'root' if app_user == 'root' else app_user }}"
+        mode: '0644'
+      when: backup_enabled | default(true)
+
+    - name: Reload systemd daemon for backup units (rootful)
+      systemd:
+        daemon_reload: yes
+      when:
+        - backup_enabled | default(true)
+        - app_user == 'root'
+
+    - name: Reload systemd daemon for backup units (rootless)
+      shell: systemctl --user daemon-reload
+      become_user: "{{ app_user }}"
+      when:
+        - backup_enabled | default(true)
+        - app_user != 'root'
+      environment:
+        XDG_RUNTIME_DIR: "/run/user/{{ app_user_uid.stdout }}"
+        DBUS_SESSION_BUS_ADDRESS: "unix:path=/run/user/{{ app_user_uid.stdout }}/bus"
+
+    - name: Enable and start backup timer (rootful)
+      systemd:
+        name: postgres-backup.timer
+        enabled: yes
+        state: started
+      when:
+        - backup_enabled | default(true)
+        - app_user == 'root'
+
+    - name: Enable and start backup timer (rootless)
+      shell: |
+        systemctl --user enable postgres-backup.timer
+        systemctl --user start postgres-backup.timer
+      become_user: "{{ app_user }}"
+      when:
+        - backup_enabled | default(true)
+        - app_user != 'root'
+      environment:
+        XDG_RUNTIME_DIR: "/run/user/{{ app_user_uid.stdout }}"
+        DBUS_SESSION_BUS_ADDRESS: "unix:path=/run/user/{{ app_user_uid.stdout }}/bus"
+
+    - name: Verify backup timer is active (rootful)
+      shell: systemctl list-timers postgres-backup.timer --no-pager
+      register: backup_timer_status_rootful
+      changed_when: false
+      when:
+        - backup_enabled | default(true)
+        - app_user == 'root'
+
+    - name: Verify backup timer is active (rootless)
+      shell: systemctl --user list-timers postgres-backup.timer --no-pager
+      become_user: "{{ app_user }}"
+      register: backup_timer_status_rootless
+      changed_when: false
+      when:
+        - backup_enabled | default(true)
+        - app_user != 'root'
+      environment:
+        XDG_RUNTIME_DIR: "/run/user/{{ app_user_uid.stdout }}"
+        DBUS_SESSION_BUS_ADDRESS: "unix:path=/run/user/{{ app_user_uid.stdout}}/bus"
+
+    - name: Display backup timer status
+      debug:
+        msg: "{{ backup_timer_status_rootful.stdout_lines if app_user == 'root' else backup_timer_status_rootless.stdout_lines }}"
+      when: backup_enabled | default(true)
+
+    # =========================================================================
+    # 15. Watchdog Service Deployment (Production Monitoring)
+    # =========================================================================
+    - name: Create watchdog scripts directory
+      file:
+        path: "{{ app_directory }}/scripts"
+        state: directory
+        owner: root
+        group: root
+        mode: '0755'
+
+    - name: Install Python requests library for watchdog
+      apt:
+        name: python3-requests
+        state: present
+        update_cache: no
+
+    - name: Deploy watchdog Python script
+      copy:
+        src: ../scripts/senex-watchdog.py
+        dest: "{{ app_directory }}/scripts/senex-watchdog.py"
+        owner: root
+        group: root
+        mode: '0755'
+
+    - name: Create watchdog state directory
+      file:
+        path: /var/lib/senex-watchdog
+        state: directory
+        owner: root
+        group: root
+        mode: '0755'
+
+    - name: Deploy watchdog systemd service
+      copy:
+        src: ../systemd/senex-watchdog.service
+        dest: /etc/systemd/system/senex-watchdog.service
+        owner: root
+        group: root
+        mode: '0644'
+      notify: Reload systemd
+
+    - name: Deploy watchdog systemd timer
+      copy:
+        src: ../systemd/senex-watchdog.timer
+        dest: /etc/systemd/system/senex-watchdog.timer
+        owner: root
+        group: root
+        mode: '0644'
+      notify: Reload systemd
+
+    - name: Reload systemd to recognize watchdog service
+      systemd:
+        daemon_reload: yes
+
+    - name: Enable and start watchdog timer
+      systemd:
+        name: senex-watchdog.timer
+        enabled: yes
+        state: started
+
+    - name: Verify watchdog timer is active
+      shell: systemctl list-timers senex-watchdog.timer --no-pager
+      register: watchdog_timer_status
+      changed_when: false
+
+    - name: Display watchdog timer status
+      debug:
+        msg: "{{ watchdog_timer_status.stdout_lines }}"
+
+  # ===========================================================================
+  # Handlers
+  # ===========================================================================
+  handlers:
+    - name: Reload Nginx
+      systemd:
+        name: nginx
+        state: reloaded
+
+    - name: Reload systemd
+      systemd:
+        daemon_reload: yes

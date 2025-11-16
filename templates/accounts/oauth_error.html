@@ -1,0 +1,12 @@
+{% extends 'base/base.html' %}
+{% block title %}OAuth Error - Senex Trader{% endblock %}
+{% block content %}
+<div class="card bg-dark border-secondary">
+  <div class="card-body">
+    <h4 class="mb-3">{{ provider }} Connection Error</h4>
+    <p class="text-warning">{{ error }}</p>
+    <a href="{% url 'accounts:settings' %}" class="btn btn-secondary">Back to Settings</a>
+  </div>
+  </div>
+{% endblock %}
+

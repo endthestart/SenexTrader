@@ -1,0 +1,54 @@
+{% extends 'base/base.html' %}
+
+{% block title %}Senex Trader - Single Strategy Trading{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-lg-8 mx-auto">
+        <div class="text-center mb-5">
+            <h1 class="display-4 fw-bold mb-3" style="color: var(--accent-color);">Senex Trader</h1>
+            <p class="lead text-muted">Automated Senex Trident Strategy Trading Platform</p>
+            <p class="text-muted">Single strategy, single broker, maximum focus.</p>
+        </div>
+
+        {% if not user.is_authenticated %}
+        <div class="row">
+            <div class="col-md-6 mb-4">
+                <div class="card bg-dark border-secondary h-100">
+                    <div class="card-body text-center">
+                        <h5 class="card-title">Get Started</h5>
+                        <p class="card-text text-muted">Create your account and connect to TastyTrade</p>
+                        <a href="{% url 'accounts:register' %}" class="btn btn-primary">Register Now</a>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6 mb-4">
+                <div class="card bg-dark border-secondary h-100">
+                    <div class="card-body text-center">
+                        <h5 class="card-title">Existing User</h5>
+                        <p class="card-text text-muted">Sign in to access your trading dashboard</p>
+                        <a href="{% url 'accounts:login' %}" class="btn btn-secondary">Login</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% else %}
+        <div class="text-center">
+            <h3 class="mb-4">Welcome back, {{ user.full_name|default:user.email }}!</h3>
+            <div class="row">
+                <div class="col-md-4 mb-3">
+                    <a href="{% url 'trading:dashboard' %}" class="btn btn-primary btn-lg w-100">Trading Dashboard</a>
+                </div>
+                <div class="col-md-4 mb-3">
+                    <a href="{% url 'trading:positions' %}" class="btn btn-secondary btn-lg w-100">View Positions</a>
+                </div>
+                <div class="col-md-4 mb-3">
+                    <a href="{% url 'accounts:settings' %}" class="btn btn-secondary btn-lg w-100">Settings</a>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+  </div>
+{% endblock %}
+

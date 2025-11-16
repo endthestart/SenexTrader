@@ -1,0 +1,48 @@
+# Development overrides for Docker Compose
+# Usage: podman-compose -f docker-compose.yml -f docker-compose.dev.yml up
+
+services:
+  # Use development Dockerfile for faster rebuilds
+  web:
+    build:
+      dockerfile: docker/Dockerfile.dev
+    environment:
+      ENVIRONMENT: development
+      DJANGO_SETTINGS_MODULE: senex_trader.settings.development
+      # Use SQLite for development (no PostgreSQL needed)
+      DB_HOST: ""
+    volumes:
+      # Mount source code for live reload
+      - .:/app:z
+    # Expose additional ports for debugging
+    ports:
+      - "8000:8000"
+
+  celery_worker:
+    build:
+      dockerfile: docker/Dockerfile.dev
+    environment:
+      ENVIRONMENT: development
+      DJANGO_SETTINGS_MODULE: senex_trader.settings.development
+      DB_HOST: ""
+    volumes:
+      - .:/app:z
+
+  celery_beat:
+    build:
+      dockerfile: docker/Dockerfile.dev
+    environment:
+      ENVIRONMENT: development
+      DJANGO_SETTINGS_MODULE: senex_trader.settings.development
+      DB_HOST: ""
+    volumes:
+      - .:/app:z
+
+  # Expose PostgreSQL and Redis ports for local development tools
+  postgres:
+    ports:
+      - "5432:5432"
+
+  redis:
+    ports:
+      - "6379:6379"

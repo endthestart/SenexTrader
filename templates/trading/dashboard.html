@@ -1,0 +1,456 @@
+{% extends 'base/base.html' %}
+{% load static %}
+{% load humanize %}
+
+{% block title %}Trading Dashboard{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <!-- Page Header -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <h1 class="h3 mb-0">Trading Dashboard</h1>
+            <p class="text-muted mb-0">Real-time overview of your trading account and market conditions</p>
+            <small class="text-muted">Last updated: {{ dashboard_timestamp|date:"Y-m-d H:i:s" }}</small>
+        </div>
+    </div>
+
+    <!-- Account & Risk Summary Row -->
+    <div class="row mb-4">
+        <!-- Account Summary Card -->
+        <div class="col-lg-6 mb-3">
+            <div class="card bg-dark border-secondary h-100">
+                <div class="card-header bg-secondary">
+                    <h5 class="mb-0">
+                        <i class="fas fa-wallet me-2"></i>Account Summary
+                    </h5>
+                </div>
+                <div class="card-body">
+                    {% if primary_account %}
+                        <div class="row">
+                            <div class="col-md-6">
+                                <p class="text-muted mb-1">Account Balance</p>
+                                <h4 class="mb-3" id="accountBalance">
+                                    {% if privacy_mode %}
+                                        <span class="text-muted">••••••</span>
+                                    {% elif account_data.available %}
+                                        ${{ account_data.balance|floatformat:2|intcomma|default:"N/A" }}
+                                    {% else %}
+                                        <span class="text-warning">Unavailable</span>
+                                    {% endif %}
+                                </h4>
+                            </div>
+                            <div class="col-md-6">
+                                <p class="text-muted mb-1">Buying Power</p>
+                                <h4 class="mb-3" id="buyingPower">
+                                    {% if privacy_mode %}
+                                        <span class="text-muted">••••••</span>
+                                    {% elif account_data.available %}
+                                        ${{ account_data.buying_power|floatformat:2|intcomma|default:"N/A" }}
+                                    {% else %}
+                                        <span class="text-warning">Unavailable</span>
+                                    {% endif %}
+                                </h4>
+                            </div>
+                        </div>
+                        <hr class="border-secondary">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <small class="text-muted">Broker:</small>
+                                <span class="text-info ms-2">
+                                    {% for connection_type, display_name in primary_account.CONNECTION_TYPES %}
+                                        {% if connection_type == primary_account.connection_type %}
+                                            {{ display_name }}
+                                        {% endif %}
+                                    {% endfor %}
+                                </span>
+                            </div>
+                            <div class="col-md-6">
+                                <small class="text-muted">Account:</small>
+                                <span class="text-info ms-2">{{ primary_account.account_number|default:"Not Set" }}</span>
+                            </div>
+                        </div>
+                        {% if account_data.source %}
+                        <div class="mt-2">
+                            <small class="text-muted">Data source: {{ account_data.source }}</small>
+                        </div>
+                        {% endif %}
+                    {% else %}
+                        <div class="alert alert-warning mb-0">
+                            <i class="fas fa-exclamation-triangle me-2"></i>
+                            No trading account configured.
+                            <a href="{% url 'accounts:settings_brokerage' %}" class="text-warning">Set up account</a>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <!-- Risk Management Card -->
+        <div class="col-lg-6 mb-3">
+            <div class="card bg-dark border-secondary h-100">
+                <div class="card-header bg-secondary">
+                    <h5 class="mb-0">
+                        <i class="fas fa-shield-alt me-2"></i>Risk Management
+                    </h5>
+                </div>
+                <div class="card-body">
+                    {% if risk_data.available %}
+                        <div class="row">
+                            <div class="col-md-6">
+                                <p class="text-muted mb-1">Strategy Power</p>
+                                <h4 class="mb-3 text-info" id="strategyPower">
+                                    ${{ risk_data.strategy_power|floatformat:2|intcomma }}
+                                </h4>
+                            </div>
+                            <div class="col-md-6">
+                                <p class="text-muted mb-1">Risk Utilization</p>
+                                <h4 class="mb-3 {% if risk_data.utilization_percent < 50 %}text-success{% elif risk_data.utilization_percent < 75 %}text-warning{% else %}text-danger{% endif %}" id="riskUtilization">
+                                    {{ risk_data.utilization_percent }}%
+                                </h4>
+                            </div>
+                        </div>
+                        <hr class="border-secondary">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <small class="text-muted">Allocation Method:</small>
+                                <span class="ms-2">{{ risk_data.allocation_method|default:"Not configured" }}</span>
+                            </div>
+                            <div class="col-md-6">
+                                <small class="text-muted">Current Risk:</small>
+                                <span class="ms-2">${{ risk_data.current_risk|floatformat:2|intcomma }}</span>
+                            </div>
+                        </div>
+                        <div class="row mt-2">
+                            <div class="col-md-12">
+                                <small class="text-muted">Tradeable Capital:</small>
+                                <span class="ms-2">${{ risk_data.tradeable_capital|floatformat:2|intcomma }}</span>
+                            </div>
+                        </div>
+                    {% else %}
+                        <div class="alert alert-warning mb-0">
+                            <i class="fas fa-exclamation-triangle me-2"></i>
+                            Risk data unavailable.
+                            {% if not account_data.available %}
+                                Account data required.
+                            {% else %}
+                                {{ risk_data.error|default:"Unable to calculate risk metrics." }}
+                            {% endif %}
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Completed Positions Summary -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card bg-dark border-secondary">
+                <div class="card-header bg-secondary">
+                    <h5 class="mb-0">
+                        <i class="fas fa-check-circle me-2"></i>Completed Positions
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <p class="text-muted mb-1">Total Closed Positions</p>
+                            <h4 class="mb-0">{{ completed_positions_data.count }}</h4>
+                        </div>
+                        <div class="col-md-6">
+                            <p class="text-muted mb-1">Total Realized P&L</p>
+                            <h4 class="mb-0 {% if completed_positions_data.total_realized_pnl > 0 %}text-success{% elif completed_positions_data.total_realized_pnl < 0 %}text-danger{% endif %}">
+                                {% if privacy_mode %}
+                                    <span class="text-muted">••••••</span>
+                                {% else %}
+                                    ${{ completed_positions_data.total_realized_pnl|floatformat:2|intcomma }}
+                                {% endif %}
+                            </h4>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Market Data Row -->
+    <div class="row mb-4">
+        <!-- Market Status Card -->
+        <div class="col-lg-4 mb-3">
+            <div class="card bg-dark border-secondary h-100">
+                <div class="card-header bg-secondary">
+                    <h5 class="mb-0">
+                        <i class="fas fa-clock me-2"></i>Market Status
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="text-center">
+                        {% if market_status.is_open %}
+                            <div class="mb-3">
+                                <span class="badge bg-success fs-5 px-3 py-2">
+                                    <i class="fas fa-circle me-2"></i>MARKET OPEN
+                                </span>
+                            </div>
+                        {% else %}
+                            <div class="mb-3">
+                                <span class="badge bg-danger fs-5 px-3 py-2">
+                                    <i class="fas fa-circle me-2"></i>MARKET CLOSED
+                                </span>
+                            </div>
+                        {% endif %}
+                        <p class="mb-1">
+                            <small class="text-muted">New York Time</small>
+                        </p>
+                        <h5 class="mb-3">{{ market_status.current_time|date:"g:i A" }}</h5>
+                        <p class="mb-0">
+                            <small class="text-muted">{{ market_status.current_time|date:"l, F j, Y" }}</small>
+                        </p>
+                    </div>
+                    <hr class="border-secondary">
+                    <div class="text-center">
+                        <small class="text-muted">
+                            Regular Hours: 9:30 AM - 4:00 PM ET<br>
+                            Extended Hours: 4:00 AM - 8:00 PM ET
+                        </small>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- QQQ Market Data Card -->
+        <div class="col-lg-4 mb-3">
+            <div class="card bg-dark border-secondary h-100">
+                <div class="card-header bg-secondary">
+                    <h5 class="mb-0">
+                        <i class="fas fa-chart-line me-2"></i>QQQ Quote
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div id="qqq-data-container">
+                        <!-- Data content (shows when available) -->
+                        <div id="qqq-data-content" style="display: {% if qqq_data.available %}block{% else %}none{% endif %};">
+                            <div class="text-center mb-3">
+                                <h3 class="mb-1" id="qqq-price">${{ qqq_data.last|floatformat:2|intcomma|default:"N/A" }}</h3>
+                                <span class="{% if qqq_data.change >= 0 %}text-success{% else %}text-danger{% endif %}" id="qqq-change">
+                                    {% if qqq_data.change_percent %}
+                                        {% if qqq_data.change >= 0 %}+{% endif %}{{ qqq_data.change|floatformat:2 }}
+                                        ({{ qqq_data.change_percent }}%)
+                                    {% endif %}
+                                </span>
+                            </div>
+                            <div class="row">
+                                <div class="col-6">
+                                    <small class="text-muted">Bid:</small>
+                                    <span class="ms-2" id="qqq-bid">${{ qqq_data.bid|floatformat:2|intcomma|default:"N/A" }}</span>
+                                </div>
+                                <div class="col-6">
+                                    <small class="text-muted">Ask:</small>
+                                    <span class="ms-2" id="qqq-ask">${{ qqq_data.ask|floatformat:2|intcomma|default:"N/A" }}</span>
+                                </div>
+            </div>
+                            <div class="row mt-2">
+                                <div class="col-12">
+                                    <small class="text-muted">Volume:</small>
+                                    <span class="ms-2" id="qqq-volume">{{ qqq_data.volume|floatformat:0|default:"N/A" }}</span>
+                                </div>
+                            </div>
+                            <hr class="border-secondary">
+                            <div class="text-center">
+                                <small class="text-muted">Source: <span id="qqq-source">{{ qqq_data.source }}</span></small>
+                            </div>
+                        </div>
+
+                        <!-- Unavailable message (shows when no data) -->
+                        <div id="qqq-data-unavailable" style="display: {% if qqq_data.available %}none{% else %}block{% endif %};">
+                            <div class="text-center mb-3">
+                                <h3 class="mb-1 text-muted">--</h3>
+                                <span class="text-muted">Awaiting data...</span>
+                            </div>
+                            <div class="alert alert-warning mb-0">
+                                <i class="fas fa-exclamation-triangle me-2"></i>
+                                QQQ quote unavailable
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- IV Data Card -->
+        <div class="col-lg-4 mb-3">
+            <div class="card bg-dark border-secondary h-100">
+                <div class="card-header bg-secondary">
+                    <h5 class="mb-0">
+                        <i class="fas fa-percentage me-2"></i>Implied Volatility
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div id="iv-data-container">
+                        <!-- Data content (shows when available) -->
+                        <div id="iv-data-content" style="display: {% if iv_data.available %}block{% else %}none{% endif %};">
+                            <div class="row">
+                                <div class="col-12 mb-3">
+                                    <p class="text-muted mb-1">IV Rank</p>
+                                    <h4 class="mb-0" id="iv-rank">{{ iv_data.iv_rank|floatformat:1|default:"N/A" }}%</h4>
+                                </div>
+                                <div class="col-6">
+                                    <small class="text-muted">IV Percentile:</small><br>
+                                    <span id="iv-percentile">{{ iv_data.iv_percentile|floatformat:1|default:"N/A" }}%</span>
+                                </div>
+                                <div class="col-6">
+                                    <small class="text-muted">Current IV:</small><br>
+                                    <span id="iv-current">{{ iv_data.current_iv|floatformat:2|default:"N/A" }}%</span>
+                                </div>
+                            </div>
+                            <hr class="border-secondary">
+                            <div class="text-center">
+                                <small class="text-muted">
+                                    Higher IV = Higher option premiums
+                                </small>
+                            </div>
+                        </div>
+
+                        <!-- Unavailable message (shows when no data) -->
+                        <div id="iv-data-unavailable" style="display: {% if iv_data.available %}none{% else %}block{% endif %};">
+                            <div class="text-center mb-3">
+                                <h4 class="mb-1 text-muted">--</h4>
+                                <span class="text-muted">Awaiting data...</span>
+                            </div>
+                            <div class="alert alert-warning mb-0">
+                                <i class="fas fa-exclamation-triangle me-2"></i>
+                                IV data unavailable
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- System Status Row -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card bg-dark border-secondary">
+                <div class="card-header bg-secondary">
+                    <h5 class="mb-0">
+                        <i class="fas fa-satellite-dish me-2"></i>System Status
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-3">
+                            <small class="text-muted">Streaming Status:</small>
+                            <span id="streaming-status-text" class="ms-2 {% if streaming_status.status == 'Connected' %}text-success{% elif streaming_status.status == 'Disconnected' %}text-danger{% else %}text-warning{% endif %}">
+                                {{ streaming_status.status }}
+                            </span>
+                        </div>
+                        <div class="col-md-3">
+                            <small class="text-muted">WebSocket:</small>
+                            <span id="websocket-status-text" class="ms-2 {% if streaming_status.websocket_connected %}text-success{% else %}text-danger{% endif %}">
+                                {% if streaming_status.websocket_connected %}Connected{% else %}Disconnected{% endif %}
+                            </span>
+                        </div>
+                        <div class="col-md-3">
+                            <small class="text-muted">Data Stream:</small>
+                            <span id="data-stream-status-text" class="ms-2 {% if streaming_status.data_streaming %}text-success{% else %}text-danger{% endif %}">
+                                {% if streaming_status.data_streaming %}Active{% else %}Inactive{% endif %}
+                            </span>
+                        </div>
+                        <div class="col-md-3">
+                            <small class="text-muted">Last Refresh:</small>
+                            <span class="ms-2" id="lastRiskUpdate">{{ dashboard_timestamp|date:"H:i:s" }}</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{% static 'js/utils.js' %}"></script>
+<script src="{% static 'js/dashboard.js' %}"></script>
+<script src="{% static 'js/streaming-handlers.js' %}"></script>
+<script>
+    // Privacy mode setting
+    window.PRIVACY_MODE = {{ privacy_mode|yesno:"true,false" }};
+
+    // Real-time streaming for dashboard
+    document.addEventListener('DOMContentLoaded', function() {
+        // Configure streaming handlers for dashboard elements
+        const streamingHandlers = new StreamingHandlers({
+            qqqPrice: 'qqq-price',
+            qqqChange: 'qqq-change',
+            accountBalance: 'accountBalance',
+            balanceUpdateTime: null  // No timestamp element on dashboard
+        });
+
+        // Wait for global streamers to be ready
+        function initializeStreaming() {
+            if (window.streamersReady) {
+                console.log('Streamers already ready, setting up dashboard streaming...');
+                setupDashboardStreaming();
+            } else {
+                console.log('Waiting for streamers-ready event...');
+
+                window.addEventListener('streamers-ready', function(e) {
+                    console.log('Dashboard: Streamers ready event received:', e.detail);
+                    setupDashboardStreaming();
+                }, { once: true });
+
+                window.addEventListener('streamers-timeout', function(e) {
+                    console.warn('Dashboard: Streamers timeout:', e.detail);
+                    // Still show static data, just without real-time updates
+                }, { once: true });
+            }
+        }
+
+        function setupDashboardStreaming() {
+            // Use the global WebSocket connection from base.html
+            const ws = window.streamerWebSocket;
+
+            if (!ws || ws.readyState !== WebSocket.OPEN) {
+                console.warn('Dashboard: Global WebSocket not available');
+                return;
+            }
+
+            console.log('Dashboard: Using global WebSocket for streaming data');
+
+            // Register dashboard page message handler
+            function dashboardMessageHandler(data) {
+                // Route message to streaming handlers
+                streamingHandlers.handleMessage(data);
+
+                // Update status elements when receiving any streaming data
+                if (data.type && (data.type === 'quote_update' || data.type === 'balance_update' || data.type === 'summary_update')) {
+                    // Use centralized StreamingHandlers for status updates
+                    const streamingStatus = document.getElementById('streaming-status-text');
+                    const websocketStatus = document.getElementById('websocket-status-text');
+                    const dataStreamStatus = document.getElementById('data-stream-status-text');
+
+                    if (streamingStatus) {
+                        streamingStatus.textContent = 'Connected';
+                        streamingStatus.className = 'ms-2 text-success';
+                    }
+                    if (websocketStatus) {
+                        websocketStatus.textContent = 'Connected';
+                        websocketStatus.className = 'ms-2 text-success';
+                    }
+                    if (dataStreamStatus) {
+                        dataStreamStatus.textContent = 'Active';
+                        dataStreamStatus.className = 'ms-2 text-success';
+                    }
+                }
+            }
+
+            // Add handler to global message broadcasting system
+            window.addMessageHandler(dashboardMessageHandler);
+        }
+
+        // Initialize streaming when DOM is ready
+        initializeStreaming();
+    });
+</script>
+{% endblock %}

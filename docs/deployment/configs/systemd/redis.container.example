@@ -1,0 +1,38 @@
+# Systemd Quadlet file for Redis cache and broker
+# Location: ~/.config/containers/systemd/redis.container
+
+[Unit]
+Description=Redis Cache and Broker - Senex Trader
+After=network-online.target
+
+[Container]
+Image=docker.io/library/redis:7-alpine
+ContainerName=redis
+AutoUpdate=registry
+
+# Network configuration
+Network=senex_net.network
+PublishPort=127.0.0.1:6379:6379
+
+# Persistent storage
+Volume=redis_data:/data:Z
+
+# Custom Redis configuration
+Volume=%h/senex-trader/configs/redis.conf:/usr/local/etc/redis/redis.conf:ro
+
+# Command to use custom config
+Exec=redis-server /usr/local/etc/redis/redis.conf
+
+# Health check
+HealthCmd=redis-cli --no-auth-warning -a ${REDIS_PASSWORD} ping
+HealthInterval=10s
+
+# Resource limits
+Memory=512M
+
+[Service]
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=default.target

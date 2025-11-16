@@ -1,0 +1,73 @@
+/* Senex Trader Dark Theme - minimal essentials per CLAUDE.md */
+:root {
+  --primary-bg: #0d1117;
+  --secondary-bg: #161b22;
+  --card-bg: #21262d;
+  --accent-color: #00d4aa;
+  --text-primary: #f0f6fc;
+  --border-color: #30363d;
+}
+
+body { background-color: var(--primary-bg) !important; color: var(--text-primary) !important; }
+.card { background-color: var(--card-bg) !important; border-color: var(--border-color) !important; }
+.card-header { background-color: var(--secondary-bg) !important; border-color: var(--border-color) !important; }
+.navbar-dark { background-color: var(--secondary-bg) !important; }
+.navbar-brand { color: var(--accent-color) !important; }
+.navbar-nav .nav-link { color: var(--text-primary) !important; }
+.navbar-nav .nav-link:hover { color: var(--accent-color) !important; }
+.btn-primary { background-color: var(--accent-color) !important; border-color: var(--accent-color) !important; color: #000 !important; }
+.form-control, .form-select { background-color: var(--secondary-bg) !important; border-color: var(--border-color) !important; color: var(--text-primary) !important; }
+
+/* Strategy Explanation Panel - Unified Component */
+#strategyExplanationPanel .alert { border-radius: 0.5rem; }
+#strategyExplanationPanel .table-success { background-color: rgba(0, 212, 170, 0.15) !important; }
+#strategyExplanationPanel .table-hover tbody tr:hover { background-color: rgba(255, 255, 255, 0.05); }
+#strategyExplanationPanel .alert-warning { background-color: rgba(255, 193, 7, 0.1); border-color: rgba(255, 193, 7, 0.3); }
+#strategyExplanationPanel .alert-danger { background-color: rgba(220, 53, 69, 0.1); border-color: rgba(220, 53, 69, 0.3); }
+#strategyExplanationPanel .alert-success { background-color: rgba(0, 212, 170, 0.1); border-color: rgba(0, 212, 170, 0.3); }
+
+/* Modal Styling - matches card theme exactly */
+.modal-content {
+    background-color: var(--card-bg) !important;
+    border: 1px solid var(--border-color) !important;
+}
+
+.modal-header {
+    background-color: var(--secondary-bg) !important;
+    border-bottom: 1px solid var(--border-color) !important;
+}
+
+.modal-footer {
+    background-color: var(--secondary-bg) !important;
+    border-top: 1px solid var(--border-color) !important;
+}
+
+.modal-body {
+    color: var(--text-primary) !important;
+}
+
+.modal-title {
+    color: var(--text-primary) !important;
+}
+
+/* Ensure modal backdrop is dark */
+.modal-backdrop {
+    background-color: #000;
+}
+
+.modal-backdrop.show {
+    opacity: 0.7;
+}
+
+/* Streaming status badge in navbar */
+#streaming-status-badge {
+    cursor: default;
+    font-size: 0.875rem;
+}
+
+/* OAuth error banner */
+#oauth-error-banner .btn-light {
+    background-color: var(--accent-color) !important;
+    border-color: var(--accent-color) !important;
+    color: #000 !important;
+}

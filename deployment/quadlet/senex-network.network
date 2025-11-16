@@ -1,0 +1,15 @@
+# Quadlet Network Configuration for Senex Trader
+# Shared network for all containers
+
+[Network]
+# Network driver (bridge is default for Podman)
+Driver=bridge
+
+# Network name (will be prefixed with user ID in rootless mode)
+NetworkName=senex_network
+
+# Subnet for the network (optional, Podman will auto-assign)
+# Subnet=10.89.0.0/24
+
+[Install]
+WantedBy=default.target

@@ -1,0 +1,16 @@
+# Senex Trader Documentation .gitignore
+
+# Temporary working directories
+temp/
+*/temp/
+
+# Editor and IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db

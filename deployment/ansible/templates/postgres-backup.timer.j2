@@ -1,0 +1,24 @@
+# PostgreSQL Backup Timer for Senex Trader
+# Managed by Ansible - DO NOT EDIT MANUALLY
+#
+# This timer triggers daily PostgreSQL backups.
+# Schedule: {{ backup_schedule | default('02:00') }} daily
+
+[Unit]
+Description=Daily PostgreSQL Backup for Senex Trader
+Requires=postgres-backup.service
+
+[Timer]
+# Run daily at configured time
+OnCalendar=daily
+# Specific time (default: 2 AM)
+OnCalendar=*-*-* {{ backup_schedule | default('02:00') }}:00
+
+# Run missed backups on boot (if system was off)
+Persistent=true
+
+# Randomize start time by up to 15 minutes to avoid load spikes
+RandomizedDelaySec=15min
+
+[Install]
+WantedBy=timers.target

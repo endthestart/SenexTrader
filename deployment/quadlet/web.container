@@ -1,0 +1,43 @@
+# Quadlet Container Configuration for Senex Trader Web
+# Django ASGI Application (Daphne server)
+
+[Unit]
+Description=Senex Trader Web Application (Daphne ASGI)
+Wants=network-online.target senex-network.service postgres.service redis.service
+After=network-online.target senex-network.service postgres.service redis.service
+Requires=postgres.service redis.service
+
+[Container]
+# Image to use (will be substituted from .env)
+Image=${GITEA_REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG}
+
+# Container name
+ContainerName=web
+
+# Auto-update from registry (optional, can enable later)
+# AutoUpdate=registry
+
+# Load environment variables from .env file (all config comes from here)
+EnvironmentFile=/etc/containers/systemd/.env
+
+# Command to run
+Exec=web
+
+# Volume mounts - :U flag enables auto-chown for rootless Podman
+Volume=/opt/senex-trader/data/staticfiles:/app/staticfiles:U
+
+# Port mapping
+PublishPort=0.0.0.0:8000:8000
+
+# Network
+Network=senex-network.network
+
+[Service]
+# Restart policy (systemd handles this reliably)
+Restart=always
+RestartSec=10s
+TimeoutStartSec=120
+
+[Install]
+# Start automatically on boot
+WantedBy=default.target

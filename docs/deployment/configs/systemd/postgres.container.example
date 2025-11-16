@@ -1,0 +1,50 @@
+# Systemd Quadlet file for PostgreSQL database
+# Location: ~/.config/containers/systemd/postgres.container
+
+[Unit]
+Description=PostgreSQL Database - Senex Trader
+After=network-online.target
+
+[Container]
+Image=docker.io/library/postgres:16
+ContainerName=postgres
+AutoUpdate=registry
+
+# Network configuration
+Network=senex_net.network
+PublishPort=127.0.0.1:5432:5432
+
+# Persistent storage
+Volume=postgres_data:/var/lib/postgresql/data:Z
+
+# Environment variables
+Environment=POSTGRES_DB=senex_trader
+Environment=POSTGRES_USER=senex_user
+Secret=db_password,type=env,target=POSTGRES_PASSWORD
+
+# PostgreSQL tuning (adjust based on server RAM)
+Environment=POSTGRES_SHARED_BUFFERS=512MB
+Environment=POSTGRES_EFFECTIVE_CACHE_SIZE=1536MB
+Environment=POSTGRES_WORK_MEM=16MB
+Environment=POSTGRES_MAINTENANCE_WORK_MEM=128MB
+
+# Command with additional settings
+Exec=postgres -c max_connections=200 -c log_statement=all -c log_duration=on
+
+# Health check
+HealthCmd=pg_isready -U senex_user
+HealthInterval=10s
+HealthTimeout=5s
+HealthRetries=3
+
+# Resource limits
+Memory=2G
+CPUQuota=200%
+
+[Service]
+Restart=always
+RestartSec=10
+TimeoutStartSec=120
+
+[Install]
+WantedBy=default.target

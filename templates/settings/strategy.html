@@ -1,0 +1,329 @@
+{% extends 'settings/base.html' %}
+{% block title %}Strategy Settings - Senex Trader{% endblock %}
+
+{% block settings_content %}
+<!-- Automated Trading Card -->
+<div class="card bg-dark border-secondary mb-4">
+  <div class="card-body">
+    <h5 class="mb-3">Automated Trading</h5>
+    <p class="text-muted small">Enable automated daily trading for your account. The system will automatically execute Senex Trident trades 30 minutes after market open (10:00 AM ET) on trading days.</p>
+
+    <div class="form-check form-switch">
+      <input class="form-check-input" type="checkbox" id="automated-trading-toggle"
+             {% if tastytrade_account.is_automated_trading_enabled %}checked{% endif %}
+             {% if not tastytrade_account or not tastytrade_account.is_active %}disabled{% endif %}>
+      <label class="form-check-label" for="automated-trading-toggle">
+        Enable Automated Trading
+      </label>
+    </div>
+
+    <div class="mt-3">
+      <label class="form-label text-muted" for="automation-offset-input">Execution Price Offset (cents)</label>
+      <div class="input-group" style="max-width: 300px;">
+        <input type="number"
+               min="0"
+               max="25"
+               step="1"
+               class="form-control bg-dark text-light"
+               id="automation-offset-input"
+               value="{% if tastytrade_account %}{{ tastytrade_account.automated_entry_offset_cents }}{% else %}0{% endif %}"
+               {% if not tastytrade_account or not tastytrade_account.is_active %}disabled{% endif %}>
+        <button class="btn btn-outline-light" type="button" id="save-automation-offset"
+                {% if not tastytrade_account or not tastytrade_account.is_active %}disabled{% endif %}>
+          Save Offset
+        </button>
+      </div>
+      <div class="form-text text-muted small">
+        Use a positive offset to submit automated credit orders a little closer to the bid
+        (e.g., 4¢ offset sends a limit that is $0.04 below the mid price).
+      </div>
+    </div>
+
+    {% if not tastytrade_account or not tastytrade_account.is_active %}
+      <div class="alert alert-warning mt-3 mb-0" role="alert">
+        <small>Connect your TastyTrade account in Brokerage settings to enable automated trading.</small>
+      </div>
+    {% endif %}
+
+    {% if tastytrade_account.is_automated_trading_enabled %}
+      <div class="alert alert-success mt-3 mb-0" role="alert">
+        <small><strong>Automated trading is active.</strong> Trades will execute daily at 10:00 AM ET on trading days (Mon-Fri) if market conditions are suitable.</small>
+      </div>
+    {% endif %}
+  </div>
+</div>
+
+<!-- Email Preferences Card -->
+<div class="card bg-dark border-secondary mb-4">
+  <div class="card-body">
+    <h5 class="mb-3">Email Notifications</h5>
+    <p class="text-muted small">Choose how you want to receive trading activity updates via email.</p>
+
+    <div class="mb-3">
+      <div class="form-check">
+        <input class="form-check-input" type="radio" name="email-preference" id="email-none" value="none"
+               {% if request.user.email_preference == 'none' %}checked{% endif %}>
+        <label class="form-check-label" for="email-none">
+          <strong>No Emails</strong>
+          <div class="text-muted small">Don't send me any trading-related emails</div>
+        </label>
+      </div>
+    </div>
+
+    <div class="mb-3">
+      <div class="form-check">
+        <input class="form-check-input" type="radio" name="email-preference" id="email-immediate" value="immediate"
+               {% if request.user.email_preference == 'immediate' %}checked{% endif %}>
+        <label class="form-check-label" for="email-immediate">
+          <strong>Emails for All Activity</strong>
+          <div class="text-muted small">Receive immediate emails when trades are executed or filled</div>
+        </label>
+      </div>
+    </div>
+
+    <div class="mb-3">
+      <div class="form-check">
+        <input class="form-check-input" type="radio" name="email-preference" id="email-summary" value="summary"
+               {% if request.user.email_preference == 'summary' %}checked{% endif %}>
+        <label class="form-check-label" for="email-summary">
+          <strong>Summary Email End of Day</strong>
+          <div class="text-muted small">Receive one daily summary email 30 minutes after market close (4:30 PM ET)</div>
+        </label>
+      </div>
+    </div>
+
+    <button class="btn btn-primary" id="save-email-preference">Save Email Preferences</button>
+  </div>
+</div>
+
+<!-- Daily Trade Suggestion Card -->
+<div class="card bg-dark border-secondary mb-4">
+  <div class="card-body">
+    <h5 class="mb-3">Daily Trade Suggestion</h5>
+    <p class="text-muted small">Receive an AI-generated trade suggestion email each morning at 10:00 AM ET (market open) to plan your trading day. The system analyzes market conditions and suggests the best strategy. This is separate from the email notifications above - you can receive both.</p>
+
+    <div class="form-check form-switch">
+      <input class="form-check-input" type="checkbox" id="daily-suggestion-toggle"
+             {% if request.user.email_daily_trade_suggestion %}checked{% endif %}>
+      <label class="form-check-label" for="daily-suggestion-toggle">
+        Email Daily Trade Suggestion at Market Open (10:00 AM ET)
+      </label>
+    </div>
+
+    <div class="alert alert-info mt-3 mb-0" role="alert">
+      <small><strong>Note:</strong> This email contains suggestions only and does not execute trades. As we add more strategies, metrics, and monitoring, this email will become smarter over time.</small>
+    </div>
+
+    <button class="btn btn-primary mt-3" id="save-daily-suggestion">Save Daily Suggestion Preference</button>
+  </div>
+</div>
+
+<script>
+// Handle automated trading toggle
+const automationToggle = document.getElementById('automated-trading-toggle');
+const automationOffsetInput = document.getElementById('automation-offset-input');
+const saveAutomationOffsetButton = document.getElementById('save-automation-offset');
+
+async function updateAutomatedTradingSettings(payload, onSuccess) {
+    try {
+        const response = await fetch('/accounts/api/automated-trading-toggle/', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCsrfToken()
+            },
+            body: JSON.stringify(payload)
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+            if (typeof data.offset_cents === 'number' && automationOffsetInput) {
+                automationOffsetInput.value = data.offset_cents;
+            }
+            onSuccess?.(data);
+        } else {
+            throw new Error(data.error || 'Request failed');
+        }
+    } catch (error) {
+        console.error('Automation settings update failed:', error);
+        throw error;
+    }
+}
+
+automationToggle?.addEventListener('change', async function() {
+    const isEnabled = this.checked;
+    const offsetValue = automationOffsetInput ? parseInt(automationOffsetInput.value, 10) : 0;
+
+    try {
+        await updateAutomatedTradingSettings(
+            {
+                is_enabled: isEnabled,
+                offset_cents: Number.isNaN(offsetValue) ? 0 : offsetValue
+            },
+            () => setTimeout(() => window.location.reload(), 500)
+        );
+    } catch (error) {
+        this.checked = !isEnabled;
+        window.showResultModal('error', 'Update Failed', 'Failed to update automated trading setting. Please try again.');
+    }
+});
+
+saveAutomationOffsetButton?.addEventListener('click', async function() {
+    const offsetValue = parseInt(automationOffsetInput.value, 10);
+
+    if (Number.isNaN(offsetValue)) {
+        window.showResultModal('warning', 'Invalid Input', 'Offset must be a number between 0 and 25.');
+        return;
+    }
+
+    if (offsetValue < 0 || offsetValue > 25) {
+        window.showResultModal('warning', 'Invalid Input', 'Offset must be between 0 and 25 cents.');
+        return;
+    }
+
+    const originalText = this.textContent;
+    this.disabled = true;
+    this.textContent = 'Saving...';
+
+    try {
+        await updateAutomatedTradingSettings(
+            {
+                offset_cents: offsetValue,
+                is_enabled: automationToggle ? automationToggle.checked : undefined
+            },
+            () => {
+                this.textContent = 'Saved!';
+                setTimeout(() => {
+                    this.textContent = originalText;
+                }, 1500);
+            }
+        );
+    } catch (error) {
+        window.showResultModal('error', 'Update Failed', 'Failed to update offset. Please try again.');
+        this.textContent = originalText;
+    } finally {
+        this.disabled = false;
+    }
+});
+
+// Handle email preference save
+document.getElementById('save-email-preference')?.addEventListener('click', async function() {
+    const selectedPreference = document.querySelector('input[name="email-preference"]:checked');
+
+    if (!selectedPreference) {
+        window.showResultModal('warning', 'Selection Required', 'Please select an email preference');
+        return;
+    }
+
+    const button = this;
+    const originalText = button.textContent;
+    button.disabled = true;
+    button.textContent = 'Saving...';
+
+    try {
+        const response = await fetch('/accounts/api/email-preference/', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCsrfToken()
+            },
+            body: JSON.stringify({
+                email_preference: selectedPreference.value
+            })
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+            button.textContent = 'Saved!';
+            button.classList.remove('btn-primary');
+            button.classList.add('btn-success');
+
+            setTimeout(() => {
+                button.textContent = originalText;
+                button.classList.remove('btn-success');
+                button.classList.add('btn-primary');
+            }, 2000);
+        } else {
+            throw new Error(data.error || 'Failed to save');
+        }
+    } catch (error) {
+        console.error('Failed to save email preference:', error);
+        window.showResultModal('error', 'Save Failed', 'Failed to save email preference. Please try again.');
+        button.textContent = originalText;
+    } finally {
+        button.disabled = false;
+    }
+});
+
+// Handle daily trade suggestion toggle state based on email preference
+const emailRadios = document.querySelectorAll('input[name="email-preference"]');
+const dailySuggestionToggle = document.getElementById('daily-suggestion-toggle');
+const saveDailySuggestionButton = document.getElementById('save-daily-suggestion');
+
+function updateDailySuggestionState() {
+    const noEmailSelected = document.getElementById('email-none')?.checked;
+    if (dailySuggestionToggle && saveDailySuggestionButton) {
+        dailySuggestionToggle.disabled = noEmailSelected;
+        saveDailySuggestionButton.disabled = noEmailSelected;
+        if (noEmailSelected) {
+            dailySuggestionToggle.checked = false;
+        }
+    }
+}
+
+// Update state when email preference changes
+emailRadios?.forEach(radio => {
+    radio.addEventListener('change', updateDailySuggestionState);
+});
+
+// Initial state on page load
+updateDailySuggestionState();
+
+// Handle daily suggestion save
+document.getElementById('save-daily-suggestion')?.addEventListener('click', async function() {
+    const isEnabled = dailySuggestionToggle?.checked || false;
+
+    const button = this;
+    const originalText = button.textContent;
+    button.disabled = true;
+    button.textContent = 'Saving...';
+
+    try {
+        const response = await fetch('/accounts/api/daily-suggestion-toggle/', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCsrfToken()
+            },
+            body: JSON.stringify({
+                is_enabled: isEnabled
+            })
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+            button.textContent = 'Saved!';
+            button.classList.remove('btn-primary');
+            button.classList.add('btn-success');
+
+            setTimeout(() => {
+                button.textContent = originalText;
+                button.classList.remove('btn-success');
+                button.classList.add('btn-primary');
+            }, 2000);
+        } else {
+            throw new Error(data.error || 'Failed to save');
+        }
+    } catch (error) {
+        console.error('Failed to save daily suggestion preference:', error);
+        window.showResultModal('error', 'Save Failed', 'Failed to save daily suggestion preference. Please try again.');
+        button.textContent = originalText;
+    } finally {
+        button.disabled = false;
+    }
+});
+</script>
+{% endblock %}

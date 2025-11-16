@@ -1,0 +1,24 @@
+# PgBouncer User List
+# Format: "username" "password"
+#
+# Password can be:
+# - Plain text (not recommended): "mypassword"
+# - MD5 hash: "md5" + md5(password + username)
+#
+# Generate MD5 hash:
+# echo -n "passwordusername" | md5sum
+# Result: abc123def456...
+# Entry: "username" "md5abc123def456..."
+
+# Example (replace with actual credentials):
+# "senex_user" "md5abc123def456..."
+
+# Admin user (PostgreSQL superuser)
+"postgres" "REPLACE_WITH_MD5_HASH"
+
+# Application user
+"senex_user" "REPLACE_WITH_MD5_HASH"
+
+# Generate hash for senex_user:
+# HASH=$(echo -n "YOUR_PASSWORDsenex_user" | md5sum | awk '{print $1}')
+# echo "\"senex_user\" \"md5$HASH\""

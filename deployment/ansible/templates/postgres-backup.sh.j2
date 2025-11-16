@@ -1,0 +1,65 @@
+#!/bin/bash
+# PostgreSQL Backup Script for Senex Trader
+# Managed by Ansible - DO NOT EDIT MANUALLY
+#
+# This script:
+# - Creates timestamped PostgreSQL dumps
+# - Optionally compresses with gzip
+# - Rotates old backups based on retention policy
+# - Logs to stdout (captured by systemd journal)
+
+set -euo pipefail
+
+# Configuration
+BACKUP_DIR="{{ app_directory }}/backups"
+RETENTION_DAYS="{{ backup_retention_days | default(7) }}"
+COMPRESS="{{ backup_compress | default('true') }}"
+DB_NAME="{{ db_name }}"
+DB_USER="{{ db_user }}"
+TIMESTAMP=$(date +%Y-%m-%d-%H%M%S)
+
+# Determine container command based on user
+{% if app_user == 'root' %}
+PODMAN_CMD="podman"
+{% else %}
+PODMAN_CMD="podman"
+{% endif %}
+
+# Create backup directory if it doesn't exist
+mkdir -p "${BACKUP_DIR}"
+
+# Set backup filename
+if [ "${COMPRESS}" = "true" ]; then
+    BACKUP_FILE="${BACKUP_DIR}/postgres-${TIMESTAMP}.sql.gz"
+else
+    BACKUP_FILE="${BACKUP_DIR}/postgres-${TIMESTAMP}.sql"
+fi
+
+echo "$(date '+%Y-%m-%d %H:%M:%S') - Starting PostgreSQL backup..."
+echo "Backup file: ${BACKUP_FILE}"
+
+# Create backup
+if [ "${COMPRESS}" = "true" ]; then
+    ${PODMAN_CMD} exec postgres pg_dump -U "${DB_USER}" "${DB_NAME}" | gzip > "${BACKUP_FILE}"
+else
+    ${PODMAN_CMD} exec postgres pg_dump -U "${DB_USER}" "${DB_NAME}" > "${BACKUP_FILE}"
+fi
+
+# Check if backup was created and is not empty
+if [ ! -s "${BACKUP_FILE}" ]; then
+    echo "ERROR: Backup file is empty or was not created!"
+    exit 1
+fi
+
+BACKUP_SIZE=$(du -h "${BACKUP_FILE}" | cut -f1)
+echo "$(date '+%Y-%m-%d %H:%M:%S') - Backup completed successfully (${BACKUP_SIZE})"
+
+# Rotate old backups
+echo "$(date '+%Y-%m-%d %H:%M:%S') - Cleaning up backups older than ${RETENTION_DAYS} days..."
+find "${BACKUP_DIR}" -name "postgres-*.sql*" -type f -mtime +${RETENTION_DAYS} -delete
+
+# Count remaining backups
+BACKUP_COUNT=$(find "${BACKUP_DIR}" -name "postgres-*.sql*" -type f | wc -l)
+echo "$(date '+%Y-%m-%d %H:%M:%S') - Retention: ${BACKUP_COUNT} backups remaining"
+
+echo "$(date '+%Y-%m-%d %H:%M:%S') - Backup process completed"

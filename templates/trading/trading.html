@@ -1,0 +1,556 @@
+{% extends 'base/base.html' %}
+{% load static %}
+
+{% block title %}Options Trading{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <!-- Page Header -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <h1 class="h3 mb-0">Options Trading</h1>
+            <p class="text-muted mb-0">Auto-select best strategy based on market conditions or manually choose from 11+ strategies</p>
+            <small class="text-info">Looking for Senex Trident? Visit <a href="{% url 'trading:senex_trident' %}">Senex Trident Algorithm</a> for automated trading</small>
+        </div>
+    </div>
+
+    <!-- Status Alert Area -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div id="statusAlert" class="alert d-none" role="alert"></div>
+        </div>
+    </div>
+
+    <!-- Trading Controls -->
+    <div class="row mb-4">
+        <div class="col-md-6">
+            <div class="card bg-dark border-secondary">
+                <div class="card-header bg-secondary">
+                    <h5 class="mb-0">
+                        <i class="bi bi-gear-fill me-2"></i>Strategy Configuration
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <!-- Selection Mode -->
+                    <div class="row mb-3">
+                        <div class="col-12">
+                            <label for="selectionMode" class="form-label">Selection Mode</label>
+                            <select class="form-select" id="selectionMode">
+                                <option value="auto" selected>Auto Mode - System Picks Best Strategy</option>
+                                <option value="forced">Manual Mode - Choose Specific Strategy</option>
+                            </select>
+                            <small class="text-muted">Auto mode scores all strategies, selecting the best for current market conditions</small>
+                        </div>
+                    </div>
+
+                    <!-- Symbol and Strategy Selectors -->
+                    <div class="row">
+                        <div class="col-md-6">
+                            <label for="symbolSelect" class="form-label">Underlying Symbol</label>
+                            <select class="form-select" id="symbolSelect">
+                                {% for symbol in available_symbols %}
+                                    <option value="{{ symbol }}" {% if forloop.first %}selected{% endif %}>{{ symbol }}</option>
+                                {% empty %}
+                                    <option value="QQQ" selected>QQQ</option>
+                                    <option value="SPY">SPY</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-6" id="strategySelectContainer">
+                            <label for="strategySelect" class="form-label">Strategy <span class="text-muted">(Manual Mode Only)</span></label>
+                            <select class="form-select" id="strategySelect" disabled>
+                                {% for value, display in available_strategies %}
+                                    <option value="{{ value }}" {% if forloop.first %}selected{% endif %}>{{ display }}</option>
+                                {% empty %}
+                                    <option value="short_put_vertical" selected>Short Put Vertical</option>
+                                    <option value="short_call_vertical">Short Call Vertical</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </div>
+
+                    <!-- Generate Button -->
+                    <div class="row mt-3">
+                        <div class="col-12">
+                            <button id="generateBtn" class="btn btn-primary" disabled>
+                                <i class="bi bi-lightbulb-fill me-2"></i>Generate Suggestion
+                            </button>
+                            <small class="text-muted ms-2" id="generateBtnStatus">Initializing...</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Pending Orders Section -->
+        <div class="col-md-6">
+            <div class="card bg-dark border-secondary">
+                <div class="card-header bg-secondary d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0">
+                        <i class="bi bi-clock-fill me-2"></i>Pending Orders
+                    </h5>
+                    <div>
+                        <button id="syncPositionsBtn" class="btn btn-sm btn-outline-warning me-2" title="Sync positions from TastyTrade">
+                            <i class="bi bi-cloud-download"></i> Sync
+                        </button>
+                        <button id="refreshPendingBtn" class="btn btn-sm btn-outline-light" title="Refresh pending orders">
+                            <i class="bi bi-arrow-clockwise"></i>
+                        </button>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <div id="pendingOrdersContainer">
+                        {% if pending_trades %}
+                            {% for trade in pending_trades %}
+                                <div class="border border-secondary rounded p-2 mb-2" data-trade-id="{{ trade.id }}">
+                                    <div class="d-flex justify-content-between align-items-center">
+                                        <div>
+                                            <strong>{{ trade.position.symbol }} {{ trade.trade_type|title }}</strong>
+                                            <span class="badge bg-warning ms-2">{{ trade.get_status_display }}</span>
+                                        </div>
+                                        <small class="text-muted">{{ trade.submitted_at|date:"H:i" }}</small>
+                                    </div>
+                                    {% if trade.broker_order_id %}
+                                        <small class="text-muted">Order ID: {{ trade.broker_order_id }}</small>
+                                    {% endif %}
+                                </div>
+                            {% endfor %}
+                        {% else %}
+                            <p class="text-muted mb-0">No pending orders</p>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+
+            <!-- Market Conditions Panel -->
+            <div class="card bg-dark border-secondary mt-3" id="marketConditionsCard" style="display: none;">
+                <div class="card-header bg-secondary">
+                    <h5 class="mb-0">
+                        <i class="bi bi-graph-up me-2"></i>Market Conditions
+                    </h5>
+                </div>
+                <div class="card-body" id="marketConditionsPanel">
+                    <p class="text-muted mb-0">Generate a suggestion to view market conditions</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Strategy Comparison Section (Auto mode only) -->
+    <div class="row mb-4" id="strategyComparisonSection" style="display: none;">
+        <div class="col-12">
+            <div class="card bg-dark border-secondary" id="strategyScoresCard">
+                <div class="card-header bg-secondary">
+                    <h5 class="mb-0">
+                        <i class="bi bi-bar-chart-fill me-2"></i>Strategy Comparison
+                    </h5>
+                </div>
+                <div class="card-body" id="strategyScoresPanel">
+                    <p class="text-muted mb-0">Available in Auto mode only</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Suggestion Display Area -->
+    <div class="row">
+        <div class="col-12">
+            <!-- Suggestion Analysis Box (Always shown with generation) -->
+            <div id="suggestionAnalysisContainer" class="d-none mb-4">
+                <div class="card bg-dark border-secondary">
+                    <div class="card-header bg-secondary d-flex justify-content-between align-items-center">
+                        <h5 class="mb-0">
+                            <i class="bi bi-bar-chart-fill me-2"></i>Suggestion Analysis
+                        </h5>
+                        <div class="d-flex align-items-center gap-2">
+                            <span id="analysisConfidenceBadge" class="badge"></span>
+                            <button class="btn btn-sm btn-outline-light"
+                                    type="button"
+                                    data-bs-toggle="collapse"
+                                    data-bs-target="#analysisCollapseContent"
+                                    aria-expanded="true"
+                                    aria-controls="analysisCollapseContent">
+                                <i class="bi bi-chevron-up" id="analysisCollapseIcon"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="collapse show" id="analysisCollapseContent">
+                        <div class="card-body" id="suggestionAnalysisContent">
+                            <!-- Analysis content populated via JavaScript -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Trading Suggestion Box (Only shown when suggestion exists) -->
+            <div id="suggestionContainer" class="d-none">
+                <div class="card bg-dark border-secondary">
+                    <div class="card-header bg-secondary d-flex justify-content-between align-items-center">
+                        <div class="d-flex align-items-center">
+                            <h5 class="mb-0 me-2">
+                                <i class="bi bi-target me-2"></i>Trading Suggestion
+                            </h5>
+                            <span id="confidenceBadge" class="badge" style="display: none;"></span>
+                        </div>
+                        <small class="text-muted" id="suggestionTimestamp"></small>
+                    </div>
+                    <div class="card-body" id="suggestionContent">
+                        <!-- Suggestion content will be populated via JavaScript -->
+                        <!-- Suggestion Details (populated dynamically) -->
+                        <div id="suggestionDetails"></div>
+                    </div>
+                    <div class="card-footer bg-dark">
+                        <div class="d-flex gap-2">
+                            <button id="executeBtn" class="btn btn-success" data-suggestion-id="">
+                                <i class="bi bi-check-circle-fill me-2"></i>Approve & Execute
+                            </button>
+                            <button id="rejectBtn" class="btn btn-danger" data-suggestion-id="">
+                                <i class="bi bi-x-circle-fill me-2"></i>Reject
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Progress Indicator -->
+    <div class="row mt-3">
+        <div class="col-12">
+            <div id="progressContainer" class="d-none">
+                <div class="card bg-dark border-secondary">
+                    <div class="card-body">
+                        <div class="d-flex align-items-center">
+                            <div class="progress flex-grow-1 me-3">
+                                <div id="progressBar" class="progress-bar" role="progressbar" style="width: 0%"></div>
+                            </div>
+                            <span id="progressText">Processing...</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Trade Details Modal -->
+<div class="modal fade" id="tradeDetailsModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content bg-dark border-secondary">
+            <div class="modal-header bg-secondary">
+                <h5 class="modal-title">Trade Details</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="tradeDetailsBody">
+                <!-- Content loaded dynamically -->
+            </div>
+            <div class="modal-footer bg-secondary">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{% static 'js/utils.js' %}"></script>
+<script src="{% static 'js/trading-utils.js' %}"></script>
+<script src="{% static 'js/trading.js' %}"></script>
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        // Initialize trading interface with configuration
+        const config = {
+            userId: {{ user.id }},
+            availableSymbols: {{ available_symbols|default:"['QQQ', 'SPY']"|safe }},
+            pendingTrades: {{ pending_trades|length|default:0 }}
+        };
+
+        function initializeTrading() {
+            if (window.streamersReady) {
+                setupTradingPage();
+            } else {
+                window.addEventListener('streamers-ready', function(e) {
+                    setupTradingPage();
+                }, { once: true });
+
+                window.addEventListener('streamers-timeout', function(e) {
+                    console.warn('Trading: Streamers timeout:', e.detail);
+                    showStatus('danger', 'Market data connection timeout. Please refresh the page.');
+                }, { once: true });
+            }
+        }
+
+        function setupTradingPage() {
+            const ws = window.streamerWebSocket;
+
+            if (!ws || ws.readyState !== WebSocket.OPEN) {
+                showStatus('danger', 'WebSocket not connected. Please refresh the page.');
+                return;
+            }
+
+            const generateBtn = document.getElementById('generateBtn');
+            const statusText = generateBtn.nextElementSibling;
+            generateBtn.disabled = false;
+            statusText.textContent = 'Ready to generate suggestions';
+            statusText.className = 'text-success ms-2';
+
+            if (window.TradingInterface) {
+                window.TradingInterface.init(config);
+            }
+        }
+
+        // Note: WebSocket message handling is now done by TradingInterface class
+
+
+        function showStatus(type, message, showSpinner = false) {
+            const alert = document.getElementById('statusAlert');
+            const spinnerHtml = showSpinner ? '<div class="spinner-border spinner-border-sm me-2" role="status"></div>' : '';
+
+            alert.className = `alert alert-${type} fade show`;
+            alert.innerHTML = spinnerHtml + message;
+            alert.classList.remove('d-none');
+
+            // Auto-hide success/info messages
+            if (type === 'success' || type === 'info') {
+                setTimeout(() => {
+                    alert.classList.add('d-none');
+                }, 5000);
+            }
+        }
+
+
+        // Selection mode toggle handler
+        document.getElementById('selectionMode').addEventListener('change', function() {
+            const strategySelect = document.getElementById('strategySelect');
+            const strategyComparisonSection = document.getElementById('strategyComparisonSection');
+            const isManual = this.value === 'forced';
+
+            strategySelect.disabled = !isManual;
+            // Hide strategy comparison section in manual mode, show in auto mode
+            if (strategyComparisonSection) {
+                strategyComparisonSection.style.display = isManual ? 'none' : '';
+            }
+        });
+
+        // Suggestion Analysis collapse icon toggle
+        const analysisCollapse = document.getElementById('analysisCollapseContent');
+        const analysisIcon = document.getElementById('analysisCollapseIcon');
+        if (analysisCollapse && analysisIcon) {
+            analysisCollapse.addEventListener('shown.bs.collapse', function() {
+                analysisIcon.className = 'bi bi-chevron-up';
+            });
+            analysisCollapse.addEventListener('hidden.bs.collapse', function() {
+                analysisIcon.className = 'bi bi-chevron-down';
+            });
+        }
+
+        // Generate button event handler - Route based on selection mode
+        document.getElementById('generateBtn').addEventListener('click', async function() {
+            const mode = document.getElementById('selectionMode').value;
+            const symbol = document.getElementById('symbolSelect').value;
+            const strategy = document.getElementById('strategySelect').value;
+            const button = this;
+
+            button.disabled = true;
+            button.innerHTML = '<i class="bi bi-hourglass-split me-2"></i>Generating...';
+
+            // Hide previous suggestion and analysis panels
+            document.getElementById('suggestionContainer').classList.add('d-none');
+            const marketCard = document.getElementById('marketConditionsCard');
+            if (marketCard) marketCard.style.display = 'none';
+            const strategySection = document.getElementById('strategyComparisonSection');
+            if (strategySection) strategySection.style.display = 'none';
+
+            // Reset unified explanation panel
+            const explanationPanel = document.getElementById('strategyExplanationPanel');
+            if (explanationPanel) explanationPanel.classList.add('d-none');
+
+            // Reset confidence badge
+            const confidenceBadge = document.getElementById('confidenceBadge');
+            if (confidenceBadge) confidenceBadge.style.display = 'none';
+
+            showStatus('info', 'Analyzing market conditions...', true);
+
+            try {
+                // Route to appropriate method based on selection mode
+                if (mode === 'auto') {
+                    await window.TradingInterface.generateAutoSuggestion(symbol);
+                } else {
+                    await window.TradingInterface.generateForcedSuggestion(symbol, strategy);
+                }
+            } catch (error) {
+                console.error('Generation error:', error);
+                showStatus('danger', 'Failed to generate suggestion: ' + error.message);
+            } finally {
+                button.disabled = false;
+                button.innerHTML = '<i class="bi bi-lightbulb-fill me-2"></i>Generate Suggestion';
+            }
+        });
+
+        // Execute button handled by TradingInterface.executeTrade() - uses modal confirmation
+
+        // Reject button event handler
+        document.getElementById('rejectBtn').addEventListener('click', async function() {
+            const suggestionId = this.dataset.suggestionId;
+            if (!suggestionId) {
+                showStatus('danger', 'No suggestion ID found');
+                return;
+            }
+
+            // Optional rejection reason
+            const reason = await window.showPromptModal(
+                'Reject Suggestion',
+                'Reason for rejection (optional):',
+                'Enter reason...',
+                ''
+            );
+            if (reason === null) return; // User cancelled
+
+            const button = this;
+            const executeBtn = document.getElementById('executeBtn');
+
+            // Disable buttons
+            button.disabled = true;
+            executeBtn.disabled = true;
+            button.innerHTML = '<i class="bi bi-hourglass-split me-2"></i>Rejecting...';
+
+            // Call API to reject suggestion
+            fetch(`/trading/api/suggestions/${suggestionId}/reject/`, {
+                method: 'POST',
+                headers: {
+                    'X-CSRFToken': getCsrfToken(),
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ reason: reason })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    showStatus('info', '❌ Suggestion rejected');
+
+                    // Hide suggestion container
+                    setTimeout(() => {
+                        document.getElementById('suggestionContainer').classList.add('d-none');
+                    }, 2000);
+                } else {
+                    showStatus('danger', data.error || 'Failed to reject suggestion');
+                    // Re-enable buttons on error
+                    button.disabled = false;
+                    executeBtn.disabled = false;
+                    button.innerHTML = '<i class="bi bi-x-circle-fill me-2"></i>Reject';
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                showStatus('danger', 'Network error during rejection');
+                // Re-enable buttons on error
+                button.disabled = false;
+                executeBtn.disabled = false;
+                button.innerHTML = '<i class="bi bi-x-circle-fill me-2"></i>Reject';
+            });
+        });
+
+        // Refresh pending orders button handler
+        document.getElementById('refreshPendingBtn').addEventListener('click', function() {
+            refreshPendingOrders();
+        });
+
+        // Sync positions button handler
+        const syncBtn = document.getElementById('syncPositionsBtn');
+        if (syncBtn) {
+            syncBtn.addEventListener('click', syncPositions);
+        }
+
+        function refreshPendingOrders() {
+            const button = document.getElementById('refreshPendingBtn');
+            button.disabled = true;
+            button.innerHTML = '<i class="bi bi-hourglass-split"></i>';
+
+            fetch('/trading/api/pending-orders/', {
+                method: 'GET',
+                headers: {
+                    'X-CSRFToken': getCsrfToken()
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    updatePendingOrdersDisplay(data.pending_orders);
+                } else {
+                    console.error('Failed to refresh pending orders:', data.error);
+                }
+            })
+            .catch(error => {
+                console.error('Error refreshing pending orders:', error);
+            })
+            .finally(() => {
+                button.disabled = false;
+                button.innerHTML = '<i class="bi bi-arrow-clockwise"></i>';
+            });
+        }
+
+        function syncPositions() {
+            const button = document.getElementById('syncPositionsBtn');
+            button.disabled = true;
+            button.innerHTML = '<i class="bi bi-hourglass-split"></i>';
+
+            fetch('/trading/api/sync-positions/', {
+                method: 'POST',
+                headers: {
+                    'X-CSRFToken': getCsrfToken(),
+                    'Content-Type': 'application/json'
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    const message = `Sync complete: ${data.imported || 0} imported, ${data.updated || 0} updated`;
+                    showStatus('success', message);
+                    setTimeout(() => location.reload(), 1000);
+                } else {
+                    console.error('Sync failed:', data.error);
+                    showStatus('danger', `Sync failed: ${data.error}`);
+                }
+            })
+            .catch(error => {
+                console.error('Sync error:', error);
+                showStatus('danger', 'Sync failed: Network error');
+            })
+            .finally(() => {
+                button.disabled = false;
+                button.innerHTML = '<i class="bi bi-cloud-download"></i> Sync';
+            });
+        }
+
+        function updatePendingOrdersDisplay(orders) {
+            const container = document.getElementById('pendingOrdersContainer');
+
+            if (!orders || orders.length === 0) {
+                container.innerHTML = '<p class="text-muted mb-0">No pending orders</p>';
+                return;
+            }
+
+            let html = '';
+            orders.forEach(order => {
+                html += `
+                    <div class="border border-secondary rounded p-2 mb-2" data-trade-id="${order.trade_id}">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div>
+                                <strong>${order.symbol} ${order.trade_type.charAt(0).toUpperCase() + order.trade_type.slice(1)}</strong>
+                                <span class="badge ms-2 ${getStatusBadgeClass(order.status)}">${order.status_display}</span>
+                            </div>
+                            <small class="text-muted">${new Date(order.submitted_at).toLocaleTimeString()}</small>
+                        </div>
+                        ${order.order_id ? `<small class="text-muted">Order ID: ${order.order_id}</small>` : ''}
+                    </div>
+                `;
+            });
+
+            container.innerHTML = html;
+        }
+
+        // Start initialization
+        initializeTrading();
+    });
+</script>
+{% endblock %}

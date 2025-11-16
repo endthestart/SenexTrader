@@ -1,0 +1,49 @@
+# Quadlet Container Configuration for PostgreSQL 15
+# Senex Trader Database
+
+[Unit]
+Description=PostgreSQL 15 Database for Senex Trader
+Wants=network-online.target senex-network.service
+After=network-online.target senex-network.service
+
+[Container]
+# Image to use
+Image=docker.io/library/postgres:15-alpine
+
+# Container name
+ContainerName=postgres
+
+# Auto-update from registry (optional, can enable later)
+# AutoUpdate=registry
+
+# Load environment variables from .env file
+EnvironmentFile=/etc/containers/systemd/.env
+
+# Environment variables (will be substituted from .env)
+Environment=POSTGRES_DB=${DB_NAME}
+Environment=POSTGRES_USER=${DB_USER}
+Environment=POSTGRES_PASSWORD=${DB_PASSWORD}
+Environment=TZ=America/New_York
+
+# Volume mounts - :U flag enables auto-chown for rootless Podman
+# This fixes the permission issues we saw in production
+Volume=/opt/senex-trader/data/postgres:/var/lib/postgresql/data:U
+
+# Network
+Network=senex-network.network
+
+# Health check (using defaults - variables don't work in HealthCmd)
+HealthCmd=pg_isready
+HealthInterval=10s
+HealthTimeout=5s
+HealthRetries=5
+
+[Service]
+# Restart policy (systemd handles this reliably)
+Restart=always
+RestartSec=10s
+TimeoutStartSec=120
+
+[Install]
+# Start automatically on boot
+WantedBy=default.target

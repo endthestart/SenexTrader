@@ -1,0 +1,1032 @@
+{% extends 'base/base.html' %}
+{% load static %}
+
+{% block title %}{{ page_title }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <!-- Page Header -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <h1 class="h3 mb-0">Senex Trident Algorithm</h1>
+            <p class="text-muted mb-0">Automated 6-leg options strategy targeting ATM strikes</p>
+            <small class="text-muted">2 Put Spreads + 1 Call Spread | QQQ Focus | DTE-Based Management</small>
+        </div>
+    </div>
+
+    <!-- Status Alert Area -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div id="statusAlert" class="alert d-none" role="alert"></div>
+        </div>
+    </div>
+
+    <!-- Automation Status and Manual Execution Row -->
+    <div class="row mb-4">
+        <div class="col-md-4">
+            <div class="card bg-dark border-secondary h-100">
+                <div class="card-header bg-secondary">
+                    <h5 class="mb-0">
+                        <i class="bi bi-gear-fill me-2"></i>Automation Status
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="d-flex align-items-center mb-3">
+                        <span class="badge {% if automation_enabled %}bg-success{% else %}bg-secondary{% endif %} me-2">
+                            {% if automation_enabled %}ENABLED{% else %}DISABLED{% endif %}
+                        </span>
+                        <small class="text-muted">
+                            {% if automation_enabled %}
+                                Trades execute automatically at 10:00 AM ET daily
+                            {% else %}
+                                Manual execution required - suggestions only
+                            {% endif %}
+                        </small>
+                    </div>
+                    {% if config %}
+                    <div class="d-flex gap-2">
+                        <button class="btn btn-sm btn-primary" onclick="toggleAutomation()">
+                            {% if automation_enabled %}Disable{% else %}Enable{% endif %} Automation
+                        </button>
+                        <button class="btn btn-sm btn-outline-light" onclick="viewConfiguration()">
+                            <i class="bi bi-sliders me-1"></i>Configuration
+                        </button>
+                    </div>
+                    {% else %}
+                    <div class="alert alert-info mb-0">
+                        <i class="bi bi-info-circle me-2"></i>
+                        Strategy configuration will be created automatically when you connect your broker account.
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <!-- Manual Execution Card -->
+        <div class="col-md-4">
+            <div class="card bg-dark border-secondary h-100">
+                <div class="card-header bg-secondary">
+                    <h5 class="mb-0">
+                        <i class="bi bi-play-circle-fill me-2"></i>Manual Execution
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <p class="text-muted small mb-3">Generate a Senex Trident suggestion for immediate review and execution</p>
+                    <div class="row g-2">
+                        <div class="col-md-7">
+                            <label for="symbol-select" class="form-label small">Symbol</label>
+                            <select class="form-select" id="symbol-select">
+                                {% for symbol in available_symbols %}
+                                <option value="{{ symbol }}" {% if symbol == "QQQ" %}selected{% endif %}>{{ symbol }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-5">
+                            <label class="form-label small">&nbsp;</label>
+                            <button id="generate-suggestion-btn" class="btn btn-success w-100" onclick="generateSuggestion()">
+                                <i class="bi bi-lightbulb-fill me-1"></i>Generate
+                            </button>
+                        </div>
+                    </div>
+                    <div class="mt-2">
+                        <small class="text-muted">
+                            <i class="bi bi-info-circle me-1"></i>Target: ATM strikes | Default: 45 DTE
+                        </small>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Risk Budget Card -->
+        <div class="col-md-4">
+            <div class="card bg-dark border-secondary h-100">
+                <div class="card-header bg-secondary d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0">
+                        <i class="bi bi-shield-check me-2"></i>Risk Budget
+                    </h5>
+                    <button id="refreshRiskBtn" class="btn btn-sm btn-outline-light" title="Refresh risk budget">
+                        <i class="bi bi-arrow-clockwise"></i>
+                    </button>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-6">
+                            <small class="text-muted">Buying Power</small>
+                            <p class="mb-2" id="riskBuyingPower">Loading...</p>
+                        </div>
+                        <div class="col-6">
+                            <small class="text-muted">Strategy Power</small>
+                            <p class="mb-2" id="riskStrategyPower">Loading...</p>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-6">
+                            <small class="text-muted">Available Budget</small>
+                            <p class="mb-2" id="riskAvailableBudget">Loading...</p>
+                        </div>
+                        <div class="col-6">
+                            <small class="text-muted">Utilization</small>
+                            <p class="mb-2" id="riskUtilization">Loading...</p>
+                        </div>
+                    </div>
+                    <div class="mt-2">
+                        <div class="progress" style="height: 8px;">
+                            <div id="riskProgressBar" class="progress-bar" role="progressbar" style="width: 0%"></div>
+                        </div>
+                    </div>
+                    <div id="riskStatusAlert" class="mt-2"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Suggestion Display (populated via JavaScript only) -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div id="suggestionContainer" class="d-none">
+                <div class="card bg-dark border-secondary">
+                    <div class="card-header bg-secondary d-flex justify-content-between align-items-center">
+                        <h5 class="mb-0">
+                            <i class="bi bi-lightbulb-fill me-2"></i>Senex Trident Suggestion
+                        </h5>
+                        <small class="text-muted" id="suggestionTimestamp"></small>
+                    </div>
+                    <div class="card-body" id="suggestionContent">
+                        <!-- Populated via JavaScript -->
+                    </div>
+                    <div class="card-footer bg-dark">
+                        <div class="d-flex gap-2">
+                            <button id="executeBtn" class="btn btn-success" data-suggestion-id="">
+                                <i class="bi bi-check-circle-fill me-2"></i>Approve & Execute
+                            </button>
+                            <button id="rejectBtn" class="btn btn-outline-danger" data-suggestion-id="">
+                                <i class="bi bi-x-circle me-2"></i>Reject
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Pending Trades -->
+    {% if pending_trades %}
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card bg-dark border-secondary">
+                <div class="card-header bg-secondary">
+                    <h5 class="mb-0">
+                        <i class="bi bi-clock-fill me-2"></i>Pending Senex Trident Trades
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-hover table-dark">
+                            <thead>
+                                <tr>
+                                    <th>Symbol</th>
+                                    <th>Expiration</th>
+                                    <th>Strikes</th>
+                                    <th>Status</th>
+                                    <th>Submitted</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for trade in pending_trades %}
+                                <tr>
+                                    <td><strong>{{ trade.position.symbol }}</strong></td>
+                                    <td>{{ trade.position.expiration_date|date:"M d, Y" }}</td>
+                                    <td>
+                                        {% if trade.position.metadata.strikes %}
+                                        <small class="text-muted">
+                                            Put: {{ trade.position.metadata.strikes.put_spread|join:"/" }}<br>
+                                            Call: {{ trade.position.metadata.strikes.call_spread|join:"/" }}
+                                        </small>
+                                        {% else %}
+                                        -
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        <span class="badge bg-warning">{{ trade.status|upper }}</span>
+                                    </td>
+                                    <td>{{ trade.submitted_at|date:"g:i A"|safe }}</td>
+                                    <td>
+                                        <button class="btn btn-sm btn-outline-danger" onclick="cancelTrade({{ trade.id }})">
+                                            <i class="bi bi-x-circle me-1"></i>Cancel
+                                        </button>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Progress Indicator -->
+    <div class="row mt-3 mb-4">
+        <div class="col-12">
+            <div id="progressContainer" class="d-none">
+                <div class="card bg-dark border-secondary">
+                    <div class="card-body">
+                        <div class="d-flex align-items-center">
+                            <div class="progress flex-grow-1 me-3">
+                                <div id="progressBar" class="progress-bar" role="progressbar" style="width: 0%"></div>
+                            </div>
+                            <span id="progressText">Processing...</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Algorithm Details -->
+    <div class="row">
+        <div class="col-md-6 mb-3">
+            <div class="card bg-dark border-secondary h-100">
+                <div class="card-header bg-secondary">
+                    <h5 class="mb-0">
+                        <i class="bi bi-diagram-3-fill me-2"></i>Algorithm Details
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-6">
+                            <small class="text-muted">Strategy:</small>
+                            <p class="mb-2">Senex Trident (6 legs)</p>
+                        </div>
+                        <div class="col-6">
+                            <small class="text-muted">Structure:</small>
+                            <p class="mb-2">2 Put + 1 Call Spread</p>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-6">
+                            <small class="text-muted">Strike Selection:</small>
+                            <p class="mb-2">ATM (at-the-money)</p>
+                        </div>
+                        <div class="col-6">
+                            <small class="text-muted">Target DTE:</small>
+                            <p class="mb-2">45 days</p>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-6">
+                            <small class="text-muted">Management:</small>
+                            <p class="mb-0">Close at 7 DTE</p>
+                        </div>
+                        <div class="col-6">
+                            <small class="text-muted">Focus Symbol:</small>
+                            <p class="mb-0">QQQ</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6 mb-3">
+            <div class="card bg-dark border-secondary h-100">
+                <div class="card-header bg-secondary">
+                    <h5 class="mb-0">
+                        <i class="bi bi-calendar-event-fill me-2"></i>Automation Schedule
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-6">
+                            <small class="text-muted">Daily Execution:</small>
+                            <p class="mb-2">10:00 AM ET (first run)</p>
+                        </div>
+                        <div class="col-6">
+                            <small class="text-muted">Position Monitoring:</small>
+                            <p class="mb-2">Every 15 minutes</p>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-6">
+                            <small class="text-muted">DTE Management:</small>
+                            <p class="mb-2">Every 15 minutes</p>
+                        </div>
+                        <div class="col-6">
+                            <small class="text-muted">Profit Targets:</small>
+                            <p class="mb-2">40%, 60%, 40%</p>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-12">
+                            <small class="text-muted">Risk Management:</small>
+                            <p class="mb-0">Automated stops</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{% static 'js/utils.js' %}"></script>
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Wait for global streamers using dashboard pattern
+        function initializeSenexPage() {
+            if (window.streamersReady) {
+                console.log('Streamers already ready, initializing Senex page...');
+                setupSenexPage();
+            } else {
+                console.log('Waiting for streamers-ready event...');
+
+                window.addEventListener('streamers-ready', function(e) {
+                    console.log('Senex: Streamers ready event received:', e.detail);
+                    setupSenexPage();
+                }, { once: true });
+
+                window.addEventListener('streamers-timeout', function(e) {
+                    console.warn('Senex: Streamers timeout:', e.detail);
+                    showStatus('danger', 'Market data connection timeout. Please refresh the page.');
+                }, { once: true });
+            }
+        }
+
+        function setupSenexPage() {
+            // Use global WebSocket like dashboard does
+            const ws = window.streamerWebSocket;
+
+            if (!ws || ws.readyState !== WebSocket.OPEN) {
+                showStatus('danger', 'WebSocket not connected. Please refresh the page.');
+                return;
+            }
+
+            console.log('Senex page setup complete, WebSocket connected');
+
+            // Load risk budget on page initialization
+            loadRiskBudget();
+
+            // Register refresh button handler
+            const refreshRiskBtn = document.getElementById('refreshRiskBtn');
+            if (refreshRiskBtn) {
+                refreshRiskBtn.addEventListener('click', () => loadRiskBudget(true));
+            }
+
+            // Register message handler for Senex-specific updates
+            function senexMessageHandler(data) {
+                if (data.type === 'suggestion_update') {
+                    console.log('📨 Senex: Received suggestion_update:', data);
+                    hideLoadingState();
+                    hideProgressIndicator();
+                    showStatus('success', '✅ Senex Trident suggestion ready!');
+                    displaySuggestion(data.suggestion);
+                    loadRiskBudget(true);
+                } else if (data.type === 'error') {
+                    console.log('📨 Senex: Received error:', data);
+                    hideLoadingState();
+                    hideProgressIndicator();
+                    const errorMsg = data.message || 'Failed to generate suggestion';
+                    window.showResultModal('error', 'Suggestion Generation Failed', errorMsg);
+                    showStatus('danger', errorMsg);
+                } else if (data.type === 'trade_update') {
+                    console.log('📨 Senex: Received trade_update:', data);
+                    showStatus('info', `Trade ${data.status}: ${data.symbol}`);
+                    loadRiskBudget(true);
+                }
+            }
+
+            // Add handler to global message broadcasting system
+            window.addMessageHandler(senexMessageHandler);
+            console.log('✅ Senex: Message handler registered for suggestion_update events');
+        }
+
+        // Start initialization
+        initializeSenexPage();
+    });
+
+    // Global utility functions (must be global for onclick handlers)
+    function displaySuggestion(suggestion) {
+        console.log('🎯 Senex: displaySuggestion() called with:', suggestion);
+        const container = document.getElementById('suggestionContainer');
+        const content = document.getElementById('suggestionContent');
+        const timestamp = document.getElementById('suggestionTimestamp');
+        const executeBtn = document.getElementById('executeBtn');
+        const rejectBtn = document.getElementById('rejectBtn');
+
+        if (!container || !content || !timestamp) return;
+
+        const formatValue = (value) => {
+            if (value === null || value === undefined) return '-';
+            if (typeof value === 'number' || !isNaN(value)) {
+                return parseFloat(value).toFixed(2);
+            }
+            return value;
+        };
+        
+        // Dynamic leg rendering based on what strikes exist
+        const renderLegs = (suggestion) => {
+            // Use new legs array if available (TastyTrade style)
+            if (suggestion.legs && suggestion.legs.length > 0) {
+                const formatExpiration = (expStr) => {
+                    const exp = new Date(expStr + 'T00:00:00');
+                    return exp.toLocaleDateString('en-US', { 
+                        month: 'short', 
+                        day: 'numeric' 
+                    });
+                };
+                
+                const formatLeg = (leg) => {
+                    const sign = leg.action === 'sell' ? '-' : '+';
+                    const qty = leg.quantity || 1;
+                    const exp = formatExpiration(leg.expiration);
+                    const dte = leg.dte ? `${leg.dte}d` : '';
+                    const strike = formatValue(leg.strike);
+                    const type = leg.option_type === 'call' ? 'C' : 'P';
+                    const action = leg.action === 'sell' ? 'STO' : 'BTO';
+                    const actionColor = leg.action === 'sell' ? 'text-danger' : 'text-success';
+                    
+                    return `
+                        <div class="mb-1 font-monospace small">
+                            <span style="display: inline-block; width: 30px; text-align: right;">${sign}${qty}</span>
+                            <span style="display: inline-block; width: 75px; margin-left: 8px;">${exp}</span>
+                            <span style="display: inline-block; width: 40px;" class="text-muted">${dte}</span>
+                            <span style="display: inline-block; width: 65px;">$${strike}</span>
+                            <span style="display: inline-block; width: 20px;">${type}</span>
+                            <span class="${actionColor}" style="display: inline-block; width: 40px;">${action}</span>
+                        </div>
+                    `;
+                };
+                
+                return suggestion.legs.map(formatLeg).join('');
+            }
+            
+            // Fallback to old rendering for backward compatibility
+            const legs = [];
+            const isDebit = suggestion.price_effect === 'Debit';
+            
+            // For debit strategies, the naming is reversed:
+            // "short" strikes are what we BUY (higher premium)
+            // "long" strikes are what we SELL (lower premium)
+            
+            // Put side
+            if (suggestion.short_put_strike !== null && suggestion.long_put_strike !== null) {
+                const putQty = suggestion.put_spread_quantity || 1;
+                if (isDebit) {
+                    legs.push(`
+                        <div class="mb-2">
+                            <small class="text-muted">Put Spread (Qty: ${putQty})</small><br>
+                            <span class="text-success">BUY</span> $${formatValue(suggestion.short_put_strike)} Put
+                            <span class="mx-2">•</span>
+                            <span class="text-danger">SELL</span> $${formatValue(suggestion.long_put_strike)} Put
+                        </div>
+                    `);
+                } else {
+                    legs.push(`
+                        <div class="mb-2">
+                            <small class="text-muted">Put Spread (Qty: ${putQty})</small><br>
+                            <span class="text-danger">SELL</span> $${formatValue(suggestion.short_put_strike)} Put
+                            <span class="mx-2">•</span>
+                            <span class="text-success">BUY</span> $${formatValue(suggestion.long_put_strike)} Put
+                        </div>
+                    `);
+                }
+            } else if (suggestion.short_put_strike !== null) {
+                legs.push(`
+                    <div class="mb-2">
+                        <small class="text-muted">Put</small><br>
+                        <span class="text-danger">SELL</span> $${formatValue(suggestion.short_put_strike)} Put
+                    </div>
+                `);
+            } else if (suggestion.long_put_strike !== null) {
+                legs.push(`
+                    <div class="mb-2">
+                        <small class="text-muted">Put</small><br>
+                        <span class="text-success">BUY</span> $${formatValue(suggestion.long_put_strike)} Put
+                    </div>
+                `);
+            }
+            
+            // Call side
+            if (suggestion.short_call_strike !== null && suggestion.long_call_strike !== null) {
+                const callQty = suggestion.call_spread_quantity || 1;
+                if (isDebit) {
+                    legs.push(`
+                        <div class="mb-2">
+                            <small class="text-muted">Call Spread (Qty: ${callQty})</small><br>
+                            <span class="text-success">BUY</span> $${formatValue(suggestion.short_call_strike)} Call
+                            <span class="mx-2">•</span>
+                            <span class="text-danger">SELL</span> $${formatValue(suggestion.long_call_strike)} Call
+                        </div>
+                    `);
+                } else {
+                    legs.push(`
+                        <div class="mb-2">
+                            <small class="text-muted">Call Spread (Qty: ${callQty})</small><br>
+                            <span class="text-danger">SELL</span> $${formatValue(suggestion.short_call_strike)} Call
+                            <span class="mx-2">•</span>
+                            <span class="text-success">BUY</span> $${formatValue(suggestion.long_call_strike)} Call
+                        </div>
+                    `);
+                }
+            } else if (suggestion.short_call_strike !== null) {
+                legs.push(`
+                    <div class="mb-2">
+                        <small class="text-muted">Call</small><br>
+                        <span class="text-danger">SELL</span> $${formatValue(suggestion.short_call_strike)} Call
+                    </div>
+                `);
+            } else if (suggestion.long_call_strike !== null) {
+                legs.push(`
+                    <div class="mb-2">
+                        <small class="text-muted">Call</small><br>
+                        <span class="text-success">BUY</span> $${formatValue(suggestion.long_call_strike)} Call
+                    </div>
+                `);
+            }
+            
+            return legs.join('');
+        };
+
+        const now = new Date();
+        const timeString = now.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+
+        // Update timestamp
+        timestamp.textContent = `Generated ${timeString}`;
+
+        // Populate content
+        content.innerHTML = `
+            <div class="row">
+                <div class="col-md-6">
+                    <h6 class="text-info">Trade Details</h6>
+                    <table class="table table-dark table-sm">
+                        <tr><td>Symbol:</td><td><strong>${suggestion.underlying_symbol}</strong></td></tr>
+                        <tr><td>Current Price:</td><td>$${formatValue(suggestion.underlying_price)}</td></tr>
+                        <tr><td>IV Rank:</td><td>${formatValue(suggestion.iv_rank)}%</td></tr>
+                    </table>
+                </div>
+                <div class="col-md-6">
+                    <h6 class="text-info">Option Legs</h6>
+                    ${renderLegs(suggestion)}
+                </div>
+            </div>
+            <div class="row mt-3">
+                <div class="col-md-6">
+                    <h6 class="text-info">P&L Metrics</h6>
+                    <table class="table table-dark table-sm mb-0">
+                        <tr><td>Total Credit:</td><td class="text-success">$${formatValue(suggestion.total_mid_credit)}</td></tr>
+                        <tr><td>Max Profit:</td><td class="text-success">$${formatValue(suggestion.max_profit)}</td></tr>
+                        <tr><td>Max Risk:</td><td class="text-warning">$${formatValue(suggestion.max_risk)}</td></tr>
+                    </table>
+                </div>
+                <div class="col-md-6">
+                    <h6 class="text-info">Order Pricing</h6>
+                    <div class="mb-2">
+                        <label class="form-label text-muted small">Bid-Ask Spread</label>
+                        <div id="bidAskSpread" class="text-info">Loading pricing data...</div>
+                    </div>
+                    <div class="mb-3">
+                        <label for="entryCreditInput" class="form-label text-muted">
+                            Limit Price <small>(adjust if needed)</small>
+                        </label>
+                        <div class="input-group">
+                            <span class="input-group-text bg-secondary border-secondary text-light">$</span>
+                            <input
+                                type="number"
+                                class="form-control bg-dark border-secondary text-light"
+                                id="entryCreditInput"
+                                step="0.01"
+                                min="0"
+                                value="${formatValue(suggestion.total_mid_credit)}"
+                                aria-label="Limit price for order"
+                            >
+                        </div>
+                        <small class="text-muted">Default: mid price ($${formatValue(suggestion.total_mid_credit)}). Adjust for better fill.</small>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        // Update button data attributes
+        if (executeBtn) executeBtn.dataset.suggestionId = suggestion.id;
+        if (rejectBtn) rejectBtn.dataset.suggestionId = suggestion.id;
+
+        // Show container
+        container.classList.remove('d-none');
+        
+        // Display bid/ask spread using TradingInterface method if available
+        if (window.TradingInterface && typeof window.TradingInterface.prototype.displayBidAskFromSuggestion === 'function') {
+            const tradingInterface = new window.TradingInterface();
+            tradingInterface.displayBidAskFromSuggestion(suggestion);
+        } else {
+            // Fallback: simple bid/ask display
+            displayBidAskSpread(suggestion);
+        }
+        
+        console.log('✅ Senex: Suggestion container displayed');
+    }
+
+    function displayBidAskSpread(suggestion) {
+        const bidAskElement = document.getElementById('bidAskSpread');
+        if (!bidAskElement) return;
+
+        const naturalCredit = suggestion.total_credit ? Math.abs(parseFloat(suggestion.total_credit)) : null;
+        const midCredit = suggestion.total_mid_credit ? Math.abs(parseFloat(suggestion.total_mid_credit)) : null;
+
+        if (midCredit && naturalCredit) {
+            const spreadWidth = Math.abs(midCredit - naturalCredit) * 2;
+            const bid = midCredit - (spreadWidth / 2);
+            const ask = midCredit + (spreadWidth / 2);
+
+            bidAskElement.innerHTML = `
+                <span class="text-warning">$${bid.toFixed(2)}</span> |
+                <span class="text-info fw-bold">$${midCredit.toFixed(2)}</span> |
+                <span class="text-success">$${ask.toFixed(2)}</span>
+                <small class="text-muted ms-2">(Bid-Ask Spread: $${spreadWidth.toFixed(2)})</small>
+            `;
+        } else if (naturalCredit) {
+            bidAskElement.innerHTML = `
+                <span class="text-warning">$${naturalCredit.toFixed(2)}</span> |
+                <span class="text-info fw-bold">$${(naturalCredit + 0.025).toFixed(2)}</span> |
+                <span class="text-success">$${(naturalCredit + 0.05).toFixed(2)}</span>
+                <small class="text-muted ms-2">(Conservative est.)</small>
+            `;
+        } else {
+            bidAskElement.innerHTML = '<span class="text-info">Loading pricing data...</span>';
+        }
+    }
+
+    function showStatus(type, message, showSpinner = false) {
+        const alert = document.getElementById('statusAlert');
+        const spinnerHtml = showSpinner ? '<div class="spinner-border spinner-border-sm me-2" role="status"></div>' : '';
+
+        alert.className = `alert alert-${type} fade show`;
+        alert.innerHTML = spinnerHtml + message;
+        alert.classList.remove('d-none');
+
+        // Auto-hide success/info messages
+        if (type === 'success' || type === 'info') {
+            setTimeout(() => {
+                alert.classList.add('d-none');
+            }, 5000);
+        }
+    }
+
+    function generateSuggestion() {
+        const symbol = document.getElementById('symbol-select').value;
+        const generateBtn = document.getElementById('generate-suggestion-btn');
+
+        showLoadingState();
+        showProgressIndicator('Generating suggestion...', 30);
+
+        fetch(`/trading/api/senex-trident/generate/`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCsrfToken()
+            },
+            body: JSON.stringify({
+                symbol: symbol,
+                mode: 'manual'
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                showStatus('info', 'Generating Senex Trident suggestion...', true);
+                updateProgressIndicator(60, 'Waiting for pricing data...');
+            } else {
+                hideLoadingState();
+                hideProgressIndicator();
+                showStatus('danger', data.message || 'Failed to generate suggestion');
+            }
+        })
+        .catch(error => {
+            hideLoadingState();
+            hideProgressIndicator();
+            showStatus('danger', 'Error: ' + error.message);
+        });
+    }
+
+    function showLoadingState() {
+        const generateBtn = document.getElementById('generate-suggestion-btn');
+        if (generateBtn) {
+            generateBtn.disabled = true;
+            const originalText = generateBtn.innerHTML;
+            generateBtn.dataset.originalText = originalText;
+            generateBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Generating...';
+        }
+    }
+
+    function hideLoadingState() {
+        const generateBtn = document.getElementById('generate-suggestion-btn');
+        if (generateBtn) {
+            generateBtn.disabled = false;
+            const originalText = generateBtn.dataset.originalText || '<i class="bi bi-lightbulb-fill me-1"></i>Generate';
+            generateBtn.innerHTML = originalText;
+        }
+    }
+
+    function showProgressIndicator(text = 'Processing...', initialProgress = 0) {
+        const container = document.getElementById('progressContainer');
+        const progressText = document.getElementById('progressText');
+        const progressBar = document.getElementById('progressBar');
+        
+        if (container) {
+            container.classList.remove('d-none');
+        }
+        if (progressText) {
+            progressText.textContent = text;
+        }
+        if (progressBar) {
+            progressBar.style.width = `${initialProgress}%`;
+            progressBar.className = 'progress-bar bg-info';
+        }
+    }
+
+    function updateProgressIndicator(progress, text = null) {
+        const progressBar = document.getElementById('progressBar');
+        const progressText = document.getElementById('progressText');
+        
+        if (progressBar) {
+            progressBar.style.width = `${Math.min(100, Math.max(0, progress))}%`;
+        }
+        if (text && progressText) {
+            progressText.textContent = text;
+        }
+    }
+
+    function hideProgressIndicator() {
+        const container = document.getElementById('progressContainer');
+        if (container) {
+            container.classList.add('d-none');
+        }
+    }
+
+    async function loadRiskBudget(forceRefresh = false) {
+        try {
+            const response = await fetch('/trading/api/risk-budget/', {
+                method: 'GET',
+                headers: {
+                    'X-CSRFToken': getCsrfToken(),
+                    'Content-Type': 'application/json'
+                }
+            });
+
+            if (!response.ok) {
+                if (response.status === 503 || response.status === 200) {
+                    handleRiskDataUnavailable();
+                    return;
+                }
+                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            }
+
+            const data = await response.json();
+
+            if (data.success && data.data_available) {
+                updateRiskDisplay(data);
+            } else {
+                handleRiskDataUnavailable(data.error || 'Risk data unavailable');
+            }
+        } catch (error) {
+            console.error('Error loading risk budget:', error);
+            handleRiskLoadError(error.message);
+        }
+    }
+
+    function updateRiskDisplay(data) {
+        window.updateElement('riskBuyingPower', `${window.formatCurrency(data.tradeable_capital)}`, 'text-success mb-2');
+        window.updateElement('riskStrategyPower', `${window.formatCurrency(data.strategy_power)}`, 'text-info mb-2');
+        window.updateElement('riskAvailableBudget', `${window.formatCurrency(data.remaining_budget)}`, 'text-warning mb-2');
+
+        const utilization = data.utilization_percent || 0;
+        const utilizationClass = utilization < 50 ? 'text-success mb-2' : utilization < 75 ? 'text-warning mb-2' : 'text-danger mb-2';
+        window.updateElement('riskUtilization', `${utilization.toFixed(1)}%`, utilizationClass);
+
+        const progressBar = document.getElementById('riskProgressBar');
+        if (progressBar) {
+            progressBar.style.width = `${Math.min(100, Math.max(0, utilization))}%`;
+            progressBar.className = utilization < 50 ? 'progress-bar bg-success' : utilization < 75 ? 'progress-bar bg-warning' : 'progress-bar bg-danger';
+        }
+
+        const alertDiv = document.getElementById('riskStatusAlert');
+        if (alertDiv) {
+            if (utilization >= 75) {
+                alertDiv.innerHTML = '<small class="text-danger"><i class="bi bi-exclamation-triangle me-1"></i>High risk utilization</small>';
+            } else if (utilization >= 50) {
+                alertDiv.innerHTML = '<small class="text-warning"><i class="bi bi-info-circle me-1"></i>Moderate risk utilization</small>';
+            } else {
+                alertDiv.innerHTML = '';
+            }
+        }
+    }
+
+    function handleRiskDataUnavailable(message = 'Account data unavailable') {
+        window.updateElement('riskBuyingPower', 'Unavailable', 'text-warning mb-2');
+        window.updateElement('riskStrategyPower', 'N/A', 'text-muted mb-2');
+        window.updateElement('riskAvailableBudget', 'N/A', 'text-muted mb-2');
+        window.updateElement('riskUtilization', 'N/A', 'text-muted mb-2');
+
+        const alertDiv = document.getElementById('riskStatusAlert');
+        if (alertDiv) {
+            alertDiv.innerHTML = `<small class="text-warning"><i class="bi bi-exclamation-triangle me-1"></i>${message}</small>`;
+        }
+    }
+
+    function handleRiskLoadError(error) {
+        window.updateElement('riskBuyingPower', 'Error', 'text-danger mb-2');
+        window.updateElement('riskStrategyPower', 'Error', 'text-danger mb-2');
+        window.updateElement('riskAvailableBudget', 'Error', 'text-danger mb-2');
+        window.updateElement('riskUtilization', 'Error', 'text-danger mb-2');
+
+        const alertDiv = document.getElementById('riskStatusAlert');
+        if (alertDiv) {
+            alertDiv.innerHTML = `<small class="text-danger"><i class="bi bi-x-circle me-1"></i>Failed to load: ${error}</small>`;
+        }
+    }
+
+    function toggleAutomation() {
+        // Get current state and toggle it
+        const currentlyEnabled = {% if automation_enabled %}true{% else %}false{% endif %};
+        const newState = !currentlyEnabled;
+
+        fetch(`/accounts/api/automated-trading-toggle/`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCsrfToken()
+            },
+            body: JSON.stringify({
+                is_enabled: newState
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                showStatus('success', data.message || 'Automation setting updated');
+                setTimeout(() => location.reload(), 1000);
+            } else {
+                showStatus('danger', data.error || 'Failed to toggle automation');
+            }
+        })
+        .catch(error => {
+            showStatus('danger', 'Error: ' + error.message);
+        });
+    }
+
+    function cancelTrade(tradeId) {
+        window.showConfirmModal(
+            'Cancel Trade',
+            'Are you sure you want to cancel this trade?',
+            () => {
+                fetch(`/trading/api/trades/${tradeId}/cancel`, {
+                    method: 'POST',
+                    headers: {
+                        'X-CSRFToken': getCsrfToken()
+                    }
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        showStatus('success', 'Trade cancelled successfully');
+                        location.reload();
+                    } else {
+                        showStatus('danger', data.message || 'Failed to cancel trade');
+                    }
+                })
+                .catch(error => {
+                    showStatus('danger', 'Error: ' + error.message);
+                });
+            },
+            'Cancel Trade',
+            'btn-danger'
+        );
+    }
+
+    function viewConfiguration() {
+        // Navigate to strategy settings page where automation can be configured
+        window.location.href = '/accounts/settings/strategy/';
+    }
+
+    // Execute button handler and keyboard shortcuts
+    document.addEventListener('DOMContentLoaded', function() {
+        const executeBtn = document.getElementById('executeBtn');
+        const rejectBtn = document.getElementById('rejectBtn');
+
+        // Keyboard shortcut: Ctrl+Enter to execute
+        document.addEventListener('keydown', function(e) {
+            if (e.ctrlKey && e.key === 'Enter' && executeBtn && !executeBtn.disabled) {
+                e.preventDefault();
+                executeBtn.click();
+            }
+        });
+
+        if (executeBtn) {
+            executeBtn.addEventListener('click', function() {
+                const suggestionId = this.dataset.suggestionId;
+                if (!suggestionId) {
+                    showStatus('danger', 'No suggestion ID found');
+                    return;
+                }
+
+                window.showConfirmModal(
+                    'Execute Trade',
+                    'Execute this suggestion? This will place real orders with your broker.',
+                    () => {
+                        showProgressIndicator('Executing trade...', 50);
+                        
+                        // Get custom credit value from input field
+                        const creditInput = document.getElementById('entryCreditInput');
+                        const customCredit = creditInput ? parseFloat(creditInput.value) : null;
+
+                        const requestBody = {};
+                        if (customCredit && customCredit > 0) {
+                            requestBody.custom_credit = customCredit;
+                        }
+
+                        fetch(`/trading/api/suggestions/${suggestionId}/execute/`, {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'X-CSRFToken': getCsrfToken()
+                            },
+                            body: JSON.stringify(requestBody)
+                        })
+                        .then(async response => {
+                            const data = await response.json();
+                            if (!response.ok) {
+                                throw { status: response.status, data: data };
+                            }
+                            return data;
+                        })
+                        .then(data => {
+                            if (data.success) {
+                                hideProgressIndicator();
+                                showStatus('success', 'Trade executed successfully!');
+                                document.getElementById('suggestionContainer').classList.add('d-none');
+                                loadRiskBudget(true);
+                                setTimeout(() => location.reload(), 1500);
+                            } else {
+                                hideProgressIndicator();
+                                const errorMsg = data.error || data.message || 'Failed to execute trade';
+                                console.error('Execute error:', data);
+                                window.showResultModal('error', 'Trade Execution Failed', errorMsg);
+                                showStatus('danger', errorMsg);
+                            }
+                        })
+                        .catch(error => {
+                            hideProgressIndicator();
+                            console.error('Execute error:', error);
+                            const errorMsg = error.data?.error || error.data?.message || error.message || 'Failed to execute trade';
+                            window.showResultModal('error', 'Trade Execution Failed', errorMsg);
+                            showStatus('danger', errorMsg);
+                        });
+                    },
+                    'Execute Trade',
+                    'btn-primary'
+                );
+            });
+        }
+
+        if (rejectBtn) {
+            rejectBtn.addEventListener('click', async function() {
+                const suggestionId = this.dataset.suggestionId;
+                if (!suggestionId) {
+                    showStatus('danger', 'No suggestion ID found');
+                    return;
+                }
+
+                const reason = await window.showPromptModal(
+                    'Reject Suggestion',
+                    'Reason for rejection (optional):',
+                    'Enter reason...',
+                    ''
+                );
+                if (reason === null) return; // User cancelled
+
+                fetch(`/trading/api/suggestions/${suggestionId}/reject/`, {
+                    method: 'POST',
+                    headers: {
+                        'X-CSRFToken': getCsrfToken(),
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ reason: reason })
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        showStatus('info', 'Suggestion rejected');
+                        // Hide suggestion
+                        document.getElementById('suggestionContainer').classList.add('d-none');
+                    } else {
+                        showStatus('danger', data.error || 'Failed to reject suggestion');
+                    }
+                })
+                .catch(error => {
+                    showStatus('danger', 'Error: ' + error.message);
+                });
+            });
+        }
+    });
+</script>
+{% endblock %}

@@ -1,0 +1,673 @@
+{% extends 'base/base.html' %}
+{% block title %}Settings - Senex Trader{% endblock %}
+
+<!-- Market Data Streaming Reconnect -->
+
+{% block content %}
+<div class="card bg-dark border-secondary mb-4">
+  <div class="card-body">
+    <h4 class="mb-3">Settings</h4>
+    <p class="text-muted">Manage your broker connections and preferences.</p>
+
+    <!-- Manual Streaming Reconnect Button -->
+    <div class="mt-2">
+      <button class="btn btn-sm btn-outline-secondary" id="manual-reconnect" onclick="forceReconnect()">
+        <i class="bi bi-arrow-repeat"></i> Reconnect Market Data
+      </button>
+      <small class="text-muted ms-2">Click if streaming status shows offline after reconnecting</small>
+    </div>
+  </div>
+</div>
+
+<div class="card bg-dark border-secondary mb-4">
+  <div class="card-body">
+    <h5 class="mb-3">TastyTrade Connection</h5>
+    {% if tastytrade_account %}
+      {% if tastytrade_account.is_active %}
+        <p class="text-muted">Status: <span class="text-success">Connected</span></p>
+        {% with accounts=tastytrade_account.metadata.accounts %}
+          {% if accounts and accounts|length > 0 %}
+            {% if tastytrade_account.account_number %}
+              <p class="text-muted">Current primary account: <strong>{{ tastytrade_account.account_number }}</strong></p>
+              <p class="text-muted">Change primary account:</p>
+            {% else %}
+              <p class="text-warning">Select a primary account:</p>
+            {% endif %}
+            <form method="post" action="{% url 'accounts:tastytrade_select_primary' %}">
+              {% csrf_token %}
+              <div class="row g-2 align-items-end">
+                <div class="col-md-6">
+                  <select class="form-select" name="account_number" required>
+                    {% for a in accounts %}
+                      <option value="{{ a.account_number }}" {% if a.account_number == tastytrade_account.account_number %}selected{% endif %}>
+                        {{ a.account_number }}{% if a.nickname %} - {{ a.nickname }}{% endif %}
+                      </option>
+                    {% endfor %}
+                  </select>
+                </div>
+                <div class="col-md-3">
+                  <button type="submit" class="btn btn-primary">
+                    {% if tastytrade_account.account_number %}Update Primary{% else %}Set Primary{% endif %}
+                  </button>
+                </div>
+              </div>
+            </form>
+          {% else %}
+            <p class="text-muted">No accounts available from broker.</p>
+          {% endif %}
+        {% endwith %}
+        <form method="post" action="{% url 'accounts:tastytrade_disconnect' %}" class="mt-3">
+          {% csrf_token %}
+          <button type="submit" class="btn btn-secondary">Disconnect</button>
+        </form>
+      {% else %}
+        <p class="text-muted">Status: <span class="text-danger">Disconnected</span></p>
+        <a href="{% url 'accounts:tastytrade_oauth_initiate' %}" class="btn btn-primary">Connect TastyTrade</a>
+      {% endif %}
+    {% else %}
+      <p class="text-muted">No TastyTrade connection configured.</p>
+      <a href="{% url 'accounts:tastytrade_oauth_initiate' %}" class="btn btn-primary">Connect TastyTrade</a>
+    {% endif %}
+  </div>
+</div>
+
+
+<!-- Automated Trading Card -->
+<div class="card bg-dark border-secondary mb-4">
+  <div class="card-body">
+    <h5 class="mb-3">Automated Trading</h5>
+    <p class="text-muted small">Enable automated daily trading for your account. The system will automatically execute Senex Trident trades 30 minutes after market open (10:00 AM ET) on trading days.</p>
+
+    <div class="form-check form-switch">
+      <input class="form-check-input" type="checkbox" id="automated-trading-toggle"
+             {% if tastytrade_account.is_automated_trading_enabled %}checked{% endif %}
+             {% if not tastytrade_account or not tastytrade_account.is_active %}disabled{% endif %}>
+      <label class="form-check-label" for="automated-trading-toggle">
+        Enable Automated Trading
+      </label>
+    </div>
+
+    <div class="mt-3">
+      <label class="form-label text-muted" for="automation-offset-input">Execution Price Offset (cents)</label>
+      <div class="input-group" style="max-width: 300px;">
+        <input type="number"
+               min="0"
+               max="25"
+               step="1"
+               class="form-control bg-dark text-light"
+               id="automation-offset-input"
+               value="{% if tastytrade_account %}{{ tastytrade_account.automated_entry_offset_cents }}{% else %}0{% endif %}"
+               {% if not tastytrade_account or not tastytrade_account.is_active %}disabled{% endif %}>
+        <button class="btn btn-outline-light" type="button" id="save-automation-offset"
+                {% if not tastytrade_account or not tastytrade_account.is_active %}disabled{% endif %}>
+          Save Offset
+        </button>
+      </div>
+      <div class="form-text text-muted small">
+        Use a positive offset to submit automated credit orders a little closer to the bid
+        (e.g., 4¢ offset sends a limit that is $0.04 below the mid price).
+      </div>
+    </div>
+
+    {% if not tastytrade_account or not tastytrade_account.is_active %}
+      <div class="alert alert-warning mt-3 mb-0" role="alert">
+        <small>Connect your TastyTrade account above to enable automated trading.</small>
+      </div>
+    {% endif %}
+
+    {% if tastytrade_account.is_automated_trading_enabled %}
+      <div class="alert alert-success mt-3 mb-0" role="alert">
+        <small><strong>Automated trading is active.</strong> Trades will execute daily at 10:00 AM ET on trading days (Mon-Fri) if market conditions are suitable.</small>
+      </div>
+    {% endif %}
+  </div>
+</div>
+
+<!-- Email Preferences Card -->
+<div class="card bg-dark border-secondary mb-4">
+  <div class="card-body">
+    <h5 class="mb-3">Email Notifications</h5>
+    <p class="text-muted small">Choose how you want to receive trading activity updates via email.</p>
+
+    <div class="mb-3">
+      <div class="form-check">
+        <input class="form-check-input" type="radio" name="email-preference" id="email-none" value="none"
+               {% if request.user.email_preference == 'none' %}checked{% endif %}>
+        <label class="form-check-label" for="email-none">
+          <strong>No Emails</strong>
+          <div class="text-muted small">Don't send me any trading-related emails</div>
+        </label>
+      </div>
+    </div>
+
+    <div class="mb-3">
+      <div class="form-check">
+        <input class="form-check-input" type="radio" name="email-preference" id="email-immediate" value="immediate"
+               {% if request.user.email_preference == 'immediate' %}checked{% endif %}>
+        <label class="form-check-label" for="email-immediate">
+          <strong>Emails for All Activity</strong>
+          <div class="text-muted small">Receive immediate emails when trades are executed or filled</div>
+        </label>
+      </div>
+    </div>
+
+    <div class="mb-3">
+      <div class="form-check">
+        <input class="form-check-input" type="radio" name="email-preference" id="email-summary" value="summary"
+               {% if request.user.email_preference == 'summary' %}checked{% endif %}>
+        <label class="form-check-label" for="email-summary">
+          <strong>Summary Email End of Day</strong>
+          <div class="text-muted small">Receive one daily summary email 30 minutes after market close (4:30 PM ET)</div>
+        </label>
+      </div>
+    </div>
+
+    <button class="btn btn-primary" id="save-email-preference">Save Email Preferences</button>
+  </div>
+</div>
+
+<!-- Risk Management Card -->
+<div class="card bg-dark border-secondary mb-4" id="risk-management-card">
+  <div class="card-body">
+    <h5 class="mb-3">Risk Management Settings</h5>
+
+    <!-- Account Overview -->
+    <div class="row mb-3">
+      <div class="col-md-6">
+        <div class="d-flex justify-content-between">
+          <span class="text-muted">Account Balance:</span>
+          <span id="account-balance">
+            {% if initial_balance is not None %}
+              ${{ initial_balance|floatformat:2 }}
+            {% else %}
+              --
+            {% endif %}
+          </span>
+        </div>
+      </div>
+      <div class="col-md-6">
+        <div class="d-flex justify-content-between">
+          <span class="text-muted">Buying Power:</span>
+          <span id="buying-power">
+            {% if initial_buying_power is not None %}
+              ${{ initial_buying_power|floatformat:2 }}
+            {% else %}
+              --
+            {% endif %}
+          </span>
+        </div>
+      </div>
+    </div>
+    <hr class="my-3">
+
+    <div class="mb-3">
+      <label class="form-label text-muted">Risk Allocation Method</label>
+      <select class="form-select" id="allocation-method" style="max-width: 400px;">
+        <option value="conservative" {% if allocation.allocation_method == 'conservative' %}selected{% endif %}>
+          Conservative (40% Normal / 60% Stressed)
+        </option>
+        <option value="moderate" {% if allocation.allocation_method == 'moderate' %}selected{% endif %}>
+          Moderate (50% Normal / 70% Stressed)
+        </option>
+        <option value="aggressive" {% if allocation.allocation_method == 'aggressive' %}selected{% endif %}>
+          Aggressive (60% Normal / 80% Stressed)
+        </option>
+      </select>
+    </div>
+
+    <!-- Live Risk Metrics -->
+    <div class="row mt-4">
+      <div class="col-md-6">
+        <h6 class="text-muted mb-3">Normal Market Conditions</h6>
+        <div class="small">
+          <div class="d-flex justify-content-between mb-2">
+            <span class="text-muted">Risk Tolerance:</span>
+            <span id="normal-tolerance">40%</span>
+          </div>
+          <div class="d-flex justify-content-between mb-2">
+            <span class="text-muted">Strategy Power:</span>
+            <span id="normal-strategy-power">--</span>
+          </div>
+          <div class="d-flex justify-content-between mb-2">
+            <span class="text-muted">Max Spreads:</span>
+            <span id="normal-max-spreads">--</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="col-md-6">
+        <h6 class="text-muted mb-3">Stressed Market Conditions</h6>
+        <div class="small">
+          <div class="d-flex justify-content-between mb-2">
+            <span class="text-muted">Risk Tolerance:</span>
+            <span id="stressed-tolerance">60%</span>
+          </div>
+          <div class="d-flex justify-content-between mb-2">
+            <span class="text-muted">Strategy Power:</span>
+            <span id="stressed-strategy-power">--</span>
+          </div>
+          <div class="d-flex justify-content-between mb-2">
+            <span class="text-muted">Max Spreads:</span>
+            <span id="stressed-max-spreads">--</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Current Utilization -->
+    <div class="mt-3 pt-3 border-top border-secondary">
+      <div class="d-flex justify-content-between align-items-center">
+        <span class="text-muted">Current Risk Utilization:</span>
+        <span class="h5 mb-0" id="risk-utilization">--</span>
+      </div>
+      <div class="progress mt-2" style="height: 10px;">
+        <div class="progress-bar bg-success" id="risk-progress-bar" role="progressbar" style="width: 0%"></div>
+      </div>
+    </div>
+
+    <button class="btn btn-primary mt-3" id="save-risk-settings">Save Settings</button>
+  </div>
+</div>
+
+{% load static %}
+<script src="{% static 'js/streaming-handlers.js' %}"></script>
+<script>
+// Settings Page - Using Global WebSocket with Shared Handlers
+document.addEventListener('DOMContentLoaded', function() {
+    // Configure streaming handlers for settings page elements
+    const streamingHandlers = new StreamingHandlers({
+        accountBalance: 'account-balance'
+    });
+
+
+    // Wait for global streamers to be ready
+    function initializeStreaming() {
+        if (window.streamersReady) {
+            console.log('Settings: Streamers already ready, setting up streaming...');
+            setupSettingsStreaming();
+        } else {
+            console.log('Settings: Waiting for streamers-ready event...');
+
+            window.addEventListener('streamers-ready', function(e) {
+                console.log('Settings: Streamers ready event received:', e.detail);
+                setupSettingsStreaming();
+            }, { once: true });
+
+            window.addEventListener('streamers-timeout', function(e) {
+                console.warn('Settings: Streamers timeout:', e.detail);
+                streamingHandlers.updateStreamStatus('Timeout', 'warning');
+            }, { once: true });
+        }
+    }
+
+    function setupSettingsStreaming() {
+        // Use the global WebSocket connection from base.html
+        const ws = window.streamerWebSocket;
+
+        if (!ws || ws.readyState !== WebSocket.OPEN) {
+            console.warn('Settings: Global WebSocket not available');
+            streamingHandlers.updateStreamStatus('Disconnected', 'danger');
+            return;
+        }
+
+        console.log('Settings: Using global WebSocket for streaming data');
+        streamingHandlers.updateStreamStatus('Connected', 'success');
+
+        // Register settings page message handler
+        function settingsMessageHandler(data) {
+            // Only handle messages relevant to settings page
+            if (data.type === 'balance_update') {
+                // Route balance updates to streaming handlers for account balance display
+                streamingHandlers.handleMessage(data);
+                // Handle settings-specific balance processing
+                handleSettingsBalanceUpdate(data);
+            }
+            // Ignore all other message types (QQQ, trades, etc.)
+        }
+
+        // Add handler to global message broadcasting system
+        window.addMessageHandler(settingsMessageHandler);
+    }
+
+    // Settings-specific balance update handler
+    function handleSettingsBalanceUpdate(data) {
+        // Update buying power display
+        const buyingPowerElement = document.getElementById('buying-power');
+        if (buyingPowerElement && data.buying_power !== undefined && data.buying_power !== null) {
+            buyingPowerElement.textContent = '$' + Number(data.buying_power).toFixed(2);
+        }
+
+        // Update risk calculations if both balance and buying power are available
+        if (data.buying_power !== null && data.buying_power !== undefined &&
+            data.balance !== null && data.balance !== undefined) {
+            updateRiskCalculations(data.balance, data.buying_power);
+        }
+    }
+
+
+    // Initialize streaming when DOM is ready
+    initializeStreaming();
+
+    // Initialize risk calculations with pre-populated data
+    if (initialAccountState.balance !== null && initialAccountState.buyingPower !== null) {
+        console.log('📊 Initializing with pre-populated data:', initialAccountState);
+        updateRiskCalculations(initialAccountState.balance, initialAccountState.buyingPower);
+
+        // Show warning if data is stale
+        if (initialAccountState.stale) {
+            console.warn('⚠️ Using stale account data from:', initialAccountState.source);
+        }
+    } else {
+        console.log('📊 No initial balance data available, waiting for streaming updates');
+    }
+});
+
+// Risk Management JavaScript
+const appManagedRisk = {{ app_managed_risk|default:0 }};
+
+// Initial account state from backend
+const initialAccountState = {
+    balance: {{ initial_balance|default:'null' }},
+    buyingPower: {{ initial_buying_power|default:'null' }},
+    source: "{{ account_state_source|default:'unavailable' }}",
+    stale: {{ account_state_stale|lower }}
+};
+
+// Risk tolerance templates
+const riskTemplates = {
+    'conservative': { normal: 0.40, stressed: 0.60 },
+    'moderate': { normal: 0.50, stressed: 0.70 },
+    'aggressive': { normal: 0.60, stressed: 0.80 }
+};
+
+// Get spread width based on tradeable capital (positions + buying power)
+function getSpreadWidth(tradeableCapital) {
+    if (tradeableCapital < 25000) return 3;
+    else if (tradeableCapital < 50000) return 5;
+    else if (tradeableCapital < 75000) return 7;
+    else return 9;
+}
+
+// Update risk calculations with live data
+function updateRiskCalculations(balance, buyingPower) {
+    const method = document.getElementById('allocation-method').value;
+    const tolerances = riskTemplates[method];
+
+    if (!tolerances) return;
+
+    // Calculate tradeable capital
+    const tradeableCapital = buyingPower + appManagedRisk;
+
+    // Calculate strategy powers
+    const normalStrategyPower = tradeableCapital * tolerances.normal;
+    const stressedStrategyPower = tradeableCapital * tolerances.stressed;
+
+    // Get spread width based on tradeable capital, not balance
+    const spreadWidth = getSpreadWidth(tradeableCapital);
+
+    // Calculate max spreads
+    const normalMaxSpreads = Math.floor(normalStrategyPower / (spreadWidth * 100));
+    const stressedMaxSpreads = Math.floor(stressedStrategyPower / (spreadWidth * 100));
+
+    // Update UI - Normal conditions
+    document.getElementById('normal-tolerance').textContent = `${(tolerances.normal * 100).toFixed(0)}%`;
+    document.getElementById('normal-strategy-power').textContent = `$${normalStrategyPower.toLocaleString('en-US', {
+        minimumFractionDigits: 0,
+        maximumFractionDigits: 0
+    })}`;
+    document.getElementById('normal-max-spreads').textContent = `${normalMaxSpreads} (${spreadWidth}-wide)`;
+
+    // Update UI - Stressed conditions
+    document.getElementById('stressed-tolerance').textContent = `${(tolerances.stressed * 100).toFixed(0)}%`;
+    document.getElementById('stressed-strategy-power').textContent = `$${stressedStrategyPower.toLocaleString('en-US', {
+        minimumFractionDigits: 0,
+        maximumFractionDigits: 0
+    })}`;
+    document.getElementById('stressed-max-spreads').textContent = `${stressedMaxSpreads} (${spreadWidth}-wide)`;
+
+    // Update utilization
+    const utilization = (appManagedRisk / normalStrategyPower * 100);
+    const utilizationClamped = Math.min(100, Math.max(0, utilization));
+
+    document.getElementById('risk-utilization').textContent = `${utilizationClamped.toFixed(1)}%`;
+
+    // Update progress bar
+    const progressBar = document.getElementById('risk-progress-bar');
+    progressBar.style.width = `${utilizationClamped}%`;
+
+    // Update progress bar color based on utilization
+    if (utilizationClamped < 50) {
+        progressBar.className = 'progress-bar bg-success';
+    } else if (utilizationClamped < 75) {
+        progressBar.className = 'progress-bar bg-warning';
+    } else {
+        progressBar.className = 'progress-bar bg-danger';
+    }
+}
+
+// Handle allocation method change
+document.getElementById('allocation-method').addEventListener('change', function() {
+    // Get current balance and buying power from displayed values
+    const balanceElement = document.getElementById('account-balance');
+    const buyingPowerElement = document.getElementById('buying-power');
+
+    if (balanceElement && balanceElement.textContent !== '--' &&
+        buyingPowerElement && buyingPowerElement.textContent !== '--') {
+
+        // Extract numeric values from displayed text
+        const balanceText = balanceElement.textContent.replace('$', '').replace(/,/g, '');
+        const balance = parseFloat(balanceText);
+
+        const buyingPowerText = buyingPowerElement.textContent.replace('$', '').replace(/,/g, '');
+        const buyingPower = parseFloat(buyingPowerText);
+
+        // Immediately recalculate with current values
+        console.log('Allocation method changed, recalculating with current values');
+        updateRiskCalculations(balance, buyingPower);
+    } else {
+        console.log('Cannot recalculate - balance or buying power not available');
+    }
+});
+
+// Save risk settings
+document.getElementById('save-risk-settings').addEventListener('click', async function() {
+    const method = document.getElementById('allocation-method').value;
+
+    // getCookie function is available from base.html
+
+    try {
+        const response = await fetch('/trading/api/risk-settings/', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCsrfToken()
+            },
+            body: JSON.stringify({
+                allocation_method: method
+            })
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+            // Show success message
+            const button = document.getElementById('save-risk-settings');
+            const originalText = button.textContent;
+            button.textContent = 'Saved!';
+            button.classList.remove('btn-primary');
+            button.classList.add('btn-success');
+
+            setTimeout(() => {
+                button.textContent = originalText;
+                button.classList.remove('btn-success');
+                button.classList.add('btn-primary');
+            }, 2000);
+        } else {
+            console.error('Failed to save risk settings:', data.error);
+        }
+    } catch (error) {
+        console.error('Error saving risk settings:', error);
+    }
+});
+
+// Handle automated trading toggle
+const automationToggle = document.getElementById('automated-trading-toggle');
+const automationOffsetInput = document.getElementById('automation-offset-input');
+const saveAutomationOffsetButton = document.getElementById('save-automation-offset');
+
+async function updateAutomatedTradingSettings(payload, onSuccess) {
+    try {
+        const response = await fetch('/accounts/api/automated-trading-toggle/', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCsrfToken()
+            },
+            body: JSON.stringify(payload)
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+            if (typeof data.offset_cents === 'number' && automationOffsetInput) {
+                automationOffsetInput.value = data.offset_cents;
+            }
+            onSuccess?.(data);
+        } else {
+            throw new Error(data.error || 'Request failed');
+        }
+    } catch (error) {
+        console.error('Automation settings update failed:', error);
+        throw error;
+    }
+}
+
+automationToggle?.addEventListener('change', async function() {
+    const isEnabled = this.checked;
+    const offsetValue = automationOffsetInput ? parseInt(automationOffsetInput.value, 10) : 0;
+
+    try {
+        await updateAutomatedTradingSettings(
+            {
+                is_enabled: isEnabled,
+                offset_cents: Number.isNaN(offsetValue) ? 0 : offsetValue
+            },
+            () => setTimeout(() => window.location.reload(), 500)
+        );
+    } catch (error) {
+        this.checked = !isEnabled;
+        alert('Failed to update automated trading setting. Please try again.');
+    }
+});
+
+saveAutomationOffsetButton?.addEventListener('click', async function() {
+    const offsetValue = parseInt(automationOffsetInput.value, 10);
+
+    if (Number.isNaN(offsetValue)) {
+        alert('Offset must be a number between 0 and 25.');
+        return;
+    }
+
+    if (offsetValue < 0 || offsetValue > 25) {
+        alert('Offset must be between 0 and 25 cents.');
+        return;
+    }
+
+    const originalText = this.textContent;
+    this.disabled = true;
+    this.textContent = 'Saving...';
+
+    try {
+        await updateAutomatedTradingSettings(
+            {
+                offset_cents: offsetValue,
+                is_enabled: automationToggle ? automationToggle.checked : undefined
+            },
+            () => {
+                this.textContent = 'Saved!';
+                setTimeout(() => {
+                    this.textContent = originalText;
+                }, 1500);
+            }
+        );
+    } catch (error) {
+        alert('Failed to update offset. Please try again.');
+        this.textContent = originalText;
+    } finally {
+        this.disabled = false;
+    }
+});
+
+// Manual streaming reconnection
+function forceReconnect() {
+    console.log('🔄 Manual reconnect triggered');
+
+    // Reset streaming state
+    window.streamersReady = false;
+    window.streamersInitialized = false;
+
+    // Close existing WebSocket if any
+    if (window.streamerWebSocket) {
+        try {
+            window.streamerWebSocket.close();
+        } catch (e) {
+            console.log('WebSocket already closed');
+        }
+    }
+
+    // Reload page for fresh initialization
+    window.location.reload();
+}
+
+// Handle email preference save
+document.getElementById('save-email-preference')?.addEventListener('click', async function() {
+    const selectedPreference = document.querySelector('input[name="email-preference"]:checked');
+
+    if (!selectedPreference) {
+        alert('Please select an email preference');
+        return;
+    }
+
+    const button = this;
+    const originalText = button.textContent;
+    button.disabled = true;
+    button.textContent = 'Saving...';
+
+    try {
+        const response = await fetch('/accounts/api/email-preference/', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCsrfToken()
+            },
+            body: JSON.stringify({
+                email_preference: selectedPreference.value
+            })
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+            button.textContent = 'Saved!';
+            button.classList.remove('btn-primary');
+            button.classList.add('btn-success');
+
+            setTimeout(() => {
+                button.textContent = originalText;
+                button.classList.remove('btn-success');
+                button.classList.add('btn-primary');
+            }, 2000);
+        } else {
+            throw new Error(data.error || 'Failed to save');
+        }
+    } catch (error) {
+        console.error('Failed to save email preference:', error);
+        alert('Failed to save email preference. Please try again.');
+        button.textContent = originalText;
+    } finally {
+        button.disabled = false;
+    }
+});
+
+</script>
+{% endblock %}

@@ -1,0 +1,361 @@
+{% extends 'settings/base.html' %}
+{% load humanize %}
+{% block title %}Risk Management Settings - Senex Trader{% endblock %}
+
+{% block settings_content %}
+<!-- Risk Management Card -->
+<div class="card bg-dark border-secondary mb-4" id="risk-management-card">
+  <div class="card-body">
+    <h5 class="mb-3">Risk Management Settings</h5>
+
+    <!-- Account Overview -->
+    <div class="row mb-3">
+      <div class="col-md-6">
+        <div class="d-flex justify-content-between">
+          <span class="text-muted">Account Balance:</span>
+          <span id="account-balance">
+            {% if privacy_mode %}
+              <span class="text-muted">••••••</span>
+            {% elif initial_balance is not None %}
+              ${{ initial_balance|floatformat:2|intcomma }}
+            {% else %}
+              --
+            {% endif %}
+          </span>
+        </div>
+      </div>
+      <div class="col-md-6">
+        <div class="d-flex justify-content-between">
+          <span class="text-muted">Buying Power:</span>
+          <span id="buying-power">
+            {% if initial_buying_power is not None %}
+              ${{ initial_buying_power|floatformat:2|intcomma }}
+            {% else %}
+              --
+            {% endif %}
+          </span>
+        </div>
+      </div>
+    </div>
+    <hr class="my-3">
+
+    <div class="mb-3">
+      <label class="form-label text-muted">Risk Allocation Method</label>
+      <select class="form-select" id="allocation-method" style="max-width: 400px;">
+        <option value="conservative" {% if allocation.allocation_method == 'conservative' %}selected{% endif %}>
+          Conservative (40% Normal / 60% Stressed)
+        </option>
+        <option value="moderate" {% if allocation.allocation_method == 'moderate' %}selected{% endif %}>
+          Moderate (50% Normal / 70% Stressed)
+        </option>
+        <option value="aggressive" {% if allocation.allocation_method == 'aggressive' %}selected{% endif %}>
+          Aggressive (60% Normal / 80% Stressed)
+        </option>
+      </select>
+    </div>
+
+    <!-- Live Risk Metrics -->
+    <div class="row mt-4">
+      <div class="col-md-6">
+        <h6 class="text-muted mb-3">Normal Market Conditions</h6>
+        <div class="small">
+          <div class="d-flex justify-content-between mb-2">
+            <span class="text-muted">Risk Tolerance:</span>
+            <span id="normal-tolerance">40%</span>
+          </div>
+          <div class="d-flex justify-content-between mb-2">
+            <span class="text-muted">Strategy Power:</span>
+            <span id="normal-strategy-power">--</span>
+          </div>
+          <div class="d-flex justify-content-between mb-2">
+            <span class="text-muted">Max Spreads:</span>
+            <span id="normal-max-spreads">--</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="col-md-6">
+        <h6 class="text-muted mb-3">Stressed Market Conditions</h6>
+        <div class="small">
+          <div class="d-flex justify-content-between mb-2">
+            <span class="text-muted">Risk Tolerance:</span>
+            <span id="stressed-tolerance">60%</span>
+          </div>
+          <div class="d-flex justify-content-between mb-2">
+            <span class="text-muted">Strategy Power:</span>
+            <span id="stressed-strategy-power">--</span>
+          </div>
+          <div class="d-flex justify-content-between mb-2">
+            <span class="text-muted">Max Spreads:</span>
+            <span id="stressed-max-spreads">--</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Current Utilization -->
+    <div class="mt-3 pt-3 border-top border-secondary">
+      <div class="d-flex justify-content-between align-items-center">
+        <span class="text-muted">Current Risk Utilization:</span>
+        <span class="h5 mb-0" id="risk-utilization">--</span>
+      </div>
+      <div class="progress mt-2" style="height: 10px;">
+        <div class="progress-bar bg-success" id="risk-progress-bar" role="progressbar" style="width: 0%"></div>
+      </div>
+    </div>
+
+    <button class="btn btn-primary mt-3" id="save-risk-settings">Save Settings</button>
+  </div>
+</div>
+
+{% load static %}
+<script src="{% static 'js/streaming-handlers.js' %}"></script>
+<script>
+// Privacy mode flag
+window.PRIVACY_MODE = {{ privacy_mode|yesno:"true,false" }};
+
+// Risk Management Page - Using Global WebSocket with Shared Handlers
+document.addEventListener('DOMContentLoaded', function() {
+    // Configure streaming handlers for risk page elements
+    const streamingHandlers = new StreamingHandlers({
+        accountBalance: 'account-balance'
+    });
+
+    // Wait for global streamers to be ready
+    function initializeStreaming() {
+        if (window.streamersReady) {
+            console.log('Risk Settings: Streamers already ready, setting up streaming...');
+            setupRiskStreaming();
+        } else {
+            console.log('Risk Settings: Waiting for streamers-ready event...');
+
+            window.addEventListener('streamers-ready', function(e) {
+                console.log('Risk Settings: Streamers ready event received:', e.detail);
+                setupRiskStreaming();
+            }, { once: true });
+
+            window.addEventListener('streamers-timeout', function(e) {
+                console.warn('Risk Settings: Streamers timeout:', e.detail);
+                streamingHandlers.updateStreamStatus('Timeout', 'warning');
+            }, { once: true });
+        }
+    }
+
+    function setupRiskStreaming() {
+        // Use the global WebSocket connection from base.html
+        const ws = window.streamerWebSocket;
+
+        if (!ws || ws.readyState !== WebSocket.OPEN) {
+            console.warn('Risk Settings: Global WebSocket not available');
+            streamingHandlers.updateStreamStatus('Disconnected', 'danger');
+            return;
+        }
+
+        console.log('Risk Settings: Using global WebSocket for streaming data');
+        streamingHandlers.updateStreamStatus('Connected', 'success');
+
+        // Register risk page message handler
+        function riskMessageHandler(data) {
+            // Only handle messages relevant to risk page
+            if (data.type === 'balance_update') {
+                // Route balance updates to streaming handlers for account balance display
+                streamingHandlers.handleMessage(data);
+                // Handle risk-specific balance processing
+                handleRiskBalanceUpdate(data);
+            }
+            // Ignore all other message types (QQQ, trades, etc.)
+        }
+
+        // Add handler to global message broadcasting system
+        window.addMessageHandler(riskMessageHandler);
+    }
+
+    // Risk-specific balance update handler
+    function handleRiskBalanceUpdate(data) {
+        // Update stored values with real data from streaming
+        if (data.balance !== null && data.balance !== undefined) {
+            currentBalance = data.balance;
+        }
+        if (data.buying_power !== null && data.buying_power !== undefined) {
+            currentBuyingPower = data.buying_power;
+        }
+
+        // Don't update display if privacy mode is enabled
+        if (window.PRIVACY_MODE) {
+            // Still update risk calculations in the background using real data
+            if (currentBuyingPower !== null && currentBalance !== null) {
+                updateRiskCalculations(currentBalance, currentBuyingPower);
+            }
+            return;
+        }
+
+        // Update buying power display (only if privacy mode is off)
+        const buyingPowerElement = document.getElementById('buying-power');
+        if (buyingPowerElement && currentBuyingPower !== null) {
+            buyingPowerElement.textContent = '$' + Number(currentBuyingPower).toFixed(2);
+        }
+
+        // Update risk calculations if both balance and buying power are available
+        if (currentBuyingPower !== null && currentBalance !== null) {
+            updateRiskCalculations(currentBalance, currentBuyingPower);
+        }
+    }
+
+    // Initialize streaming when DOM is ready
+    initializeStreaming();
+
+    // Initialize risk calculations with pre-populated data
+    if (initialAccountState.balance !== null && initialAccountState.buyingPower !== null) {
+        console.log('📊 Initializing with pre-populated data:', initialAccountState);
+        updateRiskCalculations(initialAccountState.balance, initialAccountState.buyingPower);
+
+        // Show warning if data is stale
+        if (initialAccountState.stale) {
+            console.warn('⚠️ Using stale account data from:', initialAccountState.source);
+        }
+    } else {
+        console.log('📊 No initial balance data available, waiting for streaming updates');
+    }
+});
+
+// Risk Management JavaScript
+const appManagedRisk = {{ app_managed_risk|default:0 }};
+
+// Initial account state from backend
+const initialAccountState = {
+    balance: {{ initial_balance|default:'null' }},
+    buyingPower: {{ initial_buying_power|default:'null' }},
+    source: "{{ account_state_source|default:'unavailable' }}",
+    stale: {{ account_state_stale|lower }}
+};
+
+// Current account values (updated by streaming or initial data)
+let currentBalance = initialAccountState.balance;
+let currentBuyingPower = initialAccountState.buyingPower;
+
+// Risk tolerance templates
+const riskTemplates = {
+    'conservative': { normal: 0.40, stressed: 0.60 },
+    'moderate': { normal: 0.50, stressed: 0.70 },
+    'aggressive': { normal: 0.60, stressed: 0.80 }
+};
+
+// Get spread width based on tradeable capital (positions + buying power)
+function getSpreadWidth(tradeableCapital) {
+    if (tradeableCapital < 25000) return 3;
+    else if (tradeableCapital < 50000) return 5;
+    else if (tradeableCapital < 75000) return 7;
+    else return 9;
+}
+
+// Update risk calculations with live data
+function updateRiskCalculations(balance, buyingPower) {
+    const method = document.getElementById('allocation-method').value;
+    const tolerances = riskTemplates[method];
+
+    if (!tolerances) return;
+
+    // Calculate tradeable capital
+    const tradeableCapital = buyingPower + appManagedRisk;
+
+    // Calculate strategy powers
+    const normalStrategyPower = tradeableCapital * tolerances.normal;
+    const stressedStrategyPower = tradeableCapital * tolerances.stressed;
+
+    // Get spread width based on tradeable capital, not balance
+    const spreadWidth = getSpreadWidth(tradeableCapital);
+
+    // Calculate max spreads
+    const normalMaxSpreads = Math.floor(normalStrategyPower / (spreadWidth * 100));
+    const stressedMaxSpreads = Math.floor(stressedStrategyPower / (spreadWidth * 100));
+
+    // Update UI - Normal conditions
+    document.getElementById('normal-tolerance').textContent = `${(tolerances.normal * 100).toFixed(0)}%`;
+    document.getElementById('normal-strategy-power').textContent = `$${normalStrategyPower.toLocaleString('en-US', {
+        minimumFractionDigits: 0,
+        maximumFractionDigits: 0
+    })}`;
+    document.getElementById('normal-max-spreads').textContent = `${normalMaxSpreads} (${spreadWidth}-wide)`;
+
+    // Update UI - Stressed conditions
+    document.getElementById('stressed-tolerance').textContent = `${(tolerances.stressed * 100).toFixed(0)}%`;
+    document.getElementById('stressed-strategy-power').textContent = `$${stressedStrategyPower.toLocaleString('en-US', {
+        minimumFractionDigits: 0,
+        maximumFractionDigits: 0
+    })}`;
+    document.getElementById('stressed-max-spreads').textContent = `${stressedMaxSpreads} (${spreadWidth}-wide)`;
+
+    // Update utilization
+    const utilization = (appManagedRisk / normalStrategyPower * 100);
+    const utilizationClamped = Math.min(100, Math.max(0, utilization));
+
+    document.getElementById('risk-utilization').textContent = `${utilizationClamped.toFixed(1)}%`;
+
+    // Update progress bar
+    const progressBar = document.getElementById('risk-progress-bar');
+    progressBar.style.width = `${utilizationClamped}%`;
+
+    // Update progress bar color based on utilization
+    if (utilizationClamped < 50) {
+        progressBar.className = 'progress-bar bg-success';
+    } else if (utilizationClamped < 75) {
+        progressBar.className = 'progress-bar bg-warning';
+    } else {
+        progressBar.className = 'progress-bar bg-danger';
+    }
+}
+
+// Handle allocation method change
+document.getElementById('allocation-method').addEventListener('change', function() {
+    // Use stored real values instead of parsing display text
+    if (currentBalance !== null && currentBuyingPower !== null) {
+        // Immediately recalculate with current values
+        console.log('Allocation method changed, recalculating with current values');
+        updateRiskCalculations(currentBalance, currentBuyingPower);
+    } else {
+        console.log('Cannot recalculate - balance or buying power not available');
+    }
+});
+
+// Save risk settings
+document.getElementById('save-risk-settings').addEventListener('click', async function() {
+    const method = document.getElementById('allocation-method').value;
+
+    // getCsrfToken function is available from base.html
+
+    try {
+        const response = await fetch('/trading/api/risk-settings/', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCsrfToken()
+            },
+            body: JSON.stringify({
+                allocation_method: method
+            })
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+            // Show success message
+            const button = document.getElementById('save-risk-settings');
+            const originalText = button.textContent;
+            button.textContent = 'Saved!';
+            button.classList.remove('btn-primary');
+            button.classList.add('btn-success');
+
+            setTimeout(() => {
+                button.textContent = originalText;
+                button.classList.remove('btn-success');
+                button.classList.add('btn-primary');
+            }, 2000);
+        } else {
+            console.error('Failed to save risk settings:', data.error);
+        }
+    } catch (error) {
+        console.error('Error saving risk settings:', error);
+    }
+});
+</script>
+{% endblock %}

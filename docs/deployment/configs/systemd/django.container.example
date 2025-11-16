@@ -1,0 +1,61 @@
+# Systemd Quadlet file for Django/Daphne ASGI server
+# Location: ~/.config/containers/systemd/django.container
+# After creating/editing, run: systemctl --user daemon-reload
+
+[Unit]
+Description=Django/Daphne ASGI Server - Senex Trader
+After=network-online.target
+Requires=postgres.service redis.service
+After=postgres.service redis.service
+Documentation=https://docs.senextrader.com/deployment
+
+[Container]
+Image=registry.example.com/senex-trader:latest
+ContainerName=django
+AutoUpdate=registry
+
+# Network configuration
+Network=senex_net.network
+PublishPort=8000:8000
+
+# Environment variables
+EnvironmentFile=/etc/senex-trader/.env
+
+# Volume mounts (static files shared with Nginx)
+Volume=%h/senex-trader/static:/app/staticfiles:z
+Volume=%h/senex-trader/media:/app/media:z
+
+# Health check
+HealthCmd=curl -f http://localhost:8000/health/ || exit 1
+HealthInterval=30s
+HealthTimeout=10s
+HealthRetries=3
+HealthStartPeriod=60s
+HealthOnFailure=kill
+
+# Resource limits
+Memory=1G
+MemorySwap=2G
+CPUQuota=100%
+
+# Security
+User=senex
+ReadOnlyRootfs=false
+NoNewPrivileges=true
+
+# Command to run
+Exec=daphne -b 0.0.0.0 -p 8000 --access-log - --proxy-headers senex_trader.asgi:application
+
+[Service]
+Restart=always
+RestartSec=10
+TimeoutStartSec=300
+TimeoutStopSec=60
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=django
+
+[Install]
+WantedBy=default.target

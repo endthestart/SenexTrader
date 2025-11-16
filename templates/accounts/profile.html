@@ -1,0 +1,12 @@
+{% extends 'base/base.html' %}
+{% block title %}Profile - Senex Trader{% endblock %}
+{% block content %}
+<div class="card bg-dark border-secondary">
+  <div class="card-body">
+    <h4 class="mb-3">Profile</h4>
+    <p class="text-muted">Email: {{ request.user.email }}</p>
+    <p class="text-muted">Name: {{ request.user.full_name|default:request.user.username }}</p>
+  </div>
+</div>
+{% endblock %}
+

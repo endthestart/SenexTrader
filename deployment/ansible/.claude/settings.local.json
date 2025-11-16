@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(//home/andermic/Development/senex_trader_project/senex_trader/**)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}

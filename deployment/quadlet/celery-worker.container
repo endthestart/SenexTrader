@@ -1,0 +1,37 @@
+# Quadlet Container Configuration for Celery Worker
+# Background task processing
+
+[Unit]
+Description=Senex Trader Celery Worker
+Wants=network-online.target senex-network.service postgres.service redis.service
+After=network-online.target senex-network.service postgres.service redis.service
+Requires=postgres.service redis.service
+
+[Container]
+# Image to use (will be substituted from .env)
+Image=${GITEA_REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG}
+
+# Container name
+ContainerName=celery_worker
+
+# Auto-update from registry (optional, can enable later)
+# AutoUpdate=registry
+
+# Load environment variables from .env file (all config comes from here)
+EnvironmentFile=/etc/containers/systemd/.env
+
+# Command to run
+Exec=celery-worker
+
+# Network
+Network=senex-network.network
+
+[Service]
+# Restart policy (systemd handles this reliably)
+Restart=always
+RestartSec=10s
+TimeoutStartSec=120
+
+[Install]
+# Start automatically on boot
+WantedBy=default.target

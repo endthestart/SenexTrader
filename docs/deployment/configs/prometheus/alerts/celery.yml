@@ -1,0 +1,81 @@
+# Prometheus Alert Rules for Celery
+
+groups:
+  - name: celery_alerts
+    interval: 60s
+    rules:
+      # Worker down
+      - alert: CeleryWorkerDown
+        expr: up{job="celery"} == 0
+        for: 5m
+        labels:
+          severity: critical
+          component: celery
+        annotations:
+          summary: "Celery worker is down"
+          description: "Celery worker has been down for more than 5 minutes"
+
+      # Queue backup
+      - alert: CeleryQueueBackup
+        expr: celery_queue_length{queue="trading"} > 100
+        for: 10m
+        labels:
+          severity: warning
+          component: celery
+        annotations:
+          summary: "Celery trading queue is backed up"
+          description: "Queue length is {{ $value }} (threshold: 100)"
+
+      - alert: CeleryQueueBackupCritical
+        expr: celery_queue_length{queue="trading"} > 500
+        for: 5m
+        labels:
+          severity: critical
+          component: celery
+        annotations:
+          summary: "Celery trading queue is critically backed up"
+          description: "Queue length is {{ $value }} (threshold: 500)"
+
+      # Task failures
+      - alert: CeleryHighTaskFailureRate
+        expr: rate(celery_task_failed_total[5m]) / rate(celery_task_total[5m]) > 0.1
+        for: 10m
+        labels:
+          severity: warning
+          component: celery
+        annotations:
+          summary: "High Celery task failure rate"
+          description: "Task failure rate is {{ $value | humanizePercentage }} (threshold: 10%)"
+
+      # Slow tasks
+      - alert: CelerySlowTasks
+        expr: histogram_quantile(0.95, rate(celery_task_duration_seconds_bucket[5m])) > 300
+        for: 10m
+        labels:
+          severity: warning
+          component: celery
+        annotations:
+          summary: "Celery tasks are running slowly"
+          description: "95th percentile task duration is {{ $value }}s (threshold: 300s)"
+
+      # Worker pool exhaustion
+      - alert: CeleryWorkerPoolExhausted
+        expr: celery_worker_pool_max_concurrency - celery_worker_pool_active_tasks < 2
+        for: 10m
+        labels:
+          severity: warning
+          component: celery
+        annotations:
+          summary: "Celery worker pool nearly exhausted"
+          description: "Only {{ $value }} worker slots available"
+
+      # Prefetch count issues
+      - alert: CeleryHighPrefetchCount
+        expr: celery_worker_prefetch_count > 10
+        for: 10m
+        labels:
+          severity: warning
+          component: celery
+        annotations:
+          summary: "Celery prefetch count is high"
+          description: "Prefetch count is {{ $value }} (may indicate slow tasks)"

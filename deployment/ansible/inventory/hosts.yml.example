@@ -1,0 +1,74 @@
+# Ansible Inventory - Example Configuration
+#
+# Copy this file to: config/ansible/inventory/hosts.yml
+# Then customize with your actual server information.
+#
+# Required: All variables in the vars section must be set.
+# Secrets: Database passwords, API keys, etc. go in vault files (not here).
+
+all:
+  children:
+    # Production Environment
+    production:
+      hosts:
+        production-server:
+          ansible_host: senextrader.com  # Your production server hostname or IP
+          ansible_user: root              # SSH user (typically root)
+          ansible_python_interpreter: /usr/bin/python3
+
+      vars:
+        # CRITICAL: Must be 'production' (used to load vault file)
+        django_env: production
+
+        # Container Registry Configuration
+        gitea_registry: registry.example.com   # Your container registry URL
+        image_name: your-org/senex-trader      # Container image name (owner/image)
+        image_tag: v1.0.0                      # Version tag (update for each deployment)
+
+        # Domain Configuration
+        domain_name: senextrader.com
+        allowed_hosts: "senextrader.com,www.senextrader.com"
+        app_base_url: https://senextrader.com
+        ws_allowed_origins: "https://senextrader.com,https://www.senextrader.com"
+
+        # Application User & Directory
+        app_user: senex                     # User to run containers (use 'root' for rootful Podman)
+        app_directory: /opt/senex-trader    # Where to install the application
+
+        # Database Configuration (password goes in vault)
+        db_name: senex_trader
+        db_user: senex_user
+
+        # Optional: SSL/TLS (Let's Encrypt)
+        enable_ssl: true                    # Set to false to disable SSL setup
+
+        # Optional: Backups
+        backup_enabled: true                # Set to false to disable backups
+
+        # Optional: Expose Port (defaults to 8000 if not set)
+        expose_port: 8000
+
+    # Staging Environment (optional - remove if not needed)
+    staging:
+      hosts:
+        staging-server:
+          ansible_host: staging.example.com
+          ansible_user: root
+          ansible_python_interpreter: /usr/bin/python3
+
+      vars:
+        django_env: staging
+        gitea_registry: registry.example.com
+        image_name: your-org/senex-trader
+        image_tag: latest                    # Use 'latest' for staging
+        domain_name: staging.example.com
+        allowed_hosts: "staging.example.com"
+        app_base_url: https://staging.example.com
+        ws_allowed_origins: "https://staging.example.com"
+        app_user: senex
+        app_directory: /opt/senex-trader
+        db_name: senex_trader_staging
+        db_user: senex_user_staging
+        enable_ssl: false
+        backup_enabled: false
+        expose_port: 8000

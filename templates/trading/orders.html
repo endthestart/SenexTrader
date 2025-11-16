@@ -1,0 +1,703 @@
+{% extends 'base/base.html' %}
+{% load static %}
+{% load humanize %}
+
+{% block title %}Active Orders - Senex Trader{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <!-- Page Header -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <h1 class="h3 mb-0">Active Orders</h1>
+            <p class="text-muted mb-0">View and manage your active application-managed orders</p>
+        </div>
+    </div>
+
+    <!-- Summary Card -->
+    <div class="row mb-4">
+        <div class="col-md-4">
+            <div class="card bg-dark border-info">
+                <div class="card-body">
+                    <h5 class="card-title text-info">
+                        <i class="bi bi-clock-history me-2"></i>Active Orders
+                    </h5>
+                    <h2 class="text-info">{{ order_count }}</h2>
+                    <p class="text-muted mb-0 small">Pending execution</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Active Orders Table -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card bg-dark border-secondary">
+                <div class="card-header bg-info d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0">
+                        <i class="bi bi-clock-history me-2"></i>Active Orders ({{ order_count }})
+                    </h5>
+                    <small class="text-light">Application-managed orders awaiting execution</small>
+                </div>
+                <div class="card-body">
+                    {% if enriched_orders %}
+                        <div class="table-responsive">
+                            <table class="table table-dark table-striped table-hover">
+                                <thead>
+                                    <tr>
+                                        <th></th>
+                                        <th>Position ID</th>
+                                        <th>Symbol</th>
+                                        <th>Strategy</th>
+                                        <th>Order Type</th>
+                                        <th>Trade Type</th>
+                                        <th>Expiration</th>
+                                        <th>DTE</th>
+                                        <th>Legs</th>
+                                        <th>Quantity</th>
+                                        <th>Limit Price</th>
+                                        <th>Mid Price</th>
+                                        <th>Status</th>
+                                        <th>Submitted</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for order_data in enriched_orders %}
+                                    {% with order=order_data.order %}
+                                    <tr data-order-id="{{ order.id }}" class="order-row">
+                                        <td>
+                                            {% if order_data.parsed_legs %}
+                                            <button class="btn btn-sm btn-outline-info toggle-legs" data-order-id="{{ order.id }}" title="Show leg details">
+                                                <i class="bi bi-chevron-right"></i>
+                                            </button>
+                                            {% endif %}
+                                        </td>
+                                        <td>
+                                            <a href="#" class="text-info" data-position-id="{{ order.position.id }}">
+                                                #{{ order.position.id }}
+                                            </a>
+                                        </td>
+                                        <td>
+                                            <strong>{{ order.position.symbol }}</strong>
+                                        </td>
+                                        <td>
+                                            <span class="badge bg-primary">{{ order.position.get_strategy_type_display }}</span>
+                                        </td>
+                                        <td>
+                                            <span class="badge {% if order.order_type == 'LIMIT' %}bg-secondary{% else %}bg-warning text-dark{% endif %}">
+                                                {{ order.order_type }}
+                                            </span>
+                                        </td>
+                                        <td>
+                                            <span class="badge {% if order.trade_type == 'open' %}bg-success{% elif order.trade_type == 'close' %}bg-danger{% else %}bg-info{% endif %}">
+                                                {{ order.get_trade_type_display }}
+                                            </span>
+                                        </td>
+                                        <td>
+                                            {% if order_data.expiration_date %}
+                                                <small>{{ order_data.expiration_date|date:"M d, Y" }}</small>
+                                            {% else %}
+                                                <span class="text-muted">-</span>
+                                            {% endif %}
+                                        </td>
+                                        <td>
+                                            {% if order_data.dte is not None %}
+                                                <span class="badge {% if order_data.dte <= 7 %}bg-danger{% elif order_data.dte <= 14 %}bg-warning text-dark{% else %}bg-success{% endif %}">
+                                                    {{ order_data.dte }}
+                                                </span>
+                                            {% else %}
+                                                <span class="text-muted">-</span>
+                                            {% endif %}
+                                        </td>
+                                        <td>
+                                            {% if order.order_legs %}
+                                                <span class="badge bg-secondary">{{ order.order_legs|length }}</span>
+                                            {% else %}
+                                                <span class="text-muted">-</span>
+                                            {% endif %}
+                                        </td>
+                                        <td>{{ order.quantity }}</td>
+                                        <td>
+                                            {% if order.executed_price %}
+                                                <strong>${{ order.executed_price|floatformat:2 }}</strong>
+                                            {% else %}
+                                                <span class="text-muted">-</span>
+                                            {% endif %}
+                                        </td>
+                                        <td class="mid-price-cell" data-order-id="{{ order.id }}">
+                                            <span class="text-muted" id="mid-price-{{ order.id }}">
+                                                <i class="bi bi-three-dots"></i>
+                                            </span>
+                                        </td>
+                                        <td>
+                                            <span class="badge 
+                                                {% if order.status == 'pending' %}bg-warning text-dark
+                                                {% elif order.status == 'submitted' or order.status == 'routed' %}bg-info
+                                                {% elif order.status == 'live' or order.status == 'working' %}bg-primary
+                                                {% endif %}"
+                                                id="status-badge-{{ order.id }}">
+                                                {{ order.get_status_display }}
+                                            </span>
+                                        </td>
+                                        <td>
+                                            <small class="text-muted">
+                                                {{ order.submitted_at|date:"M d, Y" }}<br>
+                                                {{ order.submitted_at|time:"g:i A" }}
+                                            </small>
+                                        </td>
+                                        <td>
+                                            {% if order.is_profit_target %}
+                                                <span class="text-muted small" title="Profit target cancellation not yet supported">
+                                                    <i class="bi bi-lock"></i> N/A
+                                                </span>
+                                            {% else %}
+                                                <button
+                                                    class="btn btn-sm btn-danger"
+                                                    onclick="cancelTrade({{ order.id }})"
+                                                    id="cancel-btn-{{ order.id }}">
+                                                    <i class="bi bi-x-circle"></i> Cancel
+                                                </button>
+                                            {% endif %}
+                                        </td>
+                                    </tr>
+                                    {% if order_data.parsed_legs %}
+                                    <tr class="leg-details-row" id="legs-{{ order.id }}" style="display: none;">
+                                        <td></td>
+                                        <td colspan="13">
+                                            <div class="card bg-dark border-info ms-3">
+                                                <div class="card-body">
+                                                    <h6 class="card-title text-info mb-3">
+                                                        <i class="bi bi-list-ul me-2"></i>Order Legs
+                                                    </h6>
+                                                    <div class="table-responsive">
+                                                        <table class="table table-sm table-dark mb-0">
+                                                            <thead>
+                                                                <tr>
+                                                                    <th>Leg</th>
+                                                                    <th>Action</th>
+                                                                    <th>Underlying</th>
+                                                                    <th>Type</th>
+                                                                    <th>Strike</th>
+                                                                    <th>Expiration</th>
+                                                                    <th>Quantity</th>
+                                                                    <th>Symbol</th>
+                                                                </tr>
+                                                            </thead>
+                                                            <tbody>
+                                                                {% for leg in order_data.parsed_legs %}
+                                                                <tr>
+                                                                    <td>
+                                                                        <span class="badge bg-secondary">{{ forloop.counter }}</span>
+                                                                    </td>
+                                                                    <td>
+                                                                        <span class="badge {% if 'Sell' in leg.action or 'SELL' in leg.action %}bg-danger{% else %}bg-success{% endif %}">
+                                                                            {{ leg.action }}
+                                                                        </span>
+                                                                    </td>
+                                                                    <td><strong>{{ leg.underlying }}</strong></td>
+                                                                    <td>
+                                                                        <span class="badge {% if leg.option_type == 'Put' %}bg-warning text-dark{% else %}bg-info{% endif %}">
+                                                                            {{ leg.option_type }}
+                                                                        </span>
+                                                                    </td>
+                                                                    <td><strong>${{ leg.strike }}</strong></td>
+                                                                    <td><small>{{ leg.expiration|date:"M d, Y" }}</small></td>
+                                                                    <td>{{ leg.quantity }}</td>
+                                                                    <td><code class="text-muted small">{{ leg.symbol }}</code></td>
+                                                                </tr>
+                                                                {% endfor %}
+                                                            </tbody>
+                                                        </table>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                    {% endif %}
+                                    {% endwith %}
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    {% else %}
+                        <div class="alert alert-info mb-0" role="alert">
+                            <i class="bi bi-info-circle me-2"></i>
+                            <strong>No Active Orders</strong>
+                            <p class="mb-0 mt-2">You don't have any pending orders at the moment. Orders will appear here when you generate and execute trading suggestions.</p>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Information Card -->
+    <div class="row">
+        <div class="col-12">
+            <div class="card bg-dark border-secondary">
+                <div class="card-body">
+                    <h6 class="card-title">
+                        <i class="bi bi-info-circle me-2"></i>About Active Orders
+                    </h6>
+                    <ul class="text-muted small mb-0">
+                        <li>This page shows all orders that are pending execution (not yet filled).</li>
+                        <li>Orders are automatically removed from this list once they are filled, cancelled, or rejected.</li>
+                        <li>You can cancel any pending order using the Cancel button. Note that orders may fill before cancellation is processed.</li>
+                        <li>Order statuses:
+                            <ul>
+                                <li><strong>Pending:</strong> Order created but not yet submitted to broker</li>
+                                <li><strong>Submitted/Routed:</strong> Order sent to broker and being routed to exchange</li>
+                                <li><strong>Live/Working:</strong> Order is active on the exchange awaiting fill</li>
+                            </ul>
+                        </li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock content %}
+
+{% block extra_js %}
+<script src="{% static 'js/utils.js' %}"></script>
+<script>
+// Toggle leg details
+document.querySelectorAll('.toggle-legs').forEach(button => {
+    button.addEventListener('click', function(e) {
+        e.preventDefault();
+        const orderId = this.dataset.orderId;
+        const legRow = document.getElementById(`legs-${orderId}`);
+        const icon = this.querySelector('i');
+        
+        if (legRow.style.display === 'none') {
+            legRow.style.display = 'table-row';
+            icon.classList.remove('bi-chevron-right');
+            icon.classList.add('bi-chevron-down');
+        } else {
+            legRow.style.display = 'none';
+            icon.classList.remove('bi-chevron-down');
+            icon.classList.add('bi-chevron-right');
+        }
+    });
+});
+
+// WebSocket real-time order updates
+let orderUpdatesRetryCount = 0;
+const MAX_ORDER_RETRIES = 20;
+
+function setupOrderUpdates() {
+    const orderRows = document.querySelectorAll('.order-row');
+    if (orderRows.length === 0) {
+        console.log('No orders on page, skipping order status updates');
+        return;
+    }
+
+    if (!window.streamerWebSocket || window.streamerWebSocket.readyState !== WebSocket.OPEN) {
+        if (orderUpdatesRetryCount >= MAX_ORDER_RETRIES) {
+            console.warn('WebSocket not available after 20 retries, giving up on order status updates');
+            return;
+        }
+        orderUpdatesRetryCount++;
+        console.log(`WebSocket not available, retrying in 500ms... (${orderUpdatesRetryCount}/${MAX_ORDER_RETRIES})`);
+        setTimeout(setupOrderUpdates, 500);
+        return;
+    }
+
+    console.log('Real-time order updates initialized');
+}
+
+// Register message handler for order status updates
+window.addMessageHandler(function(data) {
+    try {
+        if (data.type === 'order_status') {
+            handleOrderStatusUpdate(data);
+        }
+        if (data.type === 'order_fill') {
+            handleOrderFill(data);
+        }
+    } catch (error) {
+        console.error('Error handling order status message:', error, data);
+    }
+}, 'orders-status-updates');
+
+let reloadScheduled = false;
+
+function handleOrderStatusUpdate(data) {
+    if (!data || !data.trade_id || !data.status) {
+        console.warn('Invalid order status update received:', data);
+        return;
+    }
+    
+    const tradeId = data.trade_id;
+    const newStatus = data.status;
+    const oldStatus = data.old_status;
+    
+    console.log(`Order ${tradeId}: ${oldStatus} → ${newStatus}`);
+    
+    const statusBadge = document.getElementById(`status-badge-${tradeId}`);
+    if (statusBadge) {
+        statusBadge.textContent = newStatus.charAt(0).toUpperCase() + newStatus.slice(1);
+        
+        statusBadge.className = 'badge';
+        if (newStatus === 'pending') {
+            statusBadge.classList.add('bg-warning', 'text-dark');
+        } else if (newStatus === 'submitted' || newStatus === 'routed') {
+            statusBadge.classList.add('bg-info');
+        } else if (newStatus === 'live' || newStatus === 'working') {
+            statusBadge.classList.add('bg-primary');
+        } else if (newStatus === 'filled') {
+            statusBadge.classList.add('bg-success');
+            const cancelBtn = document.getElementById(`cancel-btn-${tradeId}`);
+            if (cancelBtn) {
+                cancelBtn.remove();
+            }
+            showNotification('Order Filled', `Order ${tradeId} has been filled`, 'success');
+            
+            cleanupOrderData(tradeId);
+            
+            if (!reloadScheduled) {
+                reloadScheduled = true;
+                setTimeout(() => location.reload(), 2000);
+            }
+        } else if (newStatus === 'cancelled' || newStatus === 'rejected') {
+            statusBadge.classList.add('bg-secondary');
+            const cancelBtn = document.getElementById(`cancel-btn-${tradeId}`);
+            if (cancelBtn) {
+                cancelBtn.remove();
+            }
+            
+            cleanupOrderData(tradeId);
+            
+            if (!reloadScheduled) {
+                reloadScheduled = true;
+                setTimeout(() => location.reload(), 1500);
+            }
+        }
+    }
+}
+
+function handleOrderFill(data) {
+    if (!data || !data.trade_id) {
+        console.warn('Invalid order fill notification received:', data);
+        return;
+    }
+    
+    const tradeId = data.trade_id;
+    const symbol = data.symbol;
+    
+    showNotification(
+        'Order Filled',
+        `${symbol} order has been filled successfully`,
+        'success'
+    );
+    
+    // Reload page to remove filled order from list
+    setTimeout(() => location.reload(), 2000);
+}
+
+// Initialize WebSocket updates on page load
+setupOrderUpdates();
+
+// Real-time mid-price updates
+const orderQuotes = new Map();
+const orderSymbols = new Map();
+const orderLegs = new Map();
+const allSymbols = new Set();
+const symbolMapping = new Map(); // OCC -> DXFeed mapping
+const reverseSymbolMapping = new Map(); // DXFeed -> OCC mapping
+let midPriceRetryCount = 0;
+const MAX_MIDPRICE_RETRIES = 20;
+
+function setupMidPriceUpdates() {
+    const orderRows = document.querySelectorAll('.order-row');
+    if (orderRows.length === 0) {
+        console.log('No orders on page, skipping mid-price updates');
+        return;
+    }
+
+    if (!window.streamerWebSocket || window.streamerWebSocket.readyState !== WebSocket.OPEN) {
+        if (midPriceRetryCount >= MAX_MIDPRICE_RETRIES) {
+            console.warn('WebSocket not available after 20 retries, giving up on mid-price updates');
+            return;
+        }
+        midPriceRetryCount++;
+        console.log(`WebSocket not available for mid-price updates, retrying in 500ms... (${midPriceRetryCount}/${MAX_MIDPRICE_RETRIES})`);
+        setTimeout(setupMidPriceUpdates, 500);
+        return;
+    }
+
+    // Extract order legs from the DOM
+    orderRows.forEach(row => {
+        const orderId = row.dataset.orderId;
+        const legDetailsRow = document.getElementById(`legs-${orderId}`);
+        
+        if (legDetailsRow) {
+            const legRows = legDetailsRow.querySelectorAll('tbody tr');
+            const legs = [];
+            
+            legRows.forEach(legRow => {
+                const cells = legRow.querySelectorAll('td');
+                if (cells.length >= 8) {
+                    const codeElement = cells[7].querySelector('code');
+                    if (!codeElement) {
+                        console.warn(`Missing code element in leg row for order ${orderId}`);
+                        return;
+                    }
+                    
+                    const symbol = codeElement.textContent.trim();
+                    const actionBadge = cells[1].textContent.trim();
+                    const quantityText = cells[6].textContent.trim();
+                    const quantity = parseInt(quantityText, 10);
+                    
+                    if (isNaN(quantity)) {
+                        console.warn(`Invalid quantity "${quantityText}" for order ${orderId}`);
+                        return;
+                    }
+                    
+                    legs.push({
+                        symbol: symbol,
+                        action: actionBadge,
+                        quantity: quantity
+                    });
+                    allSymbols.add(symbol);
+                }
+            });
+            
+            if (legs.length > 0) {
+                orderLegs.set(orderId, legs);
+                orderSymbols.set(orderId, legs.map(l => l.symbol));
+            }
+        }
+    });
+
+    console.log(`Extracted ${allSymbols.size} unique option symbols from ${orderRows.length} orders`);
+
+    // Subscribe to all option symbols
+    if (allSymbols.size > 0) {
+        const symbolArray = Array.from(allSymbols);
+        console.log('Subscribing to option quotes:', symbolArray);
+        
+        window.streamerWebSocket.send(JSON.stringify({
+            type: 'subscribe_legs',
+            symbols: symbolArray
+        }));
+    }
+
+    console.log('Real-time mid-price updates initialized');
+}
+
+// Register message handler for quote updates
+window.addMessageHandler(function(data) {
+    try {
+        if (data.type === 'quote_update') {
+            // Check if this symbol is one we're tracking (could be OCC or DXFeed format)
+            const occSymbol = reverseSymbolMapping.get(data.symbol) || data.symbol;
+            if (allSymbols.has(occSymbol)) {
+                handleOptionQuote(data, occSymbol);
+            }
+        }
+        
+        if (data.type === 'subscribe_legs_ack') {
+            console.log(`✅ Subscribed to ${data.symbols_count} option symbols`);
+            
+            // Store symbol mapping if provided
+            if (data.symbol_mapping) {
+                Object.entries(data.symbol_mapping).forEach(([occ, dxfeed]) => {
+                    symbolMapping.set(occ, dxfeed);
+                    reverseSymbolMapping.set(dxfeed, occ);
+                });
+                console.log(`📍 Stored mapping for ${Object.keys(data.symbol_mapping).length} symbols`);
+            }
+        }
+    } catch (error) {
+        console.error('Error handling quote message:', error, data);
+    }
+}, 'orders-mid-price');
+
+function handleOptionQuote(data, occSymbol) {
+    const bid = data.bid;
+    const ask = data.ask;
+
+    // Store quote data using OCC symbol as key (matches what's stored in orderLegs)
+    orderQuotes.set(occSymbol, { bid, ask });
+
+    // Update all orders that contain this symbol
+    orderLegs.forEach((legs, orderId) => {
+        const containsSymbol = legs.some(leg => leg.symbol === occSymbol);
+        if (containsSymbol) {
+            calculateOrderMidPrice(orderId);
+        }
+    });
+}
+
+function calculateOrderMidPrice(orderId) {
+    const legs = orderLegs.get(orderId);
+    if (!legs || legs.length === 0) return;
+
+    let netPrice = 0;
+    let allQuotesAvailable = true;
+
+    // Calculate net mid-price based on leg actions
+    legs.forEach(leg => {
+        const quote = orderQuotes.get(leg.symbol);
+        
+        if (!quote || quote.bid === null || quote.bid === undefined || 
+            quote.ask === null || quote.ask === undefined) {
+            allQuotesAvailable = false;
+            return;
+        }
+
+        const midPrice = (quote.bid + quote.ask) / 2;
+        
+        // For multi-leg spreads: sells add credit (+), buys add debit (-)
+        if (leg.action.includes('Sell') || leg.action.includes('SELL')) {
+            netPrice += midPrice * leg.quantity;
+        } else {
+            netPrice -= midPrice * leg.quantity;
+        }
+    });
+
+    // Update the display
+    const midPriceElement = document.getElementById(`mid-price-${orderId}`);
+    if (midPriceElement) {
+        if (allQuotesAvailable) {
+            const isCredit = netPrice > 0;
+            const displayPrice = Math.abs(netPrice);
+            
+            midPriceElement.innerHTML = `
+                <span class="${isCredit ? 'text-success' : 'text-danger'}">
+                    ${isCredit ? '+' : '-'}$${displayPrice.toFixed(2)}
+                </span>
+            `;
+            midPriceElement.title = `Real-time mid-price for ${legs.length}-leg spread`;
+        } else {
+            midPriceElement.innerHTML = '<span class="text-muted"><i class="bi bi-three-dots"></i></span>';
+            midPriceElement.title = 'Waiting for quote data...';
+        }
+    }
+}
+
+function cleanupOrderData(orderId) {
+    const legs = orderLegs.get(orderId);
+    if (legs) {
+        legs.forEach(leg => {
+            const stillUsed = Array.from(orderLegs.values()).some(otherLegs => 
+                otherLegs !== legs && otherLegs.some(l => l.symbol === leg.symbol)
+            );
+            if (!stillUsed) {
+                orderQuotes.delete(leg.symbol);
+                allSymbols.delete(leg.symbol);
+            }
+        });
+        orderLegs.delete(orderId);
+        orderSymbols.delete(orderId);
+    }
+}
+
+// Initialize mid-price updates
+setupMidPriceUpdates();
+
+// Cancel trade functionality (reused from positions.html)
+async function cancelTrade(tradeId) {
+    const btn = document.getElementById(`cancel-btn-${tradeId}`);
+    const statusBadge = document.getElementById(`status-badge-${tradeId}`);
+    const originalHtml = btn.innerHTML;
+
+    // Confirm with user using modal
+    window.showConfirmModal(
+        'Cancel Order',
+        'Are you sure you want to cancel this order?<br><br><strong>Note:</strong> The order may have already filled. If so, your position will be opened.',
+        async () => {
+            // Show loading state
+            btn.disabled = true;
+            btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Cancelling...';
+            statusBadge.className = 'badge bg-warning text-dark';
+            statusBadge.textContent = 'Cancelling...';
+
+            try {
+                const response = await fetch(`/trading/api/trades/${tradeId}/cancel`, {
+                    method: 'DELETE',
+                    headers: {
+                        'X-CSRFToken': getCsrfToken()
+                    }
+                });
+
+                const result = await response.json();
+
+                if (response.ok) {
+                    // Success - order cancelled
+                    statusBadge.className = 'badge bg-secondary';
+                    statusBadge.textContent = 'Cancelled';
+                    btn.remove();
+
+                    showNotification('Success', result.message, 'success');
+
+                    // Reload after short delay to show updated orders list
+                    setTimeout(() => location.reload(), 1500);
+
+                } else if (response.status === 409) {
+                    // Race condition - order filled during cancel
+                    statusBadge.className = 'badge bg-success';
+                    statusBadge.textContent = 'Filled';
+                    btn.remove();
+
+                    showNotification(
+                        'Order Filled',
+                        result.message + ' Your position has been opened.',
+                        'warning'
+                    );
+
+                    // Reload after slightly longer delay for race condition
+                    setTimeout(() => location.reload(), 2500);
+
+                } else {
+                    // Error - cannot cancel
+                    statusBadge.className = 'badge bg-warning text-dark';
+                    statusBadge.textContent = result.final_status || 'Error';
+                    btn.disabled = false;
+                    btn.innerHTML = originalHtml;
+
+                    showNotification('Cannot Cancel', result.message, 'danger');
+                }
+
+            } catch (error) {
+                console.error('Cancel error:', error);
+                btn.disabled = false;
+                btn.innerHTML = originalHtml;
+                statusBadge.className = 'badge bg-warning text-dark';
+
+                showNotification('Error', 'Network error - please refresh page and try again', 'danger');
+            }
+        },
+        'Cancel Order',
+        'btn-danger'
+    );
+}
+
+// showConfirmModal is now provided by utils.js (window.showConfirmModal)
+
+function showNotification(title, message, type) {
+    // Create Bootstrap alert
+    const alertHtml = `
+        <div class="alert alert-${type} alert-dismissible fade show position-fixed top-0 start-50 translate-middle-x mt-3"
+             role="alert" style="z-index: 9999; min-width: 400px;">
+            <strong>${title}</strong><br>
+            ${message}
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+    `;
+
+    document.body.insertAdjacentHTML('beforeend', alertHtml);
+
+    // Auto-dismiss after 5 seconds
+    setTimeout(() => {
+        const alerts = document.querySelectorAll('.alert');
+        if (alerts.length > 0) {
+            alerts[alerts.length - 1].remove();
+        }
+    }, 5000);
+}
+</script>
+{% endblock extra_js %}

@@ -1,0 +1,15 @@
+{
+  "_comment": "Senex Trader build configuration - copy to .senex_trader.json and customize",
+  "registry": "registry.example.com",
+  "owner": "username",
+  "image_name": "senex-trader",
+  "project_dir": null,
+  "default_no_push": false,
+  "_documentation": {
+    "registry": "Container registry URL (e.g., docker.io, ghcr.io, registry.example.com)",
+    "owner": "Registry owner/username for the image",
+    "image_name": "Name of the container image",
+    "project_dir": "Optional: Override project directory (defaults to script's parent directory)",
+    "default_no_push": "If true, builds by default without pushing (can override with --push flag)"
+  }
+}

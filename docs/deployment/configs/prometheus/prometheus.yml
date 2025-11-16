@@ -1,0 +1,80 @@
+# Prometheus Configuration for Senex Trader
+
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    cluster: 'senextrader-production'
+    environment: 'production'
+
+# Alertmanager configuration (optional)
+# alerting:
+#   alertmanagers:
+#     - static_configs:
+#         - targets:
+#             - 'localhost:9093'
+
+# Load alerting rules
+rule_files:
+  - 'alerts/*.yml'
+
+# Scrape configurations
+scrape_configs:
+  # Prometheus self-monitoring
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+
+  # Django application metrics
+  - job_name: 'django'
+    static_configs:
+      - targets: ['localhost:8000']
+    metrics_path: '/metrics'
+    scrape_interval: 30s
+    scrape_timeout: 10s
+
+  # PostgreSQL metrics (postgres_exporter)
+  - job_name: 'postgresql'
+    static_configs:
+      - targets: ['localhost:9187']
+    scrape_interval: 30s
+
+  # Redis metrics (redis_exporter)
+  - job_name: 'redis'
+    static_configs:
+      - targets: ['localhost:9121']
+    scrape_interval: 30s
+
+  # Node exporter (system metrics)
+  - job_name: 'node'
+    static_configs:
+      - targets: ['localhost:9100']
+    scrape_interval: 30s
+
+  # Nginx metrics (nginx-prometheus-exporter)
+  - job_name: 'nginx'
+    static_configs:
+      - targets: ['localhost:9113']
+    scrape_interval: 30s
+
+  # Celery metrics (celery-exporter or django-prometheus)
+  - job_name: 'celery'
+    static_configs:
+      - targets: ['localhost:8000']
+    metrics_path: '/metrics/celery'
+    scrape_interval: 60s
+
+  # PgBouncer metrics (pgbouncer_exporter)
+  - job_name: 'pgbouncer'
+    static_configs:
+      - targets: ['localhost:9127']
+    scrape_interval: 30s
+    # Only enable if using PgBouncer
+
+  # Podman container metrics (cadvisor)
+  - job_name: 'containers'
+    static_configs:
+      - targets: ['localhost:8080']
+    metrics_path: '/metrics'
+    scrape_interval: 30s
+    # Only enable if running cAdvisor

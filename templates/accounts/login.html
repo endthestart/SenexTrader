@@ -1,0 +1,22 @@
+{% extends 'base/base.html' %}
+{% block title %}Login - Senex Trader{% endblock %}
+{% block content %}
+<div class="row">
+  <div class="col-md-6 mx-auto">
+    <div class="card bg-dark border-secondary">
+      <div class="card-body">
+        <h4 class="mb-3">Login</h4>
+        <form method="post" novalidate>
+          {% csrf_token %}
+          {{ form.non_field_errors }}
+          {{ form.as_p }}
+          <div class="mb-3">
+            <a class="link-secondary" href="{% url 'accounts:password_reset' %}">Forgot your password?</a>
+          </div>
+          <button type="submit" class="btn btn-primary">Login</button>
+        </form>
+      </div>
+    </div>
+  </div>
+ </div>
+{% endblock %}

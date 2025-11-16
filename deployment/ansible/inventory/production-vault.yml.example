@@ -1,0 +1,39 @@
+# Production Vault Example
+# Copy this to production-vault.yml and encrypt with: ansible-vault encrypt production-vault.yml
+# Then fill in real values
+
+---
+# Django Core
+secret_key: "PRODUCTION-SECRET-KEY-GENERATE-WITH-get_random_secret_key"
+field_encryption_key: "PRODUCTION-FERNET-KEY-GENERATE-WITH-cryptography-Fernet-generate_key"
+
+# Database
+db_name: "senex_trader"
+db_user: "senex_user"
+db_password: "STRONG-PRODUCTION-DATABASE-PASSWORD"
+
+# TastyTrade API
+tastytrade_client_id: "YOUR-PRODUCTION-TASTYTRADE-CLIENT-ID"
+tastytrade_client_secret: "YOUR-PRODUCTION-TASTYTRADE-CLIENT-SECRET"
+
+# Gitea Registry (for pulling images)
+gitea_username: "your-username"
+gitea_token: "YOUR-GITEA-ACCESS-TOKEN"
+
+# Email Configuration (Production)
+# Required for error notifications and admin alerts
+email_backend: "django.core.mail.backends.smtp.EmailBackend"
+email_host: "smtp.gmail.com"
+email_port: 587
+email_use_tls: "true"
+email_host_user: "noreply@example.com"
+email_host_password: "YOUR-EMAIL-PASSWORD-OR-APP-PASSWORD"
+default_from_email: "Senex Trader <noreply@example.com>"
+admin_email: "your-email@example.com"  # Email address to receive error notifications
+server_email: "errors@example.com"  # From address for server error emails
+
+# Optional: Sentry (for error tracking)
+# sentry_dsn: "https://YOUR-SENTRY-DSN@sentry.io/PROJECT-ID"
+
+# Optional: Logging
+log_level: "INFO"

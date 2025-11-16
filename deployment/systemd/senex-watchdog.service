@@ -1,0 +1,31 @@
+[Unit]
+Description=Senex Trader Watchdog Service
+Documentation=https://github.com/your-username/senex-trader
+After=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/python3 /opt/senex-trader/scripts/senex-watchdog.py
+
+# Run as root (needed to restart user services)
+User=root
+Group=root
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=senex-watchdog
+
+# Security hardening
+PrivateTmp=yes
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+ReadWritePaths=/var/lib/senex-watchdog /var/log/senex_trader
+
+# Resource limits
+MemoryMax=100M
+CPUQuota=10%
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,49 @@
+# Quadlet Container Configuration for Redis 7
+# Senex Trader Cache, Celery Broker, and Channels
+
+[Unit]
+Description=Redis 7 for Senex Trader (Cache, Celery, Channels)
+Wants=network-online.target senex-network.service
+After=network-online.target senex-network.service
+
+[Container]
+# Image to use
+Image=docker.io/library/redis:7-alpine
+
+# Container name
+ContainerName=redis
+
+# Auto-update from registry (optional, can enable later)
+# AutoUpdate=registry
+
+# Load environment variables from .env file
+EnvironmentFile={{ quadlet_dir }}/.env
+
+# Redis command with memory limits and configuration
+Exec=redis-server --maxmemory 512mb --maxmemory-policy allkeys-lru --stop-writes-on-bgsave-error no
+
+# Environment variables
+Environment=TZ=America/New_York
+
+# Volume mounts - :U flag enables auto-chown for rootless Podman
+Volume={{ app_directory }}/data/redis:/data:U
+
+# Network
+Network=senex-network.network
+
+# Health check
+HealthCmd=redis-cli ping
+HealthInterval=10s
+HealthTimeout=5s
+HealthRetries=5
+
+[Service]
+# Restart policy (systemd handles this reliably)
+Restart=always
+RestartSec=10s
+TimeoutStartSec=120
+
+[Install]
+# Start automatically on boot
+WantedBy=default.target
+

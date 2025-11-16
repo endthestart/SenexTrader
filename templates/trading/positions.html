@@ -1,0 +1,878 @@
+{% extends 'base/base.html' %}
+{% load static %}
+{% load humanize %}
+
+{% block title %}Positions - Senex Trader{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <!-- Page Header -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <h1 class="h3 mb-0">Positions Dashboard</h1>
+            <p class="text-muted mb-0">View your managed and unmanaged positions</p>
+        </div>
+    </div>
+
+    <!-- Summary Cards -->
+    <div class="row mb-4">
+        <div class="col-md-3">
+            <div class="card bg-dark border-success">
+                <div class="card-body">
+                    <h5 class="card-title text-success">
+                        <i class="bi bi-shield-check me-2"></i>Managed
+                    </h5>
+                    <h2 class="text-success">{{ managed_count }}</h2>
+                    <p class="text-muted mb-0 small">App-created</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-dark border-warning">
+                <div class="card-body">
+                    <h5 class="card-title text-warning">
+                        <i class="bi bi-exclamation-triangle me-2"></i>Unmanaged
+                    </h5>
+                    <h2 class="text-warning">{{ unmanaged_count }}</h2>
+                    <p class="text-muted mb-0 small">External</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6">
+            <div class="card bg-dark border-info">
+                <div class="card-body">
+                    <h5 class="card-title text-info">
+                        <i class="bi bi-calculator me-2"></i>Portfolio Greeks
+                    </h5>
+                    <div class="row mt-2">
+                        <div class="col-3">
+                            <small class="text-muted">Delta</small>
+                            <div id="portfolioDelta" class="fw-bold">--</div>
+                        </div>
+                        <div class="col-3">
+                            <small class="text-muted">Gamma</small>
+                            <div id="portfolioGamma" class="fw-bold">--</div>
+                        </div>
+                        <div class="col-3">
+                            <small class="text-muted">Theta</small>
+                            <div id="portfolioTheta" class="fw-bold">--</div>
+                        </div>
+                        <div class="col-3">
+                            <small class="text-muted">Vega</small>
+                            <div id="portfolioVega" class="fw-bold">--</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Managed Positions -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card bg-dark border-secondary">
+                <div class="card-header bg-success d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0">
+                        <i class="bi bi-shield-check me-2"></i>Managed Positions ({{ managed_count }})
+                    </h5>
+                    <small class="text-light">Created by Senex Trader</small>
+                </div>
+                <div class="card-body">
+                    {% if managed_positions %}
+                        <div class="table-responsive">
+                            <table class="table table-dark table-striped">
+                                <thead>
+                                    <tr>
+                                        <th>Symbol</th>
+                                        <th>Strategy</th>
+                                        <th>DTE</th>
+                                        <th>Spreads</th>
+                                        <th>Avg Price</th>
+                                        <th>Delta</th>
+                                        <th>Theta</th>
+                                        <th>Realized P&L</th>
+                                        <th>Unrealized P&L</th>
+                                        <th>Status</th>
+                                        <th>Opened</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for position in managed_positions %}
+                                    <tr data-position-id="{{ position.id }}">
+                                        <td>
+                                            <strong>{{ position.symbol }}</strong>
+                                        </td>
+                                        <td>
+                                            <span class="badge bg-primary">{{ position.get_strategy_type_display }}</span>
+                                        </td>
+                                        <td>
+                                            {% if position.days_to_expiration is not None %}
+                                                <span class="{% if position.days_to_expiration <= 7 %}text-warning{% endif %}">
+                                                    {{ position.days_to_expiration }}
+                                                </span>
+                                            {% else %}
+                                                <span class="text-muted">-</span>
+                                            {% endif %}
+                                        </td>
+                                        <td>{{ position.quantity }}</td>
+                                        <td>
+                                            {% if position.avg_price %}
+                                                ${{ position.avg_price|floatformat:2|intcomma }}
+                                            {% else %}
+                                                -
+                                            {% endif %}
+                                        </td>
+                                        <td class="position-delta">--</td>
+                                        <td class="position-theta">--</td>
+                                        <td>
+                                            {% if position.total_realized_pnl is not None and position.total_realized_pnl != 0 %}
+                                                {% if position.total_realized_pnl > 0 %}
+                                                    <span class="text-success">+${{ position.total_realized_pnl|floatformat:2|intcomma }}</span>
+                                                {% else %}
+                                                    <span class="text-danger">${{ position.total_realized_pnl|floatformat:2|intcomma }}</span>
+                                                {% endif %}
+                                            {% else %}
+                                                <span class="text-muted">-</span>
+                                            {% endif %}
+                                        </td>
+                                        <td class="unrealized-pnl">
+                                            {% if position.unrealized_pnl is not None %}
+                                                {% if position.unrealized_pnl > 0 %}
+                                                    <span class="text-success">+${{ position.unrealized_pnl|floatformat:2|intcomma }}</span>
+                                                {% elif position.unrealized_pnl < 0 %}
+                                                    <span class="text-danger">${{ position.unrealized_pnl|floatformat:2|intcomma }}</span>
+                                                {% else %}
+                                                    <span class="text-muted">$0.00</span>
+                                                {% endif %}
+                                            {% else %}
+                                                -
+                                            {% endif %}
+                                        </td>
+                                        <td>
+                                            {% if position.active_trade %}
+                                                <span class="badge bg-warning text-dark" id="status-badge-{{ position.active_trade.id }}">
+                                                    {{ position.active_trade.get_status_display }}
+                                                </span>
+                                                <button
+                                                    class="btn btn-sm btn-danger ms-2"
+                                                    onclick="cancelTrade({{ position.active_trade.id }})"
+                                                    id="cancel-btn-{{ position.active_trade.id }}">
+                                                    <i class="bi bi-x-circle"></i> Cancel
+                                                </button>
+                                            {% else %}
+                                                <span class="badge bg-success">{{ position.get_lifecycle_state_display }}</span>
+                                            {% endif %}
+                                        </td>
+                                        <td>
+                                            {% if position.opened_at %}
+                                                {{ position.opened_at|date:"M d, Y" }}
+                                            {% else %}
+                                                {{ position.created_at|date:"M d, Y" }}
+                                            {% endif %}
+                                        </td>
+                                        <td>
+                                            <button class="btn btn-sm btn-outline-info view-details"
+                                                    data-position-id="{{ position.id }}">
+                                                <i class="bi bi-eye"></i> Details
+                                            </button>
+                                        </td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                                <tfoot>
+                                    <tr class="border-top border-info fw-bold">
+                                        <td colspan="7" class="text-end pt-3">Total:</td>
+                                        <td id="total-realized-pnl" class="pt-3">
+                                            {% if total_realized_pnl > 0 %}
+                                                <span class="text-success">+${{ total_realized_pnl|floatformat:2|intcomma }}</span>
+                                            {% elif total_realized_pnl < 0 %}
+                                                <span class="text-danger">${{ total_realized_pnl|floatformat:2|intcomma }}</span>
+                                            {% else %}
+                                                <span class="text-muted">$0.00</span>
+                                            {% endif %}
+                                        </td>
+                                        <td id="total-unrealized-pnl" class="pt-3">
+                                            {% if total_unrealized_pnl > 0 %}
+                                                <span class="text-success">+${{ total_unrealized_pnl|floatformat:2|intcomma }}</span>
+                                            {% elif total_unrealized_pnl < 0 %}
+                                                <span class="text-danger">${{ total_unrealized_pnl|floatformat:2|intcomma }}</span>
+                                            {% else %}
+                                                <span class="text-muted">$0.00</span>
+                                            {% endif %}
+                                        </td>
+                                        <td colspan="3" class="pt-3"></td>
+                                    </tr>
+                                </tfoot>
+                            </table>
+                        </div>
+                    {% else %}
+                        <p class="text-muted mb-0">
+                            <i class="bi bi-info-circle me-2"></i>
+                            No managed positions. Create trading suggestions to generate managed positions.
+                        </p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Recently Closed Positions (Last 7 Days) -->
+    {% if recently_closed %}
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card bg-dark border-secondary">
+                <div class="card-header bg-secondary d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0">
+                        <i class="bi bi-check-circle me-2"></i>Recently Closed (Last 7 Days)
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-dark table-striped table-hover">
+                            <thead>
+                                <tr>
+                                    <th>Symbol</th>
+                                    <th>Strategy</th>
+                                    <th>Opened</th>
+                                    <th>Closed</th>
+                                    <th class="text-end">Realized P&L</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for position in recently_closed %}
+                                <tr>
+                                    <td><strong>{{ position.symbol }}</strong></td>
+                                    <td>
+                                        <span class="badge bg-info">
+                                            {{ position.get_strategy_type_display|default:"Unknown" }}
+                                        </span>
+                                    </td>
+                                    <td>{{ position.opened_at|date:"M d, Y" }}</td>
+                                    <td>{{ position.closed_at|date:"M d, Y" }}</td>
+                                    <td class="text-end">
+                                        <strong class="{% if position.total_realized_pnl > 0 %}text-success{% elif position.total_realized_pnl < 0 %}text-danger{% endif %}">
+                                            ${{ position.total_realized_pnl|floatformat:2|intcomma }}
+                                        </strong>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Unmanaged Positions -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card bg-dark border-secondary">
+                <div class="card-header bg-warning d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0 text-dark">
+                        <i class="bi bi-exclamation-triangle me-2"></i>Unmanaged Positions ({{ unmanaged_count }})
+                    </h5>
+                    <small class="text-dark">External positions not created by Senex Trader</small>
+                </div>
+                <div class="card-body">
+                    {% if unmanaged_positions %}
+                        <div class="table-responsive">
+                            <table class="table table-dark table-striped">
+                                <thead>
+                                    <tr>
+                                        <th>Symbol</th>
+                                        <th>Quantity</th>
+                                        <th>Avg Price</th>
+                                        <th>Unrealized P&L</th>
+                                        <th>Status</th>
+                                        <th>Imported</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for position in unmanaged_positions %}
+                                    <tr data-position-id="{{ position.id }}">
+                                        <td>
+                                            <strong>{{ position.symbol }}</strong>
+                                            <small class="text-warning d-block">External</small>
+                                        </td>
+                                        <td>{{ position.quantity }}</td>
+                                        <td>
+                                            {% if position.avg_price %}
+                                                ${{ position.avg_price|floatformat:2|intcomma }}
+                                            {% else %}
+                                                -
+                                            {% endif %}
+                                        </td>
+                                        <td class="unrealized-pnl">
+                                            {% if position.unrealized_pnl is not None %}
+                                                {% if position.unrealized_pnl > 0 %}
+                                                    <span class="text-success">+${{ position.unrealized_pnl|floatformat:2|intcomma }}</span>
+                                                {% elif position.unrealized_pnl < 0 %}
+                                                    <span class="text-danger">${{ position.unrealized_pnl|floatformat:2|intcomma }}</span>
+                                                {% else %}
+                                                    <span class="text-muted">$0.00</span>
+                                                {% endif %}
+                                            {% else %}
+                                                -
+                                            {% endif %}
+                                        </td>
+                                        <td>
+                                            {% if position.active_trade %}
+                                                <span class="badge bg-warning text-dark">
+                                                    {{ position.active_trade.get_status_display }}
+                                                </span>
+                                            {% else %}
+                                                <span class="badge bg-info">{{ position.get_lifecycle_state_display }}</span>
+                                            {% endif %}
+                                        </td>
+                                        <td>{{ position.created_at|date:"M d, Y" }}</td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    {% else %}
+                        <p class="text-muted mb-0">
+                            <i class="bi bi-info-circle me-2"></i>
+                            No unmanaged positions found.
+                        </p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Sync Button -->
+    <div class="row">
+        <div class="col-12 text-center">
+            <button id="syncPositionsBtn" class="btn btn-outline-primary">
+                <i class="bi bi-cloud-download me-2"></i>Sync Positions from TastyTrade
+            </button>
+            <p class="text-muted mt-2 mb-0">
+                <small>Refresh positions from your broker account</small>
+            </p>
+        </div>
+    </div>
+</div>
+
+<!-- Position Details Modal -->
+<div class="modal fade" id="positionDetailsModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content bg-dark border-secondary">
+            <div class="modal-header bg-secondary">
+                <h5 class="modal-title">
+                    <i class="bi bi-info-circle me-2"></i>
+                    Position Details
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="positionDetailsBody">
+                <!-- Populated by JavaScript -->
+                <div class="text-center">
+                    <div class="spinner-border" role="status">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+/* P&L update flash animation */
+@keyframes pnl-flash {
+    0% { background-color: rgba(255, 193, 7, 0.3); }
+    100% { background-color: transparent; }
+}
+
+.pnl-updated {
+    animation: pnl-flash 0.5s ease-out;
+}
+</style>
+{% endblock content %}
+
+{% block extra_js %}
+<script src="{% static 'js/utils.js' %}"></script>
+<script src="{% static 'js/greeks.js' %}"></script>
+<script src="{% static 'js/position_metrics.js' %}"></script>
+<script>
+// Initialize Greeks display
+window.greeksUpdater = new GreeksDisplay();
+window.greeksUpdater.init();
+
+document.getElementById('syncPositionsBtn').addEventListener('click', function() {
+    const button = this;
+    button.disabled = true;
+    button.innerHTML = '<i class="bi bi-hourglass-split me-2"></i>Syncing...';
+
+    fetch('/trading/api/sync-positions/', {
+        method: 'POST',
+        headers: {
+            'X-CSRFToken': getCsrfToken(),
+            'Content-Type': 'application/json'
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            // Reload the page to show updated positions
+            location.reload();
+        } else {
+            window.showResultModal('error', 'Sync Failed', data.error || 'Unknown error');
+        }
+    })
+    .catch(error => {
+        console.error('Sync error:', error);
+        window.showResultModal('error', 'Sync Failed', 'Network error occurred. Please try again.');
+    })
+    .finally(() => {
+        button.disabled = false;
+        button.innerHTML = '<i class="bi bi-cloud-download me-2"></i>Sync Positions from TastyTrade';
+    });
+});
+
+// Cancel trade functionality
+async function cancelTrade(tradeId) {
+    const btn = document.getElementById(`cancel-btn-${tradeId}`);
+    const statusBadge = document.getElementById(`status-badge-${tradeId}`);
+    const originalHtml = btn.innerHTML;
+
+    // Confirm with user using modal
+    window.showConfirmModal(
+        'Cancel Order',
+        'Are you sure you want to cancel this order?<br><br><strong>Note:</strong> The order may have already filled. If so, your position will be opened.',
+        async () => {
+            // Show loading state
+            btn.disabled = true;
+            btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Cancelling...';
+            statusBadge.className = 'badge bg-warning text-dark';
+            statusBadge.textContent = 'Cancelling...';
+
+            try {
+                const response = await fetch(`/trading/api/trades/${tradeId}/cancel`, {
+                    method: 'DELETE',
+                    headers: {
+                        'X-CSRFToken': getCsrfToken()
+                    }
+                });
+
+                const result = await response.json();
+
+                if (response.ok) {
+                    // Success - order cancelled
+                    statusBadge.className = 'badge bg-secondary';
+                    statusBadge.textContent = 'Cancelled';
+                    btn.remove();
+
+                    showNotification('Success', result.message, 'success');
+
+                    // Reload after short delay to show updated positions
+                    setTimeout(() => location.reload(), 1500);
+
+                } else if (response.status === 409) {
+                    // Race condition - order filled during cancel
+                    statusBadge.className = 'badge bg-success';
+                    statusBadge.textContent = 'Filled';
+                    btn.remove();
+
+                    showNotification(
+                        'Order Filled',
+                        result.message + ' Your position has been opened.',
+                        'warning'
+                    );
+
+                    // Reload after slightly longer delay for race condition
+                    setTimeout(() => location.reload(), 2500);
+
+                } else {
+                    // Error - cannot cancel
+                    statusBadge.className = 'badge bg-warning text-dark';
+                    statusBadge.textContent = result.final_status || 'Error';
+                    btn.disabled = false;
+                    btn.innerHTML = originalHtml;
+
+                    showNotification('Cannot Cancel', result.message, 'danger');
+                }
+
+            } catch (error) {
+                console.error('Cancel error:', error);
+                btn.disabled = false;
+                btn.innerHTML = originalHtml;
+                statusBadge.className = 'badge bg-warning text-dark';
+
+                showNotification('Error', 'Network error - please refresh page and try again', 'danger');
+            }
+        },
+        'Cancel Order',
+        'btn-danger'
+    );
+}
+
+function showNotification(title, message, type) {
+    // Create Bootstrap alert
+    const alertHtml = `
+        <div class="alert alert-${type} alert-dismissible fade show position-fixed top-0 start-50 translate-middle-x mt-3"
+             role="alert" style="z-index: 9999; min-width: 400px;">
+            <strong>${title}</strong><br>
+            ${message}
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+    `;
+
+    document.body.insertAdjacentHTML('beforeend', alertHtml);
+
+    // Auto-dismiss after 5 seconds
+    setTimeout(() => {
+        const alerts = document.querySelectorAll('.alert');
+        if (alerts.length > 0) {
+            alerts[alerts.length - 1].remove();
+        }
+    }, 5000);
+}
+
+// Position details modal handler
+document.addEventListener('DOMContentLoaded', function() {
+    document.querySelectorAll('.view-details').forEach(button => {
+        button.addEventListener('click', async function() {
+            const positionId = this.dataset.positionId;
+            await loadPositionDetails(positionId);
+        });
+    });
+
+    // Subscribe position legs to streaming for Greeks
+    subscribePositionLegsForGreeks();
+});
+
+async function loadPositionDetails(positionId) {
+    const modal = new bootstrap.Modal(document.getElementById('positionDetailsModal'));
+    const body = document.getElementById('positionDetailsBody');
+
+    // Show loading state
+    body.innerHTML = `
+        <div class="text-center">
+            <div class="spinner-border" role="status">
+                <span class="visually-hidden">Loading...</span>
+            </div>
+        </div>
+    `;
+    modal.show();
+
+    try {
+        const response = await fetch(`/trading/api/positions/${positionId}/details/`);
+        const data = await response.json();
+
+        if (data.success) {
+            body.innerHTML = buildPositionDetailsHTML(data.position);
+        } else {
+            body.innerHTML = `
+                <div class="alert alert-danger">
+                    <i class="bi bi-exclamation-triangle me-2"></i>
+                    Failed to load position details: ${data.error || 'Unknown error'}
+                </div>
+            `;
+        }
+    } catch (error) {
+        console.error('Error loading position details:', error);
+        body.innerHTML = `
+            <div class="alert alert-danger">
+                <i class="bi bi-exclamation-triangle me-2"></i>
+                Network error loading position details
+            </div>
+        `;
+    }
+}
+
+function formatLifecycleState(state) {
+    if (!state) {
+        return 'Unknown';
+    }
+    const labels = {
+        pending_entry: 'Pending Entry',
+        open_full: 'Open - Full Size',
+        open_partial: 'Open - Partial',
+        closing: 'Closing - Exit Submitted',
+        closed: 'Closed',
+        rolled: 'Rolled',
+        adjusted: 'Adjusted',
+        expired: 'Expired',
+    };
+    return labels[state] || state.replace(/_/g, ' ');
+}
+
+function buildPositionDetailsHTML(position) {
+    let html = `
+        <div class="row mb-3">
+            <div class="col-md-6">
+                <h6 class="text-primary mb-2">Position Info</h6>
+                <table class="table table-dark table-sm table-borderless">
+                    <tr>
+                        <th>Symbol:</th>
+                        <td>${position.symbol}</td>
+                    </tr>
+                    <tr>
+                        <th>Strategy:</th>
+                        <td><span class="badge bg-primary">${position.strategy_type}</span></td>
+                    </tr>
+                    <tr>
+                        <th>Position Size:</th>
+                        <td>${position.quantity} spread${position.quantity !== 1 ? 's' : ''} (${position.quantity * 2} contracts)</td>
+                    </tr>
+                    <tr>
+                        <th>Avg Price:</th>
+                        <td>${position.avg_price ? '$' + position.avg_price.toFixed(2) : 'N/A'}</td>
+                    </tr>
+                    <tr>
+                        <th>Unrealized P&L:</th>
+                        <td class="${position.unrealized_pnl > 0 ? 'text-success' : 'text-danger'}">
+                            ${position.unrealized_pnl !== null ?
+                              (position.unrealized_pnl > 0 ? '+' : '') + '$' + position.unrealized_pnl.toFixed(2) :
+                              'N/A'}
+                        </td>
+                    </tr>
+                    <tr>
+                        <th>Status:</th>
+                        <td><span class="badge bg-success">${formatLifecycleState(position.lifecycle_state)}</span></td>
+                    </tr>
+                    <tr>
+                        <th>Managed:</th>
+                        <td>${position.is_app_managed ?
+                              '<span class="badge bg-success">Yes</span>' :
+                              '<span class="badge bg-warning text-dark">External</span>'}</td>
+                    </tr>
+                </table>
+            </div>
+            <div class="col-md-6">
+                <h6 class="text-primary mb-2">Greeks</h6>
+                <table class="table table-dark table-sm table-borderless">
+    `;
+
+    if (position.greeks) {
+        html += `
+                    <tr>
+                        <th>Delta:</th>
+                        <td>${position.greeks.delta !== null ? position.greeks.delta.toFixed(3) : 'N/A'}</td>
+                    </tr>
+                    <tr>
+                        <th>Gamma:</th>
+                        <td>${position.greeks.gamma !== null ? position.greeks.gamma.toFixed(4) : 'N/A'}</td>
+                    </tr>
+                    <tr>
+                        <th>Theta:</th>
+                        <td>${position.greeks.theta !== null ? position.greeks.theta.toFixed(3) : 'N/A'}</td>
+                    </tr>
+                    <tr>
+                        <th>Vega:</th>
+                        <td>${position.greeks.vega !== null ? position.greeks.vega.toFixed(3) : 'N/A'}</td>
+                    </tr>
+                    <tr>
+                        <th>Rho:</th>
+                        <td>${position.greeks.rho !== null && position.greeks.rho !== undefined ?
+                            (typeof position.greeks.rho === 'object' ?
+                                (position.greeks.rho.parsedValue || 0).toFixed(3) :
+                                position.greeks.rho.toFixed(3)) :
+                            'N/A'}</td>
+                    </tr>
+        `;
+    } else {
+        html += `
+                    <tr>
+                        <td colspan="2" class="text-muted">Greeks data unavailable</td>
+                    </tr>
+        `;
+    }
+
+    html += `
+                </table>
+            </div>
+        </div>
+    `;
+
+    // Legs table (if available)
+    const legs = position.metadata?.legs || [];
+    if (legs.length > 0) {
+        html += `
+        <h6 class="text-primary mb-2 mt-3">Position Legs</h6>
+        <div class="table-responsive">
+            <table class="table table-dark table-sm">
+                <thead>
+                    <tr>
+                        <th>Symbol</th>
+                        <th>Action</th>
+                        <th>Quantity</th>
+                        <th>Avg Price</th>
+                    </tr>
+                </thead>
+                <tbody>
+        `;
+
+        legs.forEach(leg => {
+            html += `
+                    <tr>
+                        <td><small class="font-monospace">${leg.symbol}</small></td>
+                        <td><span class="badge ${leg.action === 'BUY' ? 'bg-success' : 'bg-danger'}">${leg.action || leg.quantity_direction || 'N/A'}</span></td>
+                        <td>${Math.abs(leg.quantity)}</td>
+                        <td>${leg.average_open_price ? '$' + leg.average_open_price.toFixed(2) : 'N/A'}</td>
+                    </tr>
+            `;
+        });
+
+        html += `
+                </tbody>
+            </table>
+        </div>
+        `;
+    }
+
+    // Profit Targets table (if available)
+    if (position.profit_targets?.created && position.profit_targets.details) {
+        html += `
+        <h6 class="text-primary mb-2 mt-3">Profit Target Orders</h6>
+        <div class="table-responsive">
+            <table class="table table-dark table-sm">
+                <thead>
+                    <tr>
+                        <th>Spread Type</th>
+                        <th>Target %</th>
+                        <th>Original Credit</th>
+                        <th>Target Price</th>
+                        <th>Status</th>
+                        <th>Fill Price</th>
+                        <th>P&L</th>
+                        <th>Order ID</th>
+                    </tr>
+                </thead>
+                <tbody>
+        `;
+
+        for (const [spreadType, detail] of Object.entries(position.profit_targets.details)) {
+            const status = detail.status || 'active';
+            const statusBadge = status === 'filled' ? 'bg-success' :
+                               status === 'cancelled' ? 'bg-secondary' :
+                               'bg-primary';
+            const rowClass = status === 'filled' ? 'table-success' : '';
+
+            html += `
+                    <tr class="${rowClass}">
+                        <td><span class="badge bg-info">${spreadType}</span></td>
+                        <td>${detail.percent}%</td>
+                        <td>${detail.original_credit ? '$' + detail.original_credit.toFixed(2) : 'N/A'}</td>
+                        <td>$${detail.target_price.toFixed(2)}</td>
+                        <td><span class="badge ${statusBadge}">${status.toUpperCase()}</span></td>
+                        <td>${detail.fill_price ? '$' + detail.fill_price.toFixed(2) : '-'}</td>
+                        <td>${detail.realized_pnl ? (detail.realized_pnl > 0 ? '<span class="text-success">+$' + detail.realized_pnl.toFixed(2) + '</span>' : '<span class="text-danger">$' + detail.realized_pnl.toFixed(2) + '</span>') : '-'}</td>
+                        <td><small class="font-monospace">${detail.order_id || 'N/A'}</small></td>
+                    </tr>
+            `;
+        }
+
+        html += `
+                </tbody>
+            </table>
+        </div>
+        `;
+    }
+
+    return html;
+}
+
+// Subscribe position legs for Greeks streaming and initialize P&L updater
+function subscribePositionLegsForGreeks() {
+    // Wait for global WebSocket to be ready
+    if (!window.streamerWebSocket || window.streamerWebSocket.readyState !== WebSocket.OPEN) {
+        setTimeout(subscribePositionLegsForGreeks, 500);
+        return;
+    }
+
+    // Extract all position IDs from the page
+    const positionRows = document.querySelectorAll('tr[data-position-id]');
+
+    if (positionRows.length === 0) {
+        return;
+    }
+
+    const positionIds = Array.from(positionRows).map(row => row.dataset.positionId);
+
+    // Initialize unified metrics updater for real-time position updates (Greeks + P&L + Balance)
+    const metricsUpdater = new PositionMetricsUpdater(window.streamerWebSocket);
+
+    // Fetch leg symbols for all positions in a single bulk request
+    fetch('/trading/api/positions/leg-symbols/')
+        .then(res => res.json())
+        .then(data => {
+            if (!data.success || !data.positions) {
+                console.error('Failed to fetch position leg symbols:', data);
+                return;
+            }
+
+            // Extract all leg symbols from all positions
+            const allLegs = Object.values(data.positions).flat();
+            const uniqueLegs = [...new Set(allLegs)];
+
+            if (uniqueLegs.length === 0) {
+                return;
+            }
+
+            // Use GLOBAL WebSocket to subscribe legs
+            if (window.streamerWebSocket.readyState === WebSocket.OPEN) {
+                window.streamerWebSocket.send(JSON.stringify({
+                    type: 'subscribe_legs',
+                    symbols: uniqueLegs
+                }));
+            }
+        })
+        .catch(err => {
+            console.error('Failed to fetch position leg symbols:', err);
+        });
+}
+
+// Handle position sync complete (register global handler)
+window.addMessageHandler(function(data) {
+    if (data.type === 'position_sync_complete') {
+        console.log('Position sync complete:', data);
+        handlePositionSyncComplete(data);
+    }
+});
+
+function handlePositionSyncComplete(data) {
+    // Show Bootstrap toast notification
+    const toastHtml = `
+        <div class="toast position-fixed top-0 end-0 m-3" role="alert" aria-live="assertive" aria-atomic="true" data-bs-autohide="true" data-bs-delay="3000" style="z-index: 9999;">
+            <div class="toast-header bg-success text-white">
+                <strong class="me-auto">Position Sync Complete</strong>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="toast" aria-label="Close"></button>
+            </div>
+            <div class="toast-body">
+                <p class="mb-1">Positions synchronized successfully:</p>
+                <ul class="mb-0">
+                    <li>${data.positions_updated || 0} position(s) updated</li>
+                    <li>${data.positions_imported || 0} new position(s) imported</li>
+                </ul>
+            </div>
+        </div>
+    `;
+
+    // Append toast to body and show it
+    const toastContainer = document.createElement('div');
+    toastContainer.innerHTML = toastHtml;
+    document.body.appendChild(toastContainer);
+
+    const toastElement = toastContainer.querySelector('.toast');
+    const toast = new bootstrap.Toast(toastElement);
+    toast.show();
+
+    // Remove from DOM after it's hidden
+    toastElement.addEventListener('hidden.bs.toast', function() {
+        toastContainer.remove();
+    });
+
+    // Reload positions table to show updates if there were changes
+    if ((data.positions_updated > 0 || data.positions_imported > 0)) {
+        setTimeout(() => {
+            window.location.reload();
+        }, 3500);  // Reload after toast auto-dismisses
+    }
+}
+</script>
+{% endblock extra_js %}

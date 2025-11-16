@@ -1,0 +1,18 @@
+[Unit]
+Description=Senex Trader Watchdog Timer
+Documentation=https://github.com/your-username/senex-trader
+Requires=senex-watchdog.service
+
+[Timer]
+# Run every minute
+OnCalendar=*:0/1
+# Run immediately on boot
+OnBootSec=1min
+# Prevent overlap - don't start if previous run still active
+Unit=senex-watchdog.service
+
+# Logging
+Persistent=true
+
+[Install]
+WantedBy=timers.target

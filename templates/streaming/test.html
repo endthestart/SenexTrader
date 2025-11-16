@@ -1,0 +1,132 @@
+{% extends "base/base.html" %}
+
+{% block title %}WebSocket Test{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <div class="row">
+        <div class="col-md-8">
+            <div class="card bg-dark border-secondary">
+                <div class="card-header">
+                    <h5>WebSocket Connection Test</h5>
+                </div>
+                <div class="card-body">
+                    <div class="mb-3">
+                        <button id="connectBtn" class="btn btn-success">Connect</button>
+                        <button id="disconnectBtn" class="btn btn-danger" disabled>Disconnect</button>
+                        <span id="connectionStatus" class="badge bg-secondary ms-2">Disconnected</span>
+                    </div>
+
+                    <div class="mb-3">
+                        <input type="text" id="messageInput" class="form-control" placeholder="Enter test message">
+                        <button id="sendBtn" class="btn btn-primary mt-2" disabled>Send Message</button>
+                        <button id="pingBtn" class="btn btn-info mt-2" disabled>Send Ping</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-4">
+            <div class="card bg-dark border-secondary">
+                <div class="card-header">
+                    <h6>Message Log</h6>
+                </div>
+                <div class="card-body">
+                    <div id="messageLog" style="height: 300px; overflow-y: auto; font-family: monospace; font-size: 0.8rem;"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+let socket = null;
+
+function updateConnectionStatus(status, className) {
+    const statusElement = document.getElementById('connectionStatus');
+    statusElement.textContent = status;
+    statusElement.className = `badge bg-${className} ms-2`;
+}
+
+function logMessage(message, type = 'info') {
+    const log = document.getElementById('messageLog');
+    const timestamp = new Date().toLocaleTimeString();
+    const colorClass = type === 'error' ? 'text-danger' : type === 'success' ? 'text-success' : 'text-info';
+    log.innerHTML += `<div class="${colorClass}">[${timestamp}] ${message}</div>`;
+    log.scrollTop = log.scrollHeight;
+}
+
+document.getElementById('connectBtn').addEventListener('click', function() {
+    // Use proper protocol detection (wss on HTTPS, ws on HTTP)
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const wsUrl = `${protocol}//${window.location.host}/ws/test/`;
+
+    socket = new WebSocket(wsUrl);
+
+    socket.onopen = function(e) {
+        updateConnectionStatus('Connected', 'success');
+        document.getElementById('connectBtn').disabled = true;
+        document.getElementById('disconnectBtn').disabled = false;
+        document.getElementById('sendBtn').disabled = false;
+        document.getElementById('pingBtn').disabled = false;
+        logMessage('WebSocket connection established', 'success');
+    };
+
+    socket.onmessage = function(e) {
+        const data = JSON.parse(e.data);
+        logMessage(`Received: ${JSON.stringify(data, null, 2)}`, 'info');
+    };
+
+    socket.onclose = function(e) {
+        updateConnectionStatus('Disconnected', 'secondary');
+        document.getElementById('connectBtn').disabled = false;
+        document.getElementById('disconnectBtn').disabled = true;
+        document.getElementById('sendBtn').disabled = true;
+        document.getElementById('pingBtn').disabled = true;
+        logMessage(`WebSocket closed: ${e.code}`, 'error');
+    };
+
+    socket.onerror = function(e) {
+        logMessage('WebSocket error occurred', 'error');
+    };
+});
+
+document.getElementById('disconnectBtn').addEventListener('click', function() {
+    if (socket) {
+        socket.close();
+    }
+});
+
+document.getElementById('sendBtn').addEventListener('click', function() {
+    const input = document.getElementById('messageInput');
+    if (socket && input.value.trim()) {
+        const message = {
+            action: 'echo',
+            message: input.value.trim()
+        };
+        socket.send(JSON.stringify(message));
+        logMessage(`Sent: ${JSON.stringify(message)}`, 'success');
+        input.value = '';
+    }
+});
+
+document.getElementById('pingBtn').addEventListener('click', function() {
+    if (socket) {
+        const message = {
+            action: 'ping',
+            message: 'ping test',
+            timestamp: new Date().toISOString()
+        };
+        socket.send(JSON.stringify(message));
+        logMessage(`Sent ping: ${JSON.stringify(message)}`, 'success');
+    }
+});
+
+// Allow Enter key to send message
+document.getElementById('messageInput').addEventListener('keypress', function(e) {
+    if (e.key === 'Enter') {
+        document.getElementById('sendBtn').click();
+    }
+});
+</script>
+{% endblock %}
