@@ -820,7 +820,7 @@ ls -lth /opt/senex-trader/backups/ | head
 
 #### Issue: Backup service failing (CURRENT ISSUE)
 
-**Status**: ⚠️ Service is currently failing as of Oct 30, 2025
+**Status**: Service is currently failing as of Oct 30, 2025
 
 **Debug:**
 ```bash

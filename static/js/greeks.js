@@ -12,14 +12,14 @@
 class GreeksDisplay {
     constructor() {
         // No polling - WebSocket updates only (30s from StreamManager)
-        console.log('[Greeks] Using WebSocket-only updates (no polling)');
+        window.logStreamInfo('[Greeks] Using WebSocket-only updates (no polling)');
     }
 
     /**
      * Initialize Greeks display
      */
     init() {
-        console.log('Greeks display initialized');
+        window.logStreamInfo('Greeks display initialized');
 
         // Load initial portfolio Greeks (if portfolio card exists)
         // After this, WebSocket updates take over (via position_metrics_update)
@@ -209,7 +209,7 @@ class GreeksDisplay {
      */
     destroy() {
         // No polling intervals to clean up
-        console.log('[Greeks] Cleanup complete');
+        window.logStreamInfo('[Greeks] Cleanup complete');
     }
 }
 

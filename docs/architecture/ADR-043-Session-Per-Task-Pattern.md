@@ -74,31 +74,31 @@ ERROR: Failed to refresh session for user 1: Event loop is closed
 
 | Approach | Pros | Cons | Decision |
 |----------|------|------|----------|
-| **Session-Per-Task** | Simple, eliminates bug | Slightly slower | ✅ **Selected** |
-| Worker Signal Hooks | Keeps caching | Complex, still fragile | ❌ Rejected |
-| Event-Loop-Aware Caching | Current approach | **Already failing** | ❌ Not working |
-| Process-Aware Caching | Detects PID changes | Race conditions | ❌ Too complex |
-| Separate Async Workers | Proper async env | Major infrastructure change | ❌ Over-engineering |
+| **Session-Per-Task** | Simple, eliminates bug | Slightly slower | **Selected** |
+| Worker Signal Hooks | Keeps caching | Complex, still fragile | Rejected |
+| Event-Loop-Aware Caching | Current approach | **Already failing** | Not working |
+| Process-Aware Caching | Detects PID changes | Race conditions | Too complex |
+| Separate Async Workers | Proper async env | Major infrastructure change | Over-engineering |
 
 ## Consequences
 
 ### Positive
 
-- ✅ **Zero "Event loop is closed" errors** (validated in development)
-- ✅ **Predictable behavior**: Fresh session per task
-- ✅ **Simpler codebase**: -400 lines of complex caching logic
-- ✅ **Better logging**: Enhanced debugging information
-- ✅ **Easier testing**: No state to manage
+- **Zero "Event loop is closed" errors** (validated in development)
+- **Predictable behavior**: Fresh session per task
+- **Simpler codebase**: -400 lines of complex caching logic
+- **Better logging**: Enhanced debugging information
+- **Easier testing**: No state to manage
 
 ### Negative
 
-- ⚠️ **Slight performance overhead**: ~200-500ms per task (acceptable for 10-min intervals)
-- ⚠️ **More API calls**: Each task creates new session (mitigated by OAuth token caching in SDK)
+- **Slight performance overhead**: ~200-500ms per task (acceptable for 10-min intervals)
+- **More API calls**: Each task creates new session (mitigated by OAuth token caching in SDK)
 
 ### Neutral
 
-- 🔄 **No session monitoring**: Removed session info/monitoring methods (not needed)
-- 🔄 **Breaking changes**: Removed public methods (acceptable per CLAUDE.md: "No backward compatibility")
+- **No session monitoring**: Removed session info/monitoring methods (not needed)
+- **Breaking changes**: Removed public methods (acceptable per CLAUDE.md: "No backward compatibility")
 
 ## Implementation
 
@@ -146,9 +146,9 @@ python manage.py check_celery_health --verbose
 
 ### Alerts
 
-- ❌ "Event loop is closed" errors > 0
-- ⚠️ Session creation duration > 2 seconds
-- ⚠️ Session error rate > 5%
+- "Event loop is closed" errors > 0
+- Session creation duration > 2 seconds
+- Session error rate > 5%
 
 ### Logs to Check
 

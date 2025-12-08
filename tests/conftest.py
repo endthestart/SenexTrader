@@ -261,6 +261,14 @@ def market_scenario(request):
     return scenario_name, scenario_data
 
 
+@pytest.fixture(autouse=True)
+def allow_async_unsafe():
+    """Allow Django ORM access from async context during tests."""
+    os.environ["DJANGO_ALLOW_ASYNC_UNSAFE"] = "true"
+    yield
+    os.environ.pop("DJANGO_ALLOW_ASYNC_UNSAFE", None)
+
+
 # Database fixtures
 @pytest.fixture
 def transactional_db():

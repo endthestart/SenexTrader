@@ -122,7 +122,7 @@ class TestLongIronCondorScoring:
         report = create_neutral_market_report()
         report.iv_rank = 45.0
 
-        score, reasons = await strategy._score_market_conditions_impl(report)
+        _score, reasons = await strategy._score_market_conditions_impl(report)
 
         assert any("elevated" in r.lower() and "short iron condor" in r.lower() for r in reasons)
 
@@ -132,7 +132,7 @@ class TestLongIronCondorScoring:
         report.iv_rank = 25.0
         report.adx = 15.0
 
-        score, reasons = await strategy._score_market_conditions_impl(report)
+        _score, reasons = await strategy._score_market_conditions_impl(report)
 
         assert any("range-bound" in r.lower() and "ideal" in r.lower() for r in reasons)
 
@@ -142,7 +142,7 @@ class TestLongIronCondorScoring:
         report.iv_rank = 25.0
         report.adx = 22.0
 
-        score, reasons = await strategy._score_market_conditions_impl(report)
+        _score, reasons = await strategy._score_market_conditions_impl(report)
 
         assert any("weak trend" in r.lower() and "favorable" in r.lower() for r in reasons)
 
@@ -152,7 +152,7 @@ class TestLongIronCondorScoring:
         report.iv_rank = 25.0
         report.adx = 35.0
 
-        score, reasons = await strategy._score_market_conditions_impl(report)
+        _score, reasons = await strategy._score_market_conditions_impl(report)
 
         assert any("avoid" in r.lower() for r in reasons)
         assert any("directional move" in r.lower() for r in reasons)
@@ -163,7 +163,7 @@ class TestLongIronCondorScoring:
         report.iv_rank = 25.0
         report.hv_iv_ratio = 0.75
 
-        score, reasons = await strategy._score_market_conditions_impl(report)
+        _score, reasons = await strategy._score_market_conditions_impl(report)
 
         assert any("contracting" in r.lower() and "excellent" in r.lower() for r in reasons)
 
@@ -173,7 +173,7 @@ class TestLongIronCondorScoring:
         report.iv_rank = 25.0
         report.hv_iv_ratio = 0.9
 
-        score, reasons = await strategy._score_market_conditions_impl(report)
+        _score, reasons = await strategy._score_market_conditions_impl(report)
 
         assert any("moderate" in r.lower() for r in reasons)
 
@@ -183,7 +183,7 @@ class TestLongIronCondorScoring:
         report.iv_rank = 25.0
         report.hv_iv_ratio = 1.35
 
-        score, reasons = await strategy._score_market_conditions_impl(report)
+        _score, reasons = await strategy._score_market_conditions_impl(report)
 
         assert any("high" in r.lower() and "risky" in r.lower() for r in reasons)
 
@@ -193,7 +193,7 @@ class TestLongIronCondorScoring:
         report.iv_rank = 25.0
         report.macd_signal = "neutral"
 
-        score, reasons = await strategy._score_market_conditions_impl(report)
+        _score, reasons = await strategy._score_market_conditions_impl(report)
 
         assert any("ideal for iron condor" in r.lower() for r in reasons)
 
@@ -203,7 +203,7 @@ class TestLongIronCondorScoring:
         report.iv_rank = 25.0
         report.macd_signal = "strong_bearish"
 
-        score, reasons = await strategy._score_market_conditions_impl(report)
+        _score, reasons = await strategy._score_market_conditions_impl(report)
 
         assert any("reduces probability" in r.lower() for r in reasons)
 
@@ -213,7 +213,7 @@ class TestLongIronCondorScoring:
         report.iv_rank = 25.0
         report.bollinger_position = "within_bands"
 
-        score, reasons = await strategy._score_market_conditions_impl(report)
+        _score, reasons = await strategy._score_market_conditions_impl(report)
 
         assert any("centered in range" in r.lower() for r in reasons)
 
@@ -223,7 +223,7 @@ class TestLongIronCondorScoring:
         report.iv_rank = 25.0
         report.bollinger_position = "below_lower"
 
-        score, reasons = await strategy._score_market_conditions_impl(report)
+        _score, reasons = await strategy._score_market_conditions_impl(report)
 
         assert any("potential for continued move" in r.lower() for r in reasons)
 
@@ -233,7 +233,7 @@ class TestLongIronCondorScoring:
         report.iv_rank = 25.0
         report.market_stress_level = 30.0
 
-        score, reasons = await strategy._score_market_conditions_impl(report)
+        _score, reasons = await strategy._score_market_conditions_impl(report)
 
         assert any("stable environment" in r.lower() for r in reasons)
 
@@ -243,7 +243,7 @@ class TestLongIronCondorScoring:
         report.iv_rank = 25.0
         report.market_stress_level = 70.0
 
-        score, reasons = await strategy._score_market_conditions_impl(report)
+        _score, reasons = await strategy._score_market_conditions_impl(report)
 
         assert any("increased risk" in r.lower() and "breakout" in r.lower() for r in reasons)
 
@@ -253,7 +253,7 @@ class TestLongIronCondorScoring:
         report.iv_rank = 25.0
         report.recent_move_pct = 1.5
 
-        score, reasons = await strategy._score_market_conditions_impl(report)
+        _score, reasons = await strategy._score_market_conditions_impl(report)
 
         assert any("consolidating" in r.lower() for r in reasons)
 
@@ -263,7 +263,7 @@ class TestLongIronCondorScoring:
         report.iv_rank = 25.0
         report.recent_move_pct = 6.5
 
-        score, reasons = await strategy._score_market_conditions_impl(report)
+        _score, reasons = await strategy._score_market_conditions_impl(report)
 
         assert any("may continue trending" in r.lower() for r in reasons)
 

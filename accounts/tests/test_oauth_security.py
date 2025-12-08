@@ -81,10 +81,6 @@ class OAuthSecurityTests(TestCase):
                 new_callable=AsyncMock,
             ),
             patch(
-                "accounts.views.TastyTradeSessionService.clear_user_session",
-                new_callable=AsyncMock,
-            ),
-            patch(
                 "accounts.views.TastyTradeSessionService.get_session_for_user",
                 new_callable=AsyncMock,
             ) as mock_session,
@@ -166,10 +162,6 @@ class OAuthSecurityTests(TestCase):
                 new_callable=AsyncMock,
             ),
             patch(
-                "accounts.views.TastyTradeSessionService.clear_user_session",
-                new_callable=AsyncMock,
-            ),
-            patch(
                 "accounts.views.TastyTradeSessionService.get_session_for_user",
                 new_callable=AsyncMock,
             ) as mock_session,
@@ -227,10 +219,6 @@ class OAuthSecurityTests(TestCase):
                 new_callable=AsyncMock,
             ),
             patch(
-                "accounts.views.TastyTradeSessionService.clear_user_session",
-                new_callable=AsyncMock,
-            ),
-            patch(
                 "accounts.views.TastyTradeSessionService.get_session_for_user",
                 new_callable=AsyncMock,
             ) as mock_session,
@@ -275,11 +263,11 @@ class OAuthSecurityTests(TestCase):
         self.client.get(self.initiate_url)
         state = self.client.session.get("oauth.state")
 
-        # Simulate time passage beyond 5 minutes via patching services.oauth.time.time
+        # Simulate time passage beyond 5 minutes via patching services.core.oauth.time.time
         import time
 
         future = int(time.time()) + 400
-        with patch("services.oauth.time.time", return_value=future):
+        with patch("services.core.oauth.time.time", return_value=future):
             response = self.client.get(self.callback_url, {"state": state, "code": "test_code"})
         assert response.status_code == 200  # Error page
         assert b"Invalid or expired OAuth state" in response.content
@@ -348,7 +336,7 @@ class OAuthSecurityTests(TestCase):
         from services.brokers.tastytrade.client import TastyTradeOAuthClient
 
         # Test with empty configuration
-        with patch("services.brokers.tastytrade.get_config") as mock_config:
+        with patch("services.brokers.tastytrade.client.get_config") as mock_config:
             mock_config.return_value.token_url = ""
             mock_config.return_value.client_id = ""
 

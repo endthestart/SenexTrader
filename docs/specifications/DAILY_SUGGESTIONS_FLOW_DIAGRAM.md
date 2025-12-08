@@ -25,7 +25,7 @@
 ┌─────────────────────────────────────────────────────────────────┐
 │ Strategy.a_prepare_suggestion_context()                         │
 │   1. Check MIN_SCORE_THRESHOLD (35 for credit spreads)          │
-│   2. ❌ Implicitly checks risk budget somewhere?                │
+│   2. Implicitly checks risk budget somewhere?                │
 │   3. Calculate strikes, build OCC bundle                        │
 └────────────────┬────────────────────────────────────────────────┘
                  │
@@ -55,13 +55,13 @@
 ┌────────────────────────────────────────────────────────────────┐
 │ Send Email                                                      │
 │                                                                 │
-│ ❌ PROBLEM: "NO TRADE RECOMMENDED TODAY"                       │
+│ PROBLEM: "NO TRADE RECOMMENDED TODAY"                       │
 │    - No explanation WHY                                         │
 │    - No market conditions shown                                 │
 │    - User learns nothing                                        │
 │    - Happens when: risk budget full OR low scores              │
 │                                                                 │
-│ ✅ IF TRADE: Shows ONE strategy                                │
+│ IF TRADE: Shows ONE strategy                                │
 │    - Limited detail                                             │
 │    - No comparison to alternatives                              │
 │    - No risk status shown                                       │
@@ -101,7 +101,7 @@
 │                                                                 │
 │ Strategy.a_prepare_suggestion_context(suggestion_mode=True)     │
 │   1. Check MIN_SCORE_THRESHOLD (35)                            │
-│   2. ✅ SKIP risk budget check (suggestion only!)              │
+│   2. SKIP risk budget check (suggestion only!)              │
 │   3. Calculate strikes, build OCC bundle                        │
 │   4. Fetch pricing via StreamManager                            │
 │   5. Create TradingSuggestion object                            │
@@ -161,7 +161,7 @@
 │    │ • Max Risk: $X.XX                  │                      │
 │    │ • Profit Target: XX%               │                      │
 │    │                                    │                      │
-│    │ 👉 Execute: [link]                 │                      │
+│    │ Execute: [link]                 │                      │
 │    └────────────────────────────────────┘                      │
 │                                                                 │
 │ 3. STRATEGY COMPARISON                                          │
@@ -184,7 +184,7 @@
 ┌─────────────────────────────────────────────────────────────────┐
 │ Send Email                                                      │
 │                                                                 │
-│ ✅ ALWAYS PROVIDES VALUE:                                       │
+│ ALWAYS PROVIDES VALUE:                                       │
 │                                                                 │
 │ • Shows market conditions                                       │
 │ • Explains strategy reasoning                                   │
@@ -205,7 +205,7 @@
 | Aspect | Current | Proposed |
 |--------|---------|----------|
 | **Suggestions per email** | 1 (or none) | Top 3 (ranked) |
-| **Risk validation** | ❌ Blocks suggestions | ✅ Ignored during generation |
+| **Risk validation** | Blocks suggestions | Ignored during generation |
 | **Market conditions** | Minimal | Comprehensive snapshot |
 | **Explanations** | Basic | Detailed reasoning for each |
 | **No-trade scenario** | "NO TRADE TODAY" | Full analysis of why + scores |
@@ -238,7 +238,7 @@ Risk Check → Annotate Each Suggestion
             ↓
     [If they click Execute]
             ↓
-    Risk Check → Block Execution if needed ✅
+    Risk Check → Block Execution if needed
 ```
 
 ## Example: User at 100% Risk Budget
@@ -275,7 +275,7 @@ OrderExecutionService.execute_suggestion_async()
         ↓
     [Various validation]
         ↓
-Risk check via RiskValidationService ✅ STILL HAPPENS
+Risk check via RiskValidationService STILL HAPPENS
         ↓
     If blocked → Show error, don't execute
     If allowed → Execute trade
@@ -289,7 +289,7 @@ AutomatedTradingService.a_process_account()
         ↓
 Generate suggestion (lines 148-174)
         ↓
-RiskValidationService.validate_trade_risk() ✅ STILL HAPPENS (line 99)
+RiskValidationService.validate_trade_risk() STILL HAPPENS (line 99)
         ↓
     If blocked → Skip, log reason
     If allowed → Execute via OrderExecutionService

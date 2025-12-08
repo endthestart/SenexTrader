@@ -612,7 +612,7 @@ class IronButterflyStrategy(BaseStrategy):
 
         if force_generation and score < 40:
             logger.warning(
-                f"⚠️ Force generating {self.strategy_name} despite low score ({score:.1f})"
+                f"Force generating {self.strategy_name} despite low score ({score:.1f})"
             )
 
         # Calculate strikes: ATM short strikes + wings
@@ -699,7 +699,7 @@ class IronButterflyStrategy(BaseStrategy):
             "force_generation": force_generation,
         }
 
-        logger.info(f"User {self.user.id}: ✅ Context prepared for {self.strategy_name}")
+        logger.info(f"User {self.user.id}: Context prepared for {self.strategy_name}")
         return context
 
     async def a_request_suggestion_generation(
@@ -728,7 +728,7 @@ class IronButterflyStrategy(BaseStrategy):
         # Dispatch to stream manager
         await self.a_dispatch_to_stream_manager(context)
         logger.info(
-            f"User {self.user.id}: 🚀 Dispatched {self.strategy_name} request to stream manager"
+            f"User {self.user.id}: Dispatched {self.strategy_name} request to stream manager"
         )
 
     async def a_calculate_suggestion_from_cached_data(self, context: dict):
@@ -856,7 +856,7 @@ class IronButterflyStrategy(BaseStrategy):
         # Build generation notes if risk warning
         notes = ""
         if risk_warning:
-            notes = f"⚠️ RISK BUDGET EXCEEDED: {risk_warning}"
+            notes = f"RISK BUDGET EXCEEDED: {risk_warning}"
 
         # Create TradingSuggestion with REAL pricing
         suggestion = await TradingSuggestion.objects.acreate(
@@ -897,7 +897,7 @@ class IronButterflyStrategy(BaseStrategy):
         )
 
         logger.info(
-            f"User {self.user.id}: ✅ Iron Butterfly suggestion created with real pricing - "
+            f"User {self.user.id}: Iron Butterfly suggestion created with real pricing - "
             f"Credit: ${total_mid_credit:.2f}, Max Risk: ${max_risk_per_contract:.2f}"
         )
 

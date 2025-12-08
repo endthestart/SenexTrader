@@ -95,7 +95,7 @@ Historical validation against known market extremes (tests/test_epic32_validatio
 ### Results
 - **Context-aware accuracy:** 75% (3/4 correct)
 - **Baseline accuracy:** 25% (1/4 correct)
-- **Improvement:** +50 percentage points ✅
+- **Improvement:** +50 percentage points
 
 **Key Wins:**
 1. Crisis detection: Avoided COVID crash trades (baseline incorrectly selected strategies)
@@ -178,25 +178,25 @@ Historical validation against known market extremes (tests/test_epic32_validatio
 
 ## Implementation Timeline
 
-### Phase 1: Consolidation ✅
+### Phase 1: Consolidation
 - **Commit:** 63ecf74
 - Moved `MarketConditionValidator` logic into `MarketAnalyzer`
 - Removed validator service
 - Updated tests
 
-### Phase 2: Context Detection ✅
+### Phase 2: Context Detection
 - **Commit:** 0b459f9
 - Added `regime_primary`, `is_overbought/is_oversold`, `momentum_signal` fields
 - Implemented `_detect_regime()`, `_detect_extremes()`, `_detect_momentum()`
 - Type-safe enums for regime/momentum
 
-### Phase 3: Reference Strategies ✅
+### Phase 3: Reference Strategies
 - **Commit:** 030a8c3
 - Updated `BearCallSpreadStrategy` with context-aware scoring
 - Updated `BullPutSpreadStrategy` with context-aware scoring
 - Demonstrated scoring pattern for other strategies
 
-### Phase 4: Validation & Documentation ✅
+### Phase 4: Validation & Documentation
 - **Commit:** [current]
 - Created validation test framework
 - Measured 75% accuracy vs 25% baseline
@@ -303,7 +303,7 @@ logger.info(
 
 ## Decision Outcome
 
-✅ **Accepted and Implemented**
+**Accepted and Implemented**
 
 The consolidation + context-aware enhancements provide measurable value:
 - 75% strategy selection accuracy (vs 25% baseline)

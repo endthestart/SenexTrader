@@ -42,9 +42,9 @@ class Command(BaseCommand):
             redis_url = settings.CELERY_BROKER_URL
             r = redis.from_url(redis_url)
             r.ping()
-            self.stdout.write(self.style.SUCCESS("✅ Redis broker: Connected"))
+            self.stdout.write(self.style.SUCCESS("Redis broker: Connected"))
         except Exception as e:
-            self.stdout.write(self.style.ERROR(f"❌ Redis broker: Failed - {e}"))
+            self.stdout.write(self.style.ERROR(f"Redis broker: Failed - {e}"))
             healthy = False
 
         # Check 2: Active workers
@@ -54,16 +54,16 @@ class Command(BaseCommand):
 
             if active_workers:
                 worker_count = len(active_workers)
-                self.stdout.write(self.style.SUCCESS(f"✅ Celery workers: {worker_count} active"))
+                self.stdout.write(self.style.SUCCESS(f"Celery workers: {worker_count} active"))
 
                 if verbose:
                     for worker_name, tasks in active_workers.items():
                         self.stdout.write(f"   - {worker_name}: {len(tasks)} active tasks")
             else:
-                self.stdout.write(self.style.ERROR("❌ Celery workers: No active workers found"))
+                self.stdout.write(self.style.ERROR("Celery workers: No active workers found"))
                 healthy = False
         except Exception as e:
-            self.stdout.write(self.style.ERROR(f"❌ Celery workers: Failed to check - {e}"))
+            self.stdout.write(self.style.ERROR(f"Celery workers: Failed to check - {e}"))
             healthy = False
 
         # Check 3: Scheduled tasks (beat)
@@ -72,7 +72,7 @@ class Command(BaseCommand):
             if scheduled is not None:
                 total_scheduled = sum(len(tasks) for tasks in scheduled.values())
                 self.stdout.write(
-                    self.style.SUCCESS(f"✅ Celery beat: {total_scheduled} scheduled tasks")
+                    self.style.SUCCESS(f"Celery beat: {total_scheduled} scheduled tasks")
                 )
 
                 if verbose and scheduled:
@@ -80,10 +80,10 @@ class Command(BaseCommand):
                         self.stdout.write(f"   - {worker_name}: {len(tasks)} scheduled")
             else:
                 self.stdout.write(
-                    self.style.WARNING("⚠️  Celery beat: No scheduled tasks (may be normal)")
+                    self.style.WARNING("Celery beat: No scheduled tasks (may be normal)")
                 )
         except Exception as e:
-            self.stdout.write(self.style.ERROR(f"❌ Celery beat: Failed to check - {e}"))
+            self.stdout.write(self.style.ERROR(f"Celery beat: Failed to check - {e}"))
             healthy = False
 
         # Check 4: Registered tasks
@@ -92,7 +92,7 @@ class Command(BaseCommand):
             if registered:
                 total_tasks = sum(len(tasks) for tasks in registered.values())
                 self.stdout.write(
-                    self.style.SUCCESS(f"✅ Registered tasks: {total_tasks} tasks available")
+                    self.style.SUCCESS(f"Registered tasks: {total_tasks} tasks available")
                 )
 
                 if verbose:
@@ -100,20 +100,18 @@ class Command(BaseCommand):
                     dte_task = "trading.tasks.monitor_positions_for_dte_closure"
                     found_dte = any(dte_task in tasks for tasks in registered.values())
                     if found_dte:
-                        self.stdout.write(
-                            self.style.SUCCESS("   ✓ DTE monitoring task registered")
-                        )
+                        self.stdout.write(self.style.SUCCESS("   [OK] DTE monitoring task registered"))
                     else:
                         self.stdout.write(self.style.WARNING("   ⚠ DTE monitoring task NOT found"))
             else:
-                self.stdout.write(self.style.ERROR("❌ Registered tasks: No tasks registered"))
+                self.stdout.write(self.style.ERROR("Registered tasks: No tasks registered"))
                 healthy = False
         except Exception as e:
-            self.stdout.write(self.style.ERROR(f"❌ Registered tasks: Failed to check - {e}"))
+            self.stdout.write(self.style.ERROR(f"Registered tasks: Failed to check - {e}"))
             healthy = False
 
         # Check 5: Check for recent "Event loop is closed" errors in logs (if possible)
-        self.stdout.write('\n📋 Note: Check journald logs for "Event loop is closed" errors:')
+        self.stdout.write('\nNote: Check journald logs for "Event loop is closed" errors:')
         self.stdout.write(
             '   journalctl CONTAINER_NAME=celery_worker --since "1 hour ago" | grep -i "event loop"'
         )
@@ -121,9 +119,9 @@ class Command(BaseCommand):
         # Final result
         self.stdout.write("")
         if healthy:
-            self.stdout.write(self.style.SUCCESS("✅ Overall Status: HEALTHY"))
+            self.stdout.write(self.style.SUCCESS("Overall Status: HEALTHY"))
             return  # Exit code 0
-        self.stdout.write(self.style.ERROR("❌ Overall Status: UNHEALTHY"))
+        self.stdout.write(self.style.ERROR("Overall Status: UNHEALTHY"))
         self.stdout.write("\nRecommended actions:")
         self.stdout.write(
             "1. Check service status: systemctl --machine=senex@ --user status celery-worker.service"

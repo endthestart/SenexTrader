@@ -500,7 +500,7 @@ class StrategySelector:
 
             # Log successful force generation with score
             logger.info(
-                f"✅ Force generated {strategy_name} for user {self.user.id}: "
+                f"Force generated {strategy_name} for user {self.user.id}: "
                 f"score={score:.1f} (below threshold but user requested)"
             )
 
@@ -655,16 +655,16 @@ class StrategySelector:
 
         # Log scoring summary
         logger.info(
-            f"📊 Scoring complete for {symbol}: {len(eligible)}/{len(scores)} strategies "
+            f"Scoring complete for {symbol}: {len(eligible)}/{len(scores)} strategies "
             f"passed threshold (MIN={self.MIN_AUTO_SCORE})"
         )
         if eligible:
             logger.info(
-                f"✅ Eligible strategies: {', '.join([f'{n} ({s:.1f})' for n, s in eligible])}"
+                f"Eligible strategies: {', '.join([f'{n} ({s:.1f})' for n, s in eligible])}"
             )
         else:
             best_name, best_score = sorted_strategies[0] if sorted_strategies else ("none", 0)
-            logger.info(f"⚠️ No strategies passed threshold. Best: {best_name} ({best_score:.1f})")
+            logger.info(f"No strategies passed threshold. Best: {best_name} ({best_score:.1f})")
 
         # 6. If none eligible, return low scores explanation
         if not eligible:
@@ -683,7 +683,7 @@ class StrategySelector:
         generation_failures = []
 
         logger.info(
-            f"🔄 Attempting to generate suggestions for top {min(count, len(eligible))} strategies..."
+            f"Attempting to generate suggestions for top {min(count, len(eligible))} strategies..."
         )
 
         for strategy_name, score in eligible[:count]:
@@ -697,11 +697,11 @@ class StrategySelector:
                 )
 
                 if not context:
-                    logger.warning(f"  ❌ {strategy_name}: Context preparation failed")
+                    logger.warning(f"  {strategy_name}: Context preparation failed")
                     generation_failures.append((strategy_name, "Context preparation failed"))
                     continue
 
-                logger.info(f"  ✓ {strategy_name}: Context prepared")
+                logger.info(f"  PASS: {strategy_name}: Context prepared")
 
                 # Mark as automated/suggestion mode
                 context["is_automated"] = True
@@ -723,24 +723,24 @@ class StrategySelector:
                         report,
                     )
                     suggestions.append((strategy_name, suggestion, explanation))
-                    logger.info(f"  ✅ {strategy_name}: Suggestion generated successfully")
+                    logger.info(f"  {strategy_name}: Suggestion generated successfully")
                 else:
-                    logger.warning(f"  ❌ {strategy_name}: Stream manager returned None")
+                    logger.warning(f"  {strategy_name}: Stream manager returned None")
                     generation_failures.append(
                         (strategy_name, "Suggestion generation returned None")
                     )
 
             except Exception as e:
-                logger.error(f"  ❌ {strategy_name}: Exception during generation: {e}")
+                logger.error(f"  {strategy_name}: Exception during generation: {e}")
                 generation_failures.append((strategy_name, str(e)))
                 continue
 
         # Log generation summary
         if suggestions:
-            logger.info(f"✅ Generated {len(suggestions)} suggestion(s) for {symbol}")
+            logger.info(f"Generated {len(suggestions)} suggestion(s) for {symbol}")
         elif generation_failures:
             logger.warning(
-                f"⚠️ All {len(generation_failures)} eligible strategies failed generation for {symbol}:"
+                f"All {len(generation_failures)} eligible strategies failed generation for {symbol}:"
             )
             for name, reason in generation_failures:
                 logger.warning(f"  - {name}: {reason}")

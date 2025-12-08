@@ -16,10 +16,10 @@ from django.utils import timezone
 
 from accounts.models import OptionsAllocation, User
 from trading.models import (
-    CachedOrder,
     CachedOrderChain,
     Position,
     StrategyConfiguration,
+    TastyTradeOrderHistory,
     Trade,
     TradingSuggestion,
 )
@@ -86,7 +86,7 @@ class Command(BaseCommand):
             json.dump(data, f, indent=2, cls=ExtendedJSONEncoder)
 
         # Print statistics
-        self.stdout.write(self.style.SUCCESS(f"\n✅ Export completed: {output_path}"))
+        self.stdout.write(self.style.SUCCESS(f"\nExport completed: {output_path}"))
         self.stdout.write("\nExported data:")
         self.stdout.write(f"  Trading Accounts: {len(data['trading_accounts'])}")
         self.stdout.write(f"  Options Allocation: {1 if data['options_allocation'] else 0}")
@@ -210,9 +210,9 @@ class Command(BaseCommand):
         return trades
 
     def _serialize_cached_orders(self, user):
-        """Serialize CachedOrder models."""
+        """Serialize TastyTradeOrderHistory models."""
         orders = []
-        for order in CachedOrder.objects.filter(user=user):
+        for order in TastyTradeOrderHistory.objects.filter(user=user):
             order_data = self._model_to_dict(order, exclude_fields=["user"])
             order_data["_trading_account_number"] = order.trading_account.account_number
             orders.append(order_data)

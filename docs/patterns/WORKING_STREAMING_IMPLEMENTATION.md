@@ -98,13 +98,13 @@ async def _run_streaming(self, session, symbols: List[str]):
 ### What DOESN'T Work
 
 ```python
-# ❌ WRONG - Creates object but never connects
+# WRONG - Creates object but never connects
 self.context.data_streamer = DXLinkStreamer(session)
 
-# ❌ WRONG - Tries to await constructor
+# WRONG - Tries to await constructor
 self.context.data_streamer = await DXLinkStreamer(session)
 
-# ❌ WRONG - Missing async context manager
+# WRONG - Missing async context manager
 streamer = DXLinkStreamer(session)
 await streamer.subscribe(Quote, symbols)
 ```
@@ -251,13 +251,13 @@ function handleBalanceUpdate(data) {
 ### 1. Always Use Async Context Manager for DXLinkStreamer
 
 ```python
-# ✅ CORRECT
+# CORRECT
 async with DXLinkStreamer(session) as streamer:
     await streamer.subscribe(Quote, symbols)
     async for quote in streamer.listen(Quote):
         process_quote(quote)
 
-# ❌ WRONG
+# WRONG
 streamer = DXLinkStreamer(session)
 await streamer.subscribe(Quote, symbols)  # Will fail - no _websocket
 ```
@@ -314,35 +314,35 @@ async def _send_initial_balance(self):
 
 ### 1. Wrong Import Paths
 ```python
-# ❌ WRONG
+# WRONG
 from tastytrade import Quote
 
-# ✅ CORRECT
+# CORRECT
 from tastytrade.dxfeed import Quote, Greeks, Trade
 ```
 
 ### 2. Assuming Token Doesn't Expire
 ```python
-# ❌ WRONG - Token expires after 15 minutes
+# WRONG - Token expires after 15 minutes
 session = get_oauth_session()
 # Use same session for 30+ minutes
 
-# ✅ CORRECT - Refresh before expiry
+# CORRECT - Refresh before expiry
 # Refresh every 10 minutes or get new session
 ```
 
 ### 3. Using Old TastyTrade SDK Methods
 ```python
-# ❌ WRONG (old SDK pattern)
+# WRONG (old SDK pattern)
 await sync_to_async(Account.get)(session, account_number)
 
-# ✅ CORRECT (new SDK has async methods)
+# CORRECT (new SDK has async methods)
 await Account.a_get(session, account_number)
 ```
 
 ### 4. Not Handling WebSocket Reconnection
 ```python
-# ✅ CORRECT - Implement reconnection logic
+# CORRECT - Implement reconnection logic
 streamingWs.onclose = function(e) {
     if (reconnectAttempts < maxReconnectAttempts) {
         reconnectAttempts++;
@@ -354,10 +354,10 @@ streamingWs.onclose = function(e) {
 
 ### 5. Defaulting Missing Values to 0
 ```python
-# ❌ WRONG - Creates fake data
+# WRONG - Creates fake data
 net_liquidating_value = getattr(balances, 'net_liquidating_value', 0)
 
-# ✅ CORRECT - Handle None properly
+# CORRECT - Handle None properly
 net_liquidating_value = getattr(balances, 'net_liquidating_value', None)
 if net_liquidating_value is not None:
     # Process real value

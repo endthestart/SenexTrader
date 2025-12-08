@@ -38,7 +38,7 @@ class BaseDebitSpreadStrategy(BaseStrategy):
     """
 
     def __init__(self, user):
-        super().__init__(user)  # Get common dependencies from BaseStrategy
+        super().__init__(user)
 
     # Strategy-specific constants
     MIN_IV_RANK = 10  # Minimum IV (avoid dead markets)
@@ -393,10 +393,8 @@ class BaseDebitSpreadStrategy(BaseStrategy):
         Returns:
             Optional[dict]: Context dict ready for stream manager, or None if unsuitable
         """
-        # Get active config if available (optional for simple strategies)
         config = await self.a_get_active_config()
 
-        # Get market report if not provided
         if report is None:
             from services.market_data.analysis import MarketAnalyzer
 
@@ -408,24 +406,21 @@ class BaseDebitSpreadStrategy(BaseStrategy):
 
         logger.info(f"{self.strategy_name} score for {symbol}: {score:.1f} - {explanation}")
 
-        # Check threshold (allow bypass in force mode)
         if score < self.MIN_SCORE_THRESHOLD and not force_generation:
             logger.info(f"Score too low ({score:.1f}) - not generating {self.strategy_name}")
             return None
 
         if force_generation and score < self.MIN_SCORE_THRESHOLD:
             logger.warning(
-                f"⚠️ Force generating {self.strategy_name} despite low score ({score:.1f}) - "
+                f"Force generating {self.strategy_name} despite low score ({score:.1f}) - "
                 f"user explicitly requested"
             )
 
-        # Calculate spread width
         tradeable_capital, is_available = await self.risk_manager.a_get_tradeable_capital()
         spread_width = (
             config.get_spread_width(tradeable_capital) if (config and is_available) else 5
         )
 
-        # Get target criteria (NEW PATTERN: criteria instead of calculated strikes)
         target_criteria = self._get_target_criteria(
             Decimal(str(report.current_price)), spread_width, report
         )
@@ -491,7 +486,7 @@ class BaseDebitSpreadStrategy(BaseStrategy):
             # NOTE: is_automated will be set by caller
         }
 
-        logger.info(f"User {self.user.id}: ✅ Context prepared for {self.strategy_name}")
+        logger.info(f"User {self.user.id}: Context prepared for {self.strategy_name}")
         return context
 
     async def a_request_suggestion_generation(
@@ -520,7 +515,7 @@ class BaseDebitSpreadStrategy(BaseStrategy):
         # Dispatch to stream manager
         await self.a_dispatch_to_stream_manager(context)
         logger.info(
-            f"User {self.user.id}: 🚀 Dispatched {self.strategy_name} request to stream manager"
+            f"User {self.user.id}: Dispatched {self.strategy_name} request to stream manager"
         )
 
     async def a_calculate_suggestion_from_cached_data(self, context: dict):
@@ -613,7 +608,7 @@ class BaseDebitSpreadStrategy(BaseStrategy):
         )
 
         logger.info(
-            f"User {self.user.id}: ✅ {self.strategy_name} suggestion - "
+            f"User {self.user.id}: {self.strategy_name} suggestion - "
             f"Debit: ${mid_debit:.2f}, Max Risk: ${max_risk_per_contract:.2f}"
         )
         return suggestion

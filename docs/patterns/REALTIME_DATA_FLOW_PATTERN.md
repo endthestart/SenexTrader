@@ -88,7 +88,7 @@ This document defines the **canonical data flow pattern** for all real-time data
 
 **Each calculation exists in ONE place only.**
 
-✅ **Correct**:
+**Correct**:
 ```python
 # services/position_pnl_calculator.py
 class PositionPnLCalculator:
@@ -103,15 +103,15 @@ class PositionPnLCalculator:
 # - API endpoints
 ```
 
-❌ **Incorrect** (duplication):
+**Incorrect** (duplication):
 ```python
 # StreamManager
 def _broadcast_pnl():
-    pnl = (avg_price - current_price) * quantity  # ❌ Duplicate logic
+    pnl = (avg_price - current_price) * quantity  # Duplicate logic
 
 # PositionSync
 def _sync_positions():
-    pnl = (avg_price - current_price) * quantity  # ❌ Same calculation!
+    pnl = (avg_price - current_price) * quantity  # Same calculation!
 ```
 
 ### 2. Separation of Concerns
@@ -125,10 +125,10 @@ def _sync_positions():
 - **Frontend**: Display data (receives from WebSocket)
 
 **Never mix concerns:**
-- ❌ StreamManager should NOT calculate P&L directly
-- ❌ Services should NOT broadcast via WebSocket
-- ❌ Frontend should NOT poll for data (except initial load)
-- ❌ Broadcast layer should NOT save to database
+- StreamManager should NOT calculate P&L directly
+- Services should NOT broadcast via WebSocket
+- Frontend should NOT poll for data (except initial load)
+- Broadcast layer should NOT save to database
 
 ### 3. Cache as Source for Real-Time
 
@@ -143,7 +143,7 @@ def _sync_positions():
 
 **Combine related metrics into single WebSocket broadcasts.**
 
-✅ **Correct** (unified):
+**Correct** (unified):
 ```python
 async def _start_position_metrics_updates(self):
     # Combine balance + Greeks + P&L
@@ -161,16 +161,16 @@ async def _start_position_metrics_updates(self):
     await asyncio.sleep(30)  # Single consistent interval
 ```
 
-❌ **Incorrect** (fragmented):
+**Incorrect** (fragmented):
 ```python
 # Three separate broadcasts with different intervals
 await self._broadcast("balance_update", {...})  # Every 30s
 await asyncio.sleep(30)
 
-await self._broadcast("greeks_update", {...})  # Every 5s  ❌ Different!
+await self._broadcast("greeks_update", {...})  # Every 5s  Different!
 await asyncio.sleep(5)
 
-await self._broadcast("pnl_update", {...})  # Every 10s  ❌ Different!
+await self._broadcast("pnl_update", {...})  # Every 10s  Different!
 await asyncio.sleep(10)
 ```
 
@@ -178,7 +178,7 @@ await asyncio.sleep(10)
 
 **Frontend should use WebSocket updates, not API polling.**
 
-✅ **Correct**:
+**Correct**:
 ```javascript
 class MetricsUpdater extends RealtimeUpdaterBase {
     constructor(websocket) {
@@ -195,9 +195,9 @@ class MetricsUpdater extends RealtimeUpdaterBase {
 }
 ```
 
-❌ **Incorrect**:
+**Incorrect**:
 ```javascript
-// Polling every 5 seconds  ❌ Don't do this!
+// Polling every 5 seconds  Don't do this!
 setInterval(() => {
     fetch('/api/metrics/').then(...)
 }, 5000);
@@ -283,7 +283,7 @@ async def _subscribe_symbols(self, streamer: DXLinkStreamer, symbols: list[str])
 
 **Common mistake**:
 ```python
-# ❌ Bad - treats everything as one type
+# Bad - treats everything as one type
 is_options_only = all(" " in s for s in symbols)
 if is_options_only:
     # Subscribe to Greeks
@@ -579,17 +579,17 @@ def periodic_sync():
 
 ## Anti-Patterns to Avoid
 
-### ❌ Anti-Pattern #1: Duplicate Calculations
+### Anti-Pattern #1: Duplicate Calculations
 
 **Problem**: Same calculation logic in multiple places
 
 ```python
-# ❌ Bad - StreamManager
+# Bad - StreamManager
 async def broadcast_pnl(self):
     for leg in position.metadata["legs"]:
         pnl = (avg_price - current_price) * qty  # Calculation
 
-# ❌ Bad - PositionSync
+# Bad - PositionSync
 def sync_positions(self):
     for leg in position.metadata["legs"]:
         pnl = (avg_price - current_price) * qty  # DUPLICATE!
@@ -598,7 +598,7 @@ def sync_positions(self):
 **Solution**: Single service, reused everywhere
 
 ```python
-# ✅ Good - Single source
+# Good - Single source
 class PositionPnLCalculator:
     @staticmethod
     def calculate_leg_pnl(...):
@@ -609,12 +609,12 @@ StreamManager: pnl = PositionPnLCalculator.calculate_leg_pnl(...)
 PositionSync: pnl = PositionPnLCalculator.calculate_leg_pnl(...)
 ```
 
-### ❌ Anti-Pattern #2: Frontend Polling
+### Anti-Pattern #2: Frontend Polling
 
 **Problem**: Frontend repeatedly polls API
 
 ```javascript
-// ❌ Bad
+// Bad
 setInterval(async () => {
     const response = await fetch('/api/metrics/');
     updateDOM(await response.json());
@@ -624,7 +624,7 @@ setInterval(async () => {
 **Solution**: WebSocket updates
 
 ```javascript
-// ✅ Good
+// Good
 class MetricsUpdater extends RealtimeUpdaterBase {
     constructor(websocket) {
         super({ websocket });
@@ -634,12 +634,12 @@ class MetricsUpdater extends RealtimeUpdaterBase {
 }
 ```
 
-### ❌ Anti-Pattern #3: Mixed Update Intervals
+### Anti-Pattern #3: Mixed Update Intervals
 
 **Problem**: Related metrics update at different rates
 
 ```python
-# ❌ Bad
+# Bad
 async def broadcast_greeks():
     await asyncio.sleep(5)  # Every 5 seconds
 
@@ -653,7 +653,7 @@ async def broadcast_balance():
 **Solution**: Unified broadcast with consistent interval
 
 ```python
-# ✅ Good
+# Good
 async def broadcast_all_metrics():
     # All metrics together
     await self._broadcast("position_metrics_update", {
@@ -664,12 +664,12 @@ async def broadcast_all_metrics():
     await asyncio.sleep(30)  # One consistent interval
 ```
 
-### ❌ Anti-Pattern #4: Race Conditions on Shared Data
+### Anti-Pattern #4: Race Conditions on Shared Data
 
 **Problem**: Multiple tasks read/write same data concurrently
 
 ```python
-# ❌ Bad - Both read position.metadata["legs"] at same time
+# Bad - Both read position.metadata["legs"] at same time
 Task A (streaming): reads metadata["legs"] for calculation
 Task B (sync): writes metadata["legs"] with new data
 # Result: Task A gets partial/stale data → erratic values
@@ -678,23 +678,23 @@ Task B (sync): writes metadata["legs"] with new data
 **Solution**: Single reader per use case, or use locking
 
 ```python
-# ✅ Good - Only one task calculates from legs for streaming
+# Good - Only one task calculates from legs for streaming
 # StreamManager: Reads from service (which reads cache)
 # PositionSync: Updates metadata["legs"] + saves to DB
 # No concurrent reads during writes
 ```
 
-### ❌ Anti-Pattern #5: Saving to DB in Broadcast Loop
+### Anti-Pattern #5: Saving to DB in Broadcast Loop
 
 **Problem**: Database writes in streaming broadcast
 
 ```python
-# ❌ Bad
+# Bad
 async def broadcast_metrics(self):
     for position in positions:
         pnl = calculate_pnl(position)
 
-        # ❌ Don't save in broadcast loop!
+        # Don't save in broadcast loop!
         position.unrealized_pnl = pnl
         await position.asave()
 
@@ -704,7 +704,7 @@ async def broadcast_metrics(self):
 **Solution**: Separate broadcast (real-time) from persistence (periodic)
 
 ```python
-# ✅ Good
+# Good
 async def broadcast_metrics(self):
     for position in positions:
         pnl = calculate_pnl(position)
@@ -791,11 +791,11 @@ When converting existing code to this pattern:
 **Problem**: Erratic Greek values caused by duplicate P&L calculations and race conditions.
 
 **Changes Made**:
-- ✅ Backend: Removed `_start_pnl_updates()` and `_start_balance_updates()` methods
-- ✅ Backend: Created unified `_start_position_metrics_updates()` (30s interval)
-- ✅ Frontend: Created `position_metrics.js` (replaces `position_pnl.js`)
-- ✅ Frontend: Removed polling from `greeks.js` (was 5s interval)
-- ✅ Template: Updated `positions.html` to use unified handler
+- Backend: Removed `_start_pnl_updates()` and `_start_balance_updates()` methods
+- Backend: Created unified `_start_position_metrics_updates()` (30s interval)
+- Frontend: Created `position_metrics.js` (replaces `position_pnl.js`)
+- Frontend: Removed polling from `greeks.js` (was 5s interval)
+- Template: Updated `positions.html` to use unified handler
 
 **Files Removed**:
 - `static/js/position_pnl.js` - Superseded by `position_metrics.js`
@@ -814,11 +814,11 @@ When converting existing code to this pattern:
 **Root Cause**: `_subscribe_symbols()` used `all(" " in s for s in symbols)` which failed when batch contained both option symbols (with spaces) and stock symbols (no spaces).
 
 **Changes Made**:
-- ✅ Backend: Split subscription logic to separate options from stocks
-- ✅ Backend: Options get Quote + Greeks subscription
-- ✅ Backend: Stocks get Quote + Trade + Summary subscription (no Greeks)
-- ✅ Frontend: Added portfolio Greeks aggregation from position-level data
-- ✅ Frontend: Initialized `window.greeksUpdater` in positions template
+- Backend: Split subscription logic to separate options from stocks
+- Backend: Options get Quote + Greeks subscription
+- Backend: Stocks get Quote + Trade + Summary subscription (no Greeks)
+- Frontend: Added portfolio Greeks aggregation from position-level data
+- Frontend: Initialized `window.greeksUpdater` in positions template
 
 **Result**: Greeks now flow correctly for all option positions, portfolio Greeks aggregate properly.
 

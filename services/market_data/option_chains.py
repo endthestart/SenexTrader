@@ -511,12 +511,9 @@ class OptionChainService:
                 return None
 
             # Extract strikes from the matching chain
-            current_price = None
             strikes_list = []  # Initialize to prevent UnboundLocalError
 
             for chain_item in chains:
-                logger.debug(f"Processing chain: type={type(chain_item)}")
-
                 # NestedOptionChain: look through each expiration
                 if hasattr(chain_item, "expirations") and chain_item.expirations:
                     for expiration_obj in chain_item.expirations:
@@ -526,16 +523,10 @@ class OptionChainService:
                             exp_date = exp_date.date()
 
                         if exp_date == target_exp:
-                            logger.info(f"✅ Found matching expiration for {symbol}: {target_exp}")
-
-                            # Get current underlying price if available
-                            if hasattr(expiration_obj, "underlying_price"):
-                                current_price = Decimal(str(expiration_obj.underlying_price))
-                                logger.debug(f"Found underlying price: {current_price}")
+                            logger.debug(f"Found matching expiration: {target_exp}")
 
                             # Extract strikes from this expiration
                             if hasattr(expiration_obj, "strikes") and expiration_obj.strikes:
-                                logger.debug(f"Processing {len(expiration_obj.strikes)} strikes")
                                 # Epic 28 Task 010: Preserve Strike objects with OCC symbols
                                 strikes_list = []
                                 for strike in expiration_obj.strikes:
@@ -565,7 +556,7 @@ class OptionChainService:
                 else:
                     logger.debug("Chain item missing expirations attribute")
 
-            logger.info(f"📊 Strikes extraction complete for {symbol} {target_exp}:")
+            logger.info(f"Strikes extraction complete for {symbol} {target_exp}:")
             put_strikes_set = extract_put_strikes(strikes_list)
             call_strikes_set = extract_call_strikes(strikes_list)
             put_display = sorted(put_strikes_set) if put_strikes_set else "None"
@@ -574,21 +565,20 @@ class OptionChainService:
             logger.info(f"   Call strikes: {len(call_strikes_set)} found ({call_display})")
 
             if not put_strikes_set and not call_strikes_set:
-                logger.warning(f"❌ No valid strikes found for {symbol} {target_exp}")
+                logger.warning(f"No valid strikes found for {symbol} {target_exp}")
                 return None
 
-            # Fallback to MarketAnalyzer if price not in chain
-            if current_price is None:
-                logger.warning(f"Underlying price not in option chain for {symbol}, using fallback")
-                from services.market_data.analysis import MarketAnalyzer
+            # Fetch current price from MarketAnalyzer
+            # (TastyTrade NestedOptionChainExpiration doesn't include underlying_price)
+            from services.market_data.analysis import MarketAnalyzer
 
-                analyzer = MarketAnalyzer(user)
-                price_float = await analyzer._get_current_quote(symbol)
-                if price_float:
-                    current_price = Decimal(str(price_float))
-                    logger.info(
-                        f"✅ Successfully fetched price from MarketAnalyzer: {current_price}"
-                    )
+            analyzer = MarketAnalyzer(user)
+            price_float = await analyzer._get_current_quote(symbol)
+            if price_float:
+                current_price = Decimal(str(price_float))
+                logger.debug(f"Fetched current price for {symbol}: {current_price}")
+            else:
+                current_price = None
 
             # CRITICAL: Fail fast if current price unavailable
             if current_price is None:
@@ -624,10 +614,10 @@ class OptionChainService:
 
     def _find_exact_expiration(self, chains: list, target: date) -> date | None:
         """Find EXACT expiration match in chains. Returns None if not found."""
-        logger.info(f"🔍 Looking for EXACT expiration {target}")
+        logger.info(f"Looking for EXACT expiration {target}")
 
         if not chains:
-            logger.warning("❌ No chains provided")
+            logger.warning("No chains provided")
             return None
 
         expirations = []
@@ -640,15 +630,15 @@ class OptionChainService:
                             exp_date = exp_date.date()
                         expirations.append(exp_date)
 
-        logger.debug(f"📅 Found {len(expirations)} total expirations")
+        logger.debug(f"Found {len(expirations)} total expirations")
 
         # Look for EXACT match
         if target in expirations:
-            logger.info(f"✅ Found EXACT expiration match: {target}")
+            logger.info(f"Found EXACT expiration match: {target}")
             return target
         available_sample = sorted(set(expirations))[:10]
         logger.error(
-            f"❌ EXACT expiration {target} not found in chain. "
+            f"EXACT expiration {target} not found in chain. "
             f"Available (sample): {available_sample}"
         )
         return None
@@ -656,10 +646,10 @@ class OptionChainService:
     def _find_closest_expiration(self, chains: list, target: date) -> date | None:
         """Find the expiration date closest to target from chains."""
         chains_count = len(chains) if chains else 0
-        logger.info(f"🔍 Looking for closest expiration to {target} from {chains_count} chains")
+        logger.info(f"Looking for closest expiration to {target} from {chains_count} chains")
 
         if not chains:
-            logger.warning("❌ No chains provided")
+            logger.warning("No chains provided")
             return None
 
         expirations = []
@@ -669,7 +659,7 @@ class OptionChainService:
 
             # NestedOptionChain: chain.expirations list with dates
             if hasattr(chain, "expirations") and chain.expirations:
-                logger.debug(f"✅ Chain {i} has {len(chain.expirations)} expiration objects")
+                logger.debug(f"Chain {i} has {len(chain.expirations)} expiration objects")
                 for j, expiration_obj in enumerate(chain.expirations):
                     has_exp_date = hasattr(expiration_obj, "expiration_date")
                     logger.debug(
@@ -682,33 +672,33 @@ class OptionChainService:
                         if hasattr(exp_date, "date"):
                             exp_date = exp_date.date()
                         expirations.append(exp_date)
-                        logger.debug(f"    ✅ Found expiration: {exp_date}")
+                        logger.debug(f"    Found expiration: {exp_date}")
                     else:
-                        logger.debug(f"    ❌ Expiration {j} missing expiration_date attribute")
+                        logger.debug(f"    Expiration {j} missing expiration_date attribute")
             else:
-                logger.debug(f"❌ Chain {i} missing expirations attribute or empty")
+                logger.debug(f"Chain {i} missing expirations attribute or empty")
 
         exp_display = sorted(expirations) if expirations else "None"
-        logger.info(f"📅 Found {len(expirations)} total expirations: {exp_display}")
+        logger.info(f"Found {len(expirations)} total expirations: {exp_display}")
 
         if not expirations:
-            logger.warning("❌ No expiration dates found in chains")
+            logger.warning("No expiration dates found in chains")
             return None
 
         # Filter for expirations on or after target
         future_expirations = [exp for exp in expirations if exp >= target]
         future_display = sorted(future_expirations) if future_expirations else "None"
-        logger.info(f"📈 Future expirations (>= {target}): {future_display}")
+        logger.info(f"Future expirations (>= {target}): {future_display}")
 
         if future_expirations:
             # Find closest future expiration
             closest = min(future_expirations, key=lambda x: abs((x - target).days))
             dte = (closest - target).days
-            logger.info(f"✅ Selected closest future expiration: {closest} (DTE: {dte})")
+            logger.info(f"Selected closest future expiration: {closest} (DTE: {dte})")
         else:
             # If no future expirations, get the closest past one
             closest = min(expirations, key=lambda x: abs((x - target).days))
-            logger.warning(f"⚠️ No future expirations found, using past expiration: {closest}")
+            logger.warning(f"No future expirations found, using past expiration: {closest}")
 
         return closest
 

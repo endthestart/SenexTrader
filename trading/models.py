@@ -159,14 +159,6 @@ class Position(models.Model):
     )
     number_of_spreads = models.IntegerField(default=1, help_text="Number of spread contracts")
 
-    # Broker tracking
-    broker_order_ids = models.JSONField(
-        default=list,
-        blank=True,
-        encoder=DjangoJSONEncoder,
-        help_text="TastyTrade order IDs associated with this position",
-    )
-
     # Transaction type tracking
     opening_price_effect = models.CharField(
         max_length=10,
@@ -185,6 +177,45 @@ class Position(models.Model):
         help_text="Details of profit target orders by spread type",
     )
 
+    # TastyTrade Order Tracking - PRIMARY LINK for position isolation
+    opening_order_id = models.CharField(
+        max_length=50,
+        null=True,
+        blank=True,
+        db_index=True,
+        unique=True,
+        help_text="TastyTrade order ID that opened this position (PlacedOrder.id). "
+        "This is the PRIMARY KEY for isolating duplicate positions with same strikes.",
+    )
+    opening_complex_order_id = models.CharField(
+        max_length=50,
+        null=True,
+        blank=True,
+        db_index=True,
+        help_text="TastyTrade complex order ID if opened via OTOCO",
+    )
+
+    # Closure tracking
+    closure_reason = models.CharField(
+        max_length=50,
+        null=True,
+        blank=True,
+        help_text="Reason position was closed: profit_target, manual_close, "
+        "assignment, expired_worthless, exercise, unknown",
+    )
+    assigned_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="Timestamp when option was assigned (if applicable)",
+    )
+
+    # Sync metadata
+    last_synced_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="Last time this position was synced with TastyTrade",
+    )
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -196,6 +227,9 @@ class Position(models.Model):
             # Phase 4.2: Performance optimization indexes
             models.Index(fields=["user", "-created_at"]),
             models.Index(fields=["lifecycle_state", "-created_at"]),
+            # Position isolation indexes
+            models.Index(fields=["opening_order_id"]),
+            models.Index(fields=["opening_complex_order_id"]),
         ]
 
     def __str__(self):
@@ -254,13 +288,7 @@ class Trade(models.Model):
         blank=True,
         help_text="Lifecycle event recorded when this trade executed",
     )
-    realized_pnl = models.DecimalField(
-        max_digits=12,
-        decimal_places=2,
-        null=True,
-        blank=True,
-        help_text="Realized P&L attributed to this trade",
-    )
+    # NOTE: realized_pnl removed - use Position.total_realized_pnl instead
     lifecycle_snapshot = models.JSONField(
         default=dict,
         blank=True,
@@ -689,9 +717,12 @@ class MarketMetricsHistory(models.Model):
         return f"{self.symbol} {self.date}: IV Rank={self.iv_rank}%"
 
 
-class CachedOrder(models.Model):
+class TastyTradeOrderHistory(models.Model):
     """
-    Local cache of TastyTrade order history - single source of truth for order data.
+    TastyTrade order history - single source of truth for all orders placed via TastyTrade.
+
+    Note: Previously named CachedOrder. Renamed for clarity as this is comprehensive
+    order history storage, not just cached data.
 
     **Purpose:**
     Stores complete order history from TastyTrade to enable accurate position reconstruction
@@ -722,7 +753,7 @@ class CachedOrder(models.Model):
     **Example Query:**
     ```python
     # Find all filled profit targets for a position
-    filled_targets = CachedOrder.objects.filter(
+    filled_targets = TastyTradeOrderHistory.objects.filter(
         broker_order_id__in=position.profit_target_order_ids,
         status="Filled"
     )
@@ -766,22 +797,27 @@ class CachedOrder(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        db_table = "cached_orders"
+        db_table = "tastytrade_order_history"  # Previously "cached_orders"
         indexes = [
             models.Index(fields=["user", "underlying_symbol", "filled_at"]),
             models.Index(fields=["trading_account", "status"]),
             models.Index(fields=["broker_order_id"]),
-            models.Index(fields=["status", "broker_order_id"], name="idx_status_broker_order"),
+            models.Index(
+                fields=["status", "broker_order_id"],
+                name="idx_tt_order_status_broker",
+            ),
         ]
         constraints = [
             models.UniqueConstraint(
-                fields=["broker_order_id"], name="unique_cached_order_broker_id"
+                fields=["broker_order_id"],
+                name="unique_tt_order_broker_id",
             )
         ]
         ordering = ["-filled_at", "-received_at"]
 
     def __str__(self):
-        return f"{self.underlying_symbol} {self.order_type} {self.status} - {self.broker_order_id}"
+        order_info = f"{self.underlying_symbol} {self.order_type} {self.status}"
+        return f"{order_info} - {self.broker_order_id}"
 
 
 class CachedOrderChain(models.Model):
@@ -859,6 +895,116 @@ class CachedOrderChain(models.Model):
 
     def __str__(self):
         return f"{self.underlying_symbol} Chain {self.chain_id} - {self.description}"
+
+
+class TastyTradeTransaction(models.Model):
+    """
+    Store raw transaction data from TastyTrade for historical reference.
+
+    **Purpose:**
+    Transactions are the ground truth for what actually executed - every fill,
+    assignment, dividend, and fee is recorded as a transaction. This complements
+    TastyTradeOrderHistory (what was requested) with what actually happened.
+
+    **Data Source:**
+    - Synced from TastyTrade API via Account.get_history()
+    - Includes: Trade fills, assignments, exercises, dividends, fees
+    - Each transaction has a unique ID that never changes
+
+    **Key Fields:**
+    - transaction_id: TastyTrade's unique identifier
+    - order_id: Links to the TastyTradeOrderHistory that generated this transaction
+    - action: "Buy to Open", "Sell to Close", etc.
+    - Symbol/quantity/price for the specific fill
+
+    **Usage:**
+    - Position P&L calculation from actual fills
+    - Assignment/exercise detection
+    - Linking fills to specific Position via order_id → opening_order_id
+    - Partial close tracking
+
+    **Relationship to Position:**
+    - related_position is set when we match transaction.order_id to
+      Position.opening_order_id
+    - Multiple transactions can relate to one Position (multi-leg fills)
+    """
+
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="tt_transactions")
+    trading_account = models.ForeignKey(
+        "accounts.TradingAccount",
+        on_delete=models.CASCADE,
+        related_name="tt_transactions",
+    )
+
+    # TastyTrade IDs
+    transaction_id = models.BigIntegerField(unique=True, db_index=True)
+    order_id = models.BigIntegerField(null=True, blank=True, db_index=True)
+
+    # Transaction details
+    transaction_type = models.CharField(max_length=50)  # "Trade", "Receive Deliver"
+    transaction_sub_type = models.CharField(
+        max_length=50,
+        null=True,
+        blank=True,
+    )  # "Buy to Open", "Assignment"
+    description = models.TextField(null=True, blank=True)
+    action = models.CharField(
+        max_length=50,
+        null=True,
+        blank=True,
+    )  # OrderAction value
+
+    # Financial data
+    value = models.DecimalField(max_digits=15, decimal_places=4)
+    net_value = models.DecimalField(max_digits=15, decimal_places=4)
+    commission = models.DecimalField(max_digits=10, decimal_places=4, null=True, blank=True)
+    clearing_fees = models.DecimalField(max_digits=10, decimal_places=4, null=True, blank=True)
+    regulatory_fees = models.DecimalField(max_digits=10, decimal_places=4, null=True, blank=True)
+
+    # Symbol and quantity
+    symbol = models.CharField(max_length=50, null=True, blank=True, db_index=True)
+    underlying_symbol = models.CharField(
+        max_length=20,
+        null=True,
+        blank=True,
+        db_index=True,
+    )
+    instrument_type = models.CharField(max_length=50)
+    quantity = models.DecimalField(max_digits=10, decimal_places=4, null=True, blank=True)
+    price = models.DecimalField(max_digits=10, decimal_places=4, null=True, blank=True)
+
+    # Timestamps
+    executed_at = models.DateTimeField(db_index=True)
+
+    # Raw data preservation
+    raw_data = models.JSONField(default=dict, encoder=DjangoJSONEncoder)
+
+    # Link to Position (set during position matching)
+    related_position = models.ForeignKey(
+        Position,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="transactions",
+    )
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "tastytrade_transactions"
+        ordering = ["-executed_at"]
+        indexes = [
+            models.Index(fields=["user", "executed_at"]),
+            models.Index(
+                fields=["trading_account", "underlying_symbol", "executed_at"],
+            ),
+            models.Index(fields=["order_id"]),
+        ]
+
+    def __str__(self):
+        action = self.transaction_sub_type or self.transaction_type
+        return f"{action} {self.symbol} @ {self.executed_at}"
 
 
 class TechnicalIndicatorCache(models.Model):

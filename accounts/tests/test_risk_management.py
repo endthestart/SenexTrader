@@ -1,3 +1,4 @@
+import contextlib
 from decimal import Decimal
 from unittest.mock import patch
 
@@ -14,6 +15,11 @@ from services.risk.manager import EnhancedRiskManager
 User = get_user_model()
 
 
+def delete_default_allocation(user):
+    with contextlib.suppress(OptionsAllocation.DoesNotExist):
+        user.options_allocation.delete()
+
+
 class OptionsAllocationModelTests(TestCase):
     """Test OptionsAllocation model creation, validation, and defaults"""
 
@@ -23,6 +29,7 @@ class OptionsAllocationModelTests(TestCase):
             username="riskuser@example.com",
             password="testpass123",
         )
+        delete_default_allocation(self.user)
 
     def test_options_allocation_creation_with_defaults(self):
         """Test creating OptionsAllocation with default values"""
@@ -172,6 +179,7 @@ class OptionsAllocationModelTests(TestCase):
             username="user2@example.com",
             password="testpass123",
         )
+        delete_default_allocation(user2)
 
         user_defined_allocation = OptionsAllocation.objects.create(
             user=user2, allocation_method="user_defined"
@@ -214,6 +222,7 @@ class EnhancedRiskManagerTests(TestCase):
             username="enhanced@example.com",
             password="testpass123",
         )
+        delete_default_allocation(self.user)
         self.risk_manager = EnhancedRiskManager(self.user)
 
     def test_spread_width_tiers_return_odd_numbers(self):
@@ -387,8 +396,7 @@ class BollingerBandsTests(TestCase):
         assert result["current_price"] == 95.0
         assert len(prices) == 20  # Verify we have exactly 20 prices
 
-    @patch("services.market_analysis.cache")
-    def test_bollinger_bands_realtime(self, mock_cache):
+    def test_bollinger_bands_realtime(self):
         """Test real-time Bollinger Bands with mock data"""
         # Mock historical prices
         with patch.object(self.analyzer, "_get_historical_prices") as mock_historical:

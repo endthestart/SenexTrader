@@ -2,7 +2,7 @@
 
 ## CRITICAL: What Senex Trident IS and IS NOT
 
-### ⚠️ Senex Trident IS NOT AN IRON CONDOR
+### Senex Trident IS NOT AN IRON CONDOR
 
 **This is a critical distinction that must be understood:**
 
@@ -84,8 +84,8 @@ The asymmetric structure (2 put spreads vs 1 call spread) affects position sizin
 ### Code References
 
 When referencing this strategy in code:
-- ✅ CORRECT: "Senex Trident", "2 put spreads + 1 call spread", "asymmetric condor variant"
-- ❌ WRONG: "iron condor", "4-leg iron condor", "standard iron condor"
+- CORRECT: "Senex Trident", "2 put spreads + 1 call spread", "asymmetric condor variant"
+- WRONG: "iron condor", "4-leg iron condor", "standard iron condor"
 
 ### Summary
 

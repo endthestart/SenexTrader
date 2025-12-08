@@ -83,12 +83,11 @@ async def validate_trade_risk(request):
     except json.JSONDecodeError:
         return JsonResponse({"valid": False, "message": "Invalid JSON in request body"}, status=400)
     except Exception as e:
-        # Async-safe user ID access for logging
         try:
-            user_id_for_log = await async_get_user_id(request)
-        except:
-            user_id_for_log = "unknown"
-        logger.error(f"Error in validate_trade_risk API for user {user_id_for_log}: {e}")
+            user_id = await async_get_user_id(request)
+        except Exception:
+            user_id = "unknown"
+        logger.error(f"Error in validate_trade_risk API for user {user_id}: {e}")
         return JsonResponse(
             {
                 "valid": False,
@@ -245,11 +244,11 @@ async def check_streamer_readiness(request):
 
     except Exception as e:
         try:
-            user_id_for_log = await async_get_user_id(request)
-        except:
-            user_id_for_log = "unknown"
+            user_id = await async_get_user_id(request)
+        except Exception:
+            user_id = "unknown"
         logger.error(
-            f"Error checking streamer readiness for user {user_id_for_log}: {e}", exc_info=True
+            f"Error checking streamer readiness for user {user_id}: {e}", exc_info=True
         )
         return JsonResponse(
             {
@@ -404,7 +403,7 @@ async def execute_suggestion(request, suggestion_id):
                 await suggestion.asave(update_fields=["status"])
 
                 logger.info(
-                    f"🧪 DRY-RUN: Suggestion {suggestion_id} validated for user {user_id} "
+                    f"DRY-RUN: Suggestion {suggestion_id} validated for user {user_id} "
                     "(status reverted to pending)"
                 )
                 return JsonResponse(
@@ -683,7 +682,6 @@ def save_risk_settings(request):
         if allocation_method not in ["conservative", "moderate", "aggressive"]:
             return JsonResponse({"success": False, "error": "Invalid allocation method"})
 
-
         # OptionsAllocation is created automatically via signals when user is created
         allocation = request.user.options_allocation
         allocation.allocation_method = allocation_method
@@ -761,33 +759,22 @@ def sync_positions(request):
             "action": "sync_positions_start",
         },
     )
-    logger.info(f"🔍 SYNC START: User {request.user.id} requested position sync")
+    logger.info(f"Position sync requested by user {request.user.id}")
 
     try:
         from asgiref.sync import async_to_sync
 
         from services.positions.sync import PositionSyncService
 
-        logger.info("📍 Creating PositionSyncService...")
         service = PositionSyncService()
-
-        logger.info("📍 Calling sync_all_positions...")
-        # Use async_to_sync instead of asyncio.run to avoid event loop conflicts
         result = async_to_sync(service.sync_all_positions)(request.user)
 
-        logger.info(f"📊 SYNC RESULT: {result}")
-
-        logger.info("🎉 SYNC COMPLETE: Returning result to frontend")
+        logger.info(f"Position sync result: {result}")
         return JsonResponse(result)
 
     except Exception as e:
-        logger.error(f"🚨 Position sync error for user {request.user.id}: {e}", exc_info=True)
+        logger.error(f"Position sync error for user {request.user.id}: {e}", exc_info=True)
         return JsonResponse({"success": False, "error": str(e)})
-
-
-# ============================================================================
-# PHASE 4: INTELLIGENT STRATEGY SELECTOR ENDPOINTS
-# ============================================================================
 
 
 @login_required
@@ -1349,11 +1336,6 @@ async def get_all_positions_leg_symbols(request):
         return ErrorResponseBuilder.from_exception(e, context="get_all_positions_leg_symbols")
 
 
-# ============================================================================
-# WATCHLIST ENDPOINTS (Phase 0: Multi-Equity Suggestions)
-# ============================================================================
-
-
 @login_required
 @require_http_methods(["GET"])
 async def watchlist_symbol_search(request):
@@ -1509,6 +1491,7 @@ async def watchlist_api(request):
         except Exception as e:
             logger.error(f"Add to watchlist error: {e}", exc_info=True)
             return JsonResponse({"success": False, "error": "Failed to add symbol"}, status=500)
+    return None
 
 
 @login_required

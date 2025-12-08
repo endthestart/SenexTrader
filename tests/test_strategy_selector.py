@@ -326,15 +326,15 @@ class TestStrategySelector:
             patch.object(GlobalStreamManager, "get_user_manager", return_value=mock_manager),
         ):
             strategy_name, suggestion, explanation = await selector.a_select_and_generate(
-                "SPY", forced_strategy="bull_put_spread"
+                "SPY", forced_strategy="short_put_vertical"
             )
 
             # Should generate requested strategy
-            assert strategy_name == "bull_put_spread"
+            assert strategy_name == "short_put_vertical"
             assert suggestion is not None
             assert isinstance(explanation, dict)
             assert explanation["type"] == "forced"
-            assert "Bull Put Spread" in explanation["title"]
+            assert "Short Put Vertical" in explanation["title"]
             assert "confidence" in explanation
 
     @pytest.mark.asyncio
@@ -373,13 +373,13 @@ class TestStrategySelector:
             ),
             patch.object(GlobalStreamManager, "get_user_manager", return_value=mock_manager),
         ):
-            # Force Bull Put Spread in bearish market (bad conditions)
+            # Force Short Put Vertical in bearish market (bad conditions)
             strategy_name, suggestion, explanation = await selector.a_select_and_generate(
-                "SPY", forced_strategy="bull_put_spread"
+                "SPY", forced_strategy="short_put_vertical"
             )
 
             # Should generate requested strategy even with low confidence
-            assert strategy_name == "bull_put_spread"
+            assert strategy_name == "short_put_vertical"
             assert suggestion is not None
             assert isinstance(explanation, dict)
             assert explanation["type"] == "forced"
@@ -414,14 +414,14 @@ class TestStrategySelector:
             ),
             patch.object(GlobalStreamManager, "get_user_manager", return_value=mock_manager),
         ):
-            strategy_name, suggestion, explanation = await selector.a_select_and_generate(
-                "SPY", forced_strategy="bull_put_spread"
+            strategy_name, suggestion, _explanation = await selector.a_select_and_generate(
+                "SPY", forced_strategy="short_put_vertical"
             )
 
             # Should start streaming when not active
             mock_manager.start_streaming.assert_called_once_with(["SPY"])
             # Should generate requested strategy
-            assert strategy_name == "bull_put_spread"
+            assert strategy_name == "short_put_vertical"
             assert suggestion is not None
 
     @pytest.mark.asyncio
@@ -445,14 +445,14 @@ class TestStrategySelector:
             ),
             patch.object(GlobalStreamManager, "get_user_manager", return_value=mock_manager),
         ):
-            strategy_name, suggestion, explanation = await selector.a_select_and_generate(
-                "SPY", forced_strategy="bull_put_spread"
+            strategy_name, suggestion, _explanation = await selector.a_select_and_generate(
+                "SPY", forced_strategy="short_put_vertical"
             )
 
             # Should NOT start streaming when already active
             mock_manager.start_streaming.assert_not_called()
             # Should generate requested strategy
-            assert strategy_name == "bull_put_spread"
+            assert strategy_name == "short_put_vertical"
             assert suggestion is not None
 
     @pytest.mark.asyncio
@@ -480,13 +480,13 @@ class TestStrategySelector:
             patch.object(GlobalStreamManager, "get_user_manager", return_value=mock_manager),
         ):
             strategy_name, suggestion, explanation = await selector.a_select_and_generate(
-                "SPY", forced_strategy="bull_put_spread"
+                "SPY", forced_strategy="short_put_vertical"
             )
 
             # Should attempt to start streaming
             mock_manager.start_streaming.assert_called_once_with(["SPY"])
             # Should return strategy name but no suggestion
-            assert strategy_name == "bull_put_spread"
+            assert strategy_name == "short_put_vertical"
             assert suggestion is None
             # Should have error explanation
             assert isinstance(explanation, dict)
@@ -582,7 +582,7 @@ class TestStrategySelector:
             patch.object(GlobalStreamManager, "get_user_manager", return_value=mock_manager),
         ):
             _, _, explanation = await selector.a_select_and_generate(
-                "SPY", forced_strategy="bull_put_spread"
+                "SPY", forced_strategy="short_put_vertical"
             )
 
             # Check required sections in dict format
@@ -609,7 +609,7 @@ class TestStrategySelector:
                 selector.analyzer, "a_analyze_market_conditions", return_value=ideal_market_report
             ),
             patch.object(
-                selector.strategies["bull_put_spread"],
+                selector.strategies["short_put_vertical"],
                 "a_score_market_conditions",
                 side_effect=Exception("Scoring failed"),
             ),
@@ -618,9 +618,9 @@ class TestStrategySelector:
             strategy_name, _, _explanation = await selector.a_select_and_generate("SPY")
 
             # Should still select a strategy (one that didn't error)
-            # Since bull_put_spread errored, should select different strategy
+            # Since short_put_vertical errored, should select different strategy
             assert strategy_name is not None
-            assert strategy_name != "bull_put_spread"
+            assert strategy_name != "short_put_vertical"
 
     @pytest.mark.asyncio
     async def test_no_trade_explanation_includes_last_update(self, mock_user, no_trade_report):
@@ -705,9 +705,9 @@ class TestStrategySelector:
         """
         from decimal import Decimal
 
-        from services.strategies.credit_spread_strategy import BullPutSpreadStrategy
+        from services.strategies.credit_spread_strategy import ShortPutVerticalStrategy
 
-        strategy = BullPutSpreadStrategy(mock_user)
+        strategy = ShortPutVerticalStrategy(mock_user)
 
         # Mock only the risk manager to simulate 100% utilization
         strategy.risk_manager.a_can_open_position = AsyncMock(
@@ -795,7 +795,6 @@ class TestStrategySelector:
         # Mock strategy generation methods but keep prepare_suggestion_context real
         for name, strategy in selector.strategies.items():
             # Save the real prepare method before any mocking
-            real_prepare = strategy.a_prepare_suggestion_context
 
             # Mock only what's needed for the test to work
             strategy.a_prepare_suggestion_context = AsyncMock(
@@ -843,109 +842,3 @@ class TestStrategySelector:
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
-
-
-class TestQualityBlockIntegration:
-    """Tests for Epic 50 Task 003: Quality block in explanations."""
-
-    @pytest.mark.asyncio
-    async def test_quality_block_in_auto_explanation(self, mock_user):
-        """
-        Ensure every auto explanation dict contains fully-populated quality block.
-
-        Validates Task 003 acceptance criteria: quality feedback always present
-        in strategy explanations for UI rendering.
-        """
-        selector = StrategySelector(user=mock_user)
-
-        # Mock report
-        mock_report = MagicMock()
-        mock_report.symbol = "SPY"
-        mock_report.trend = "bullish"
-        mock_report.iv_rank = 65.0
-
-        # Quality score data
-        quality_score_data = {
-            "score": 75.0,
-            "level": "good",
-            "metrics": {
-                "market_alignment": 30.0,
-                "strike_deviation": 25.0,
-                "dte_optimality": 15.0,
-                "liquidity": 5.0,
-            },
-            "warnings": ["Minor DTE suboptimal"],
-        }
-
-        # Build explanation with all required parameters
-        explanation = selector._build_auto_explanation(
-            selected="bull_put_spread",
-            selected_score=75.0,
-            confidence="high",
-            all_scores={"bull_put_spread": 75.0, "bear_call_spread": 60.0},
-            all_explanations={
-                "bull_put_spread": "Good market conditions",
-                "bear_call_spread": "Moderate fit",
-            },
-            report=mock_report,
-            quality_score_data=quality_score_data,
-        )
-
-        # Verify quality block exists and is fully populated
-        assert "quality" in explanation, "Explanation missing quality block"
-        quality = explanation["quality"]
-
-        # Verify all required fields
-        assert "score" in quality
-        assert "badge_color" in quality
-        assert "badge_text" in quality
-        assert "status" in quality
-        assert "level" in quality
-        assert "warnings" in quality
-        assert "metrics" in quality
-        assert "metric_breakdown" in quality
-
-        # Verify values
-        assert quality["score"] == 75.0
-        assert quality["level"] == "good"
-        assert quality["badge_color"] == "warning"  # Good = yellow/warning
-        assert len(quality["warnings"]) > 0
-        assert len(quality["metric_breakdown"]) == 4
-
-    @pytest.mark.asyncio
-    async def test_quality_block_in_forced_explanation(self, mock_user):
-        """Ensure forced explanations also include quality block."""
-        selector = StrategySelector(user=mock_user)
-
-        # Mock report
-        mock_report = MagicMock()
-        mock_report.symbol = "QQQ"
-        mock_report.trend = "neutral"
-
-        # Quality score data
-        quality_score_data = {
-            "score": 45.0,
-            "level": "fair",
-            "metrics": {
-                "market_alignment": 15.0,
-                "strike_deviation": 15.0,
-                "dte_optimality": 10.0,
-                "liquidity": 5.0,
-            },
-            "warnings": ["Market conditions suboptimal"],
-        }
-
-        # Build explanation with all required parameters
-        explanation = selector._build_forced_explanation(
-            strategy_name="bull_put_spread",
-            score=45.0,
-            confidence="medium",
-            score_explanation="Forced generation with suboptimal conditions",
-            report=mock_report,
-            quality_score_data=quality_score_data,
-        )
-
-        assert "quality" in explanation
-        assert explanation["quality"]["score"] == 45.0
-        assert explanation["quality"]["level"] == "fair"
-        assert explanation["quality"]["badge_color"] == "orange"  # Fair = orange

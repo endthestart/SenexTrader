@@ -124,7 +124,7 @@ class OrderExecutionService:
                 legs=order_legs_dict,
                 expected_credit=net_credit,
                 simulated_status="validated",
-                message=f"✅ Dry-run validated successfully for {suggestion.strategy_id} on {suggestion.underlying_symbol}",
+                message=f"Dry-run validated successfully for {suggestion.strategy_id} on {suggestion.underlying_symbol}",
                 would_create_profit_targets=True,
                 suggestion_id=suggestion.id,
                 strategy_type=suggestion.strategy_id,
@@ -137,7 +137,7 @@ class OrderExecutionService:
             return DryRunResult(
                 legs=order_legs_dict,
                 expected_credit=net_credit,
-                message=f"❌ Dry-run validation failed: {e!s}",
+                message=f"Dry-run validation failed: {e!s}",
                 simulated_status="validation_failed",
                 suggestion_id=suggestion.id,
                 strategy_type=suggestion.strategy_id,
@@ -180,7 +180,7 @@ class OrderExecutionService:
         is_test_mode = account.is_test
         if is_test_mode:
             logger.warning(
-                f"🧪 SANDBOX MODE: Order for {suggestion.underlying_symbol} "
+                f"SANDBOX MODE: Order for {suggestion.underlying_symbol} "
                 f"will be submitted to TastyTrade sandbox environment"
             )
 
@@ -208,7 +208,8 @@ class OrderExecutionService:
             )
             raise StalePricingError(suggestion_id=suggestion.id, age_seconds=age_seconds)
 
-        order_legs = await self._build_senex_order_legs(session, suggestion)
+        # Dispatch to appropriate leg builder based on strategy type
+        order_legs = await self._build_order_legs_for_strategy(session, suggestion)
         if not order_legs:
             logger.error("Failed to build order legs for suggestion %s", suggestion.id)
             raise OrderBuildError(suggestion_id=suggestion.id)
@@ -292,15 +293,13 @@ class OrderExecutionService:
 
         if self._should_dry_run():
             logger.info(
-                f"🧪 DRY-RUN MODE: Validating order for {suggestion.underlying_symbol} "
+                f"DRY-RUN MODE: Validating order for {suggestion.underlying_symbol} "
                 f"via TastyTrade API without database persistence"
             )
             return await self._execute_dry_run(
                 suggestion, session, account, order_legs, order_legs_dict, net_credit
             )
 
-        # CRITICAL: Create pending database records FIRST using async transaction
-        # This prevents data loss if DB writes fail after successful order placement
         try:
             position, trade = await self._create_pending_records_async(
                 account, suggestion, order_legs_dict
@@ -310,9 +309,6 @@ class OrderExecutionService:
             logger.error(f"Failed to create pending database records: {e}")
             return None
 
-        # NOW submit the order to TastyTrade
-        # Note: is_test_mode controls environment (sandbox vs production)
-        # not dry_run behavior - actual orders are placed in both environments
         try:
             response = await self._submit_order(
                 session, account.account_number, order_legs, net_credit
@@ -329,15 +325,13 @@ class OrderExecutionService:
                     order_details={"suggestion_id": suggestion.id},
                 )
 
-            # Order succeeded! Extract order ID and update records
             order_id = self._extract_order_id(response)
-            logger.info(f"✅ ORDER PLACED: {order_id} - Updating database records...")
+            logger.info(f"ORDER PLACED: {order_id} - Updating database records...")
 
-            # Update records with actual order info
             await self._finalize_position_record(position, response)
             await self._finalize_trade_record(trade, response, order_id)
             await self._mark_suggestion_executed(suggestion, position)
-            logger.info(f"✅ DATABASE SYNC SUCCESS: Order {order_id} fully recorded")
+            logger.info(f"DATABASE SYNC SUCCESS: Order {order_id} fully recorded")
 
         except Exception as e:
             # Order may or may not have been placed - log extensively
@@ -348,9 +342,6 @@ class OrderExecutionService:
             # Clean up pending records - if order succeeded, AlertStreamer will detect it
             await self._delete_pending_records(position, trade)
             raise
-
-        # Profit targets are created asynchronously via AlertStreamer when the order fills
-        # See streaming/services/stream_manager.py::_create_profit_targets_for_trade()
 
         logger.info(
             "Executed suggestion %s as position %s (trade %s)",
@@ -371,8 +362,6 @@ class OrderExecutionService:
         @sync_to_async
         def _create_records():
             with transaction.atomic():
-                # Create position with 'pending entry' lifecycle state
-                # Calculate number of spreads (each vertical spread counts as 1)
                 num_spreads = suggestion.put_spread_quantity + suggestion.call_spread_quantity
 
                 position = Position.objects.create(
@@ -421,7 +410,6 @@ class OrderExecutionService:
                     },
                 )
 
-                # Create trade with 'pending' status
                 trade = Trade.objects.create(
                     user=self.user,
                     position=position,
@@ -493,8 +481,95 @@ class OrderExecutionService:
 
         # dry_run validates without submitting (useful for testing order building)
         if dry_run:
-            logger.info("🔍 DRY RUN: Validating order without submission (will return order_id=-1)")
+            logger.info("DRY RUN: Validating order without submission (will return order_id=-1)")
         return await tt_account.a_place_order(session, new_order, dry_run=dry_run)
+
+    async def _build_order_legs_for_strategy(
+        self, session, suggestion: TradingSuggestion
+    ) -> list:
+        """
+        Dispatch to appropriate leg builder based on strategy type.
+
+        Args:
+            session: OAuth session for API calls
+            suggestion: TradingSuggestion with strategy_id and strikes
+
+        Returns:
+            List of Leg objects for the order
+        """
+        strategy_id = suggestion.strategy_id
+
+        # Senex Trident uses special builder (2 puts + 1 call)
+        if strategy_id == "senex_trident":
+            return await self._build_senex_order_legs(session, suggestion)
+
+        # Credit spreads (short verticals)
+        if strategy_id == "short_put_vertical":
+            return await self._build_spread_order_legs(
+                session, suggestion, spread_type="put_spread"
+            )
+
+        if strategy_id == "short_call_vertical":
+            return await self._build_spread_order_legs(
+                session, suggestion, spread_type="call_spread"
+            )
+
+        # Debit spreads (long verticals) - same leg structure, different pricing
+        if strategy_id == "long_put_vertical":
+            return await self._build_spread_order_legs(
+                session, suggestion, spread_type="put_spread"
+            )
+
+        if strategy_id == "long_call_vertical":
+            return await self._build_spread_order_legs(
+                session, suggestion, spread_type="call_spread"
+            )
+
+        # Fallback to Senex builder for unknown strategies (backward compatibility)
+        logger.warning(
+            f"Unknown strategy_id '{strategy_id}' - falling back to Senex leg builder"
+        )
+        return await self._build_senex_order_legs(session, suggestion)
+
+    async def _build_spread_order_legs(
+        self, session, suggestion: TradingSuggestion, spread_type: str
+    ) -> list:
+        """
+        Build order legs for a single spread (put or call vertical).
+
+        Args:
+            session: OAuth session for API calls
+            suggestion: TradingSuggestion with strikes
+            spread_type: "put_spread" or "call_spread"
+
+        Returns:
+            List of Leg objects for the spread
+        """
+        from services.orders.utils.order_builder_utils import build_opening_spread_legs
+
+        if spread_type == "put_spread":
+            strikes = {
+                "short_put": suggestion.short_put_strike,
+                "long_put": suggestion.long_put_strike,
+            }
+        elif spread_type == "call_spread":
+            strikes = {
+                "short_call": suggestion.short_call_strike,
+                "long_call": suggestion.long_call_strike,
+            }
+        else:
+            raise ValueError(f"Unknown spread_type: {spread_type}")
+
+        quantity = suggestion.put_spread_quantity or suggestion.call_spread_quantity or 1
+
+        return await build_opening_spread_legs(
+            session,
+            suggestion.underlying_symbol,
+            suggestion.expiration_date,
+            spread_type,
+            strikes,
+            quantity,
+        )
 
     async def _build_senex_order_legs(self, session, suggestion: TradingSuggestion) -> list:
         """Construct the OCC legs for the Senex structure using centralized async utility."""
@@ -567,6 +642,23 @@ class OrderExecutionService:
                 return str(order_id)
 
         logger.warning(f"Could not extract order ID from response: {response}")
+        return None
+
+    def _extract_complex_order_id(self, response) -> str | None:
+        """Extract complex order ID from TastyTrade PlacedOrderResponse.
+
+        Complex order IDs group related orders in OTOCO (One Triggers OCO) patterns,
+        such as opening orders with attached profit targets.
+        """
+        if response is None:
+            return None
+
+        if hasattr(response, "order"):
+            order = response.order
+            complex_id = getattr(order, "complex_order_id", None)
+            if complex_id:
+                return str(complex_id)
+
         return None
 
     @staticmethod
@@ -818,17 +910,22 @@ class OrderExecutionService:
 
         # Extract order ID from response
         order_id = self._extract_order_id(response)
+        complex_order_id = self._extract_complex_order_id(response)
 
-        # Set broker_order_ids list for order history linking
-        # Skip None (dry-run orders) to prevent monitoring task errors
+        # Set opening_order_id - CRITICAL for position isolation
+        # This is the primary key for linking this position to its TastyTrade order
         if order_id:
-            position.broker_order_ids = [order_id]
-        else:
-            position.broker_order_ids = []
+            position.opening_order_id = order_id
+        # NOTE: broker_order_ids removed - use opening_order_id instead
+
+        # Set opening_complex_order_id if this is part of an OTOCO order
+        if complex_order_id:
+            position.opening_complex_order_id = complex_order_id
 
         # Store detailed broker response in metadata
         position.metadata["broker_response"] = {
             "order_id": order_id,
+            "complex_order_id": complex_order_id,
             "status": getattr(
                 response.order if hasattr(response, "order") else response, "status", None
             ),
@@ -839,13 +936,17 @@ class OrderExecutionService:
                 response.order if hasattr(response, "order") else response, "price", None
             ),
             "filled_quantity": getattr(
-                response.order if hasattr(response, "order") else response, "filled_quantity", None
+                response.order if hasattr(response, "order") else response,
+                "filled_quantity",
+                None,
             ),
             "order_type": getattr(
                 response.order if hasattr(response, "order") else response, "order_type", None
             ),
             "time_in_force": getattr(
-                response.order if hasattr(response, "order") else response, "time_in_force", None
+                response.order if hasattr(response, "order") else response,
+                "time_in_force",
+                None,
             ),
         }
         await position.asave()
@@ -1069,11 +1170,11 @@ class OrderExecutionService:
                     }
                 )
                 logger.info(
-                    f"✅ Created {spec.spread_type} profit target "
+                    f"Created {spec.spread_type} profit target "
                     f"({spec.profit_percentage}%): {order_id}"
                 )
             else:
-                logger.error(f"❌ Failed to create {spec.spread_type} profit target")
+                logger.error(f"Failed to create {spec.spread_type} profit target")
 
         return {"order_ids": order_ids, "targets": results, "total_orders": len(order_ids)}
 
@@ -1118,21 +1219,17 @@ class OrderExecutionService:
 
             if response:
                 order_id = self._extract_order_id(response)
-                logger.info(f"✅ Executed order spec: {order_spec.description} -> {order_id}")
+                logger.info(f"Executed order spec: {order_spec.description} -> {order_id}")
                 return order_id
-            logger.error(f"❌ Failed to execute order spec: {order_spec.description}")
+            logger.error(f"Failed to execute order spec: {order_spec.description}")
             return None
 
         except Exception as e:
-            logger.error(f"❌ Error executing order spec '{order_spec.description}': {e}")
+            logger.error(f"Error executing order spec '{order_spec.description}': {e}")
             return None
 
     async def _submit_order_spec(self, session, account_number: str, order_spec) -> dict | None:
         """Submit an OrderSpec to TastyTrade API."""
-        # Check market hours before submission
-        if not is_market_open_now():
-            raise MarketClosedError()
-
         try:
             from tastytrade import Account
             from tastytrade.order import InstrumentType, Leg, NewOrder, OrderTimeInForce, OrderType
@@ -1147,6 +1244,10 @@ class OrderExecutionService:
             "GTC": OrderTimeInForce.GTC,
             "IOC": OrderTimeInForce.IOC,
         }
+
+        # Check market hours only for DAY orders (GTC and IOC can be submitted anytime)
+        if order_spec.time_in_force == "DAY" and not is_market_open_now():
+            raise MarketClosedError()
 
         # Map order type string to enum
         order_type_map = {
@@ -1213,7 +1314,7 @@ class OrderExecutionService:
             preserve_existing: If True, merge new targets with existing ones instead of replacing
             filter_spread_types: If provided, only create profit targets for these spread types
         """
-        logger.info(f"📊 SYNC PROFIT TARGETS: Starting for position {position.id}")
+        logger.info(f"SYNC PROFIT TARGETS: Starting for position {position.id}")
 
         from trading.models import Trade
 

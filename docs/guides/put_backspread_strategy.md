@@ -32,23 +32,23 @@
 **REGIME:** Trending Bull + High Volatility + ATH Extended + Exhaustion Confirmed
 
 **Key Warning Signals:**
-1. ✓ Price within 2% of ATH 
-2. ✓ RSI >70 for 5+ days
-3. ✓ Price >10% above 20-day MA
-4. ✓ Volume declining on rallies (42M vs 58M avg = 72% of normal)
-5. ✓ Heavy institutional put buying (smart money positioning)
-6. ✓ VIX elevated at highs (fear at tops = divergence)
-7. ✓ Breadth divergence (fewer new highs while price at ATH)
-8. ✓ Multiple rejection attempts at $605-609
+1. [OK] Price within 2% of ATH 
+2. [OK] RSI >70 for 5+ days
+3. [OK] Price >10% above 20-day MA
+4. [OK] Volume declining on rallies (42M vs 58M avg = 72% of normal)
+5. [OK] Heavy institutional put buying (smart money positioning)
+6. [OK] VIX elevated at highs (fear at tops = divergence)
+7. [OK] Breadth divergence (fewer new highs while price at ATH)
+8. [OK] Multiple rejection attempts at $605-609
 
 **Exhaustion Score:** 7/8 ATH warnings + 5/8 exhaustion signals = **HIGH PROBABILITY CORRECTION SETUP**
 
 ### Your Thesis Validation
-**✓ Market is overbought** - RSI 73.69, extreme territory  
-**✓ At all-time highs** - 0.2% from peak, multiple rejections  
-**✓ Smart money defensive** - Heavy institutional put buying  
-**✓ Volatility elevated** - VIX 18+ despite new highs (divergence)  
-**✓ Breadth weakening** - Fewer stocks participating in rally  
+**[OK] Market is overbought** - RSI 73.69, extreme territory  
+**[OK] At all-time highs** - 0.2% from peak, multiple rejections  
+**[OK] Smart money defensive** - Heavy institutional put buying  
+**[OK] Volatility elevated** - VIX 18+ despite new highs (divergence)  
+**[OK] Breadth weakening** - Fewer stocks participating in rally  
 
 **CONCLUSION:** Your bearish bias is well-supported. Put backspread is an appropriate strategy for this environment.
 
@@ -71,12 +71,12 @@ A put backspread (also called a "ratio put spread" or "put backspread") is a bea
 - **Best outcome:** Significant downside move with volatility expansion
 
 **Why Put Backspreads for This Environment:**
-1. ✓ Profits from correction you expect
-2. ✓ Benefits from volatility expansion (IV will spike on drop)
-3. ✓ Limited upside risk if you're wrong about correction
-4. ✓ Can be entered for near-zero cost or small credit
-5. ✓ Positive vega (benefits from IV increase)
-6. ✓ Defined max loss (unlike short puts)
+1. [OK] Profits from correction you expect
+2. [OK] Benefits from volatility expansion (IV will spike on drop)
+3. [OK] Limited upside risk if you're wrong about correction
+4. [OK] Can be entered for near-zero cost or small credit
+5. [OK] Positive vega (benefits from IV increase)
+6. [OK] Defined max loss (unlike short puts)
 
 ---
 
@@ -381,9 +381,9 @@ Do NOT enter immediately. Wait for one of these setups:
 - Confirms support turned resistance
 
 **AVOID:**
-- ❌ Entering Monday Oct 21 (too reactive to weekend news)
-- ❌ Entering during big up day (chasing, poor premium)
-- ❌ Entering during big down day (already moved, IV too high)
+- Entering Monday Oct 21 (too reactive to weekend news)
+- Entering during big up day (chasing, poor premium)
+- Entering during big down day (already moved, IV too high)
 
 ### Recommended Trade (When Conditions Met)
 
@@ -460,8 +460,8 @@ Put backspreads have **positive vega** (benefit from IV increase):
 **Condition:** QQQ rallies to $630-650 (new ATH with no correction)
 
 **Impact on Put Backspread:**
-- Short $610 put expires worthless ✓ (collect full premium)
-- Long $595 puts expire worthless ✗ (lose all premium paid)
+- Short $610 put expires worthless [OK] (collect full premium)
+- Long $595 puts expire worthless [FAIL] (lose all premium paid)
 - **Net Result:** Lose net debit paid, typically $2-5 per spread
 
 **Probability:** 20-25% (based on exhaustion signals, unlikely but possible)
@@ -570,18 +570,18 @@ Put backspreads have **positive vega** (benefit from IV increase):
 5. Take profits early, cut losses fast
 
 **YOUR THESIS IS VALID:**
-- ✓ Overbought (RSI 73.69)
-- ✓ At ATH ($611.93 vs $613.18)
-- ✓ Exhaustion signals (7/8 warnings)
-- ✓ Smart money positioning (heavy put buying)
-- ✓ Volatility elevated (VIX 18+)
+- [OK] Overbought (RSI 73.69)
+- [OK] At ATH ($611.93 vs $613.18)
+- [OK] Exhaustion signals (7/8 warnings)
+- [OK] Smart money positioning (heavy put buying)
+- [OK] Volatility elevated (VIX 18+)
 
 **PUT BACKSPREAD IS THE RIGHT STRATEGY:**
-- ✓ Profits from expected correction
-- ✓ Limited risk if wrong
-- ✓ Benefits from volatility expansion
-- ✓ Can be entered weekly
-- ✓ Scales well with conviction
+- [OK] Profits from expected correction
+- [OK] Limited risk if wrong
+- [OK] Benefits from volatility expansion
+- [OK] Can be entered weekly
+- [OK] Scales well with conviction
 
 **EXECUTION IS EVERYTHING:**
 - Enter at right strikes (resistance/support)

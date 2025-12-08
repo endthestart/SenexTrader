@@ -501,11 +501,11 @@ async def _async_generate_and_email_daily_suggestions():
             )
             
             results["emails_sent"] += 1
-            logger.info(f"✅ Sent daily suggestion email to {user.email}")
+            logger.info(f"Sent daily suggestion email to {user.email}")
             
         except Exception as exc:
             logger.error(
-                f"❌ Failed to send suggestion to {user.email}: {exc}", 
+                f"Failed to send suggestion to {user.email}: {exc}", 
                 exc_info=True
             )
             results["failed"] += 1
@@ -601,7 +601,7 @@ def _build_comprehensive_email(
     
     # Strategy comparison section
     body += "=" * 60 + "\n"
-    body += "📊 STRATEGY COMPARISON\n\n"
+    body += "STRATEGY COMPARISON\n\n"
     body += _build_strategy_comparison(suggestions_list, global_context)
     body += "\n"
     
@@ -681,7 +681,7 @@ def _build_suggestion_section(
     section += "\n"
     
     # Execute link - NO RISK CHECKING HERE
-    section += f"   👉 Execute this trade: {base_url}/trading/?suggestion={suggestion.id}\n"
+    section += f"   Execute this trade: {base_url}/trading/?suggestion={suggestion.id}\n"
     
     return section
 
@@ -710,9 +710,9 @@ def _build_strategy_comparison(suggestions_list: list, global_context: dict) -> 
         if score >= 70:
             section += " ⭐ STRONG PICK\n"
         elif score >= 50:
-            section += " ⚙️ MODERATE PICK\n"
+            section += " MODERATE PICK\n"
         else:
-            section += " ⚠️ HEDGE OPTION\n"
+            section += " HEDGE OPTION\n"
         
         # Strategy-specific description
         if "trident" in strategy_name.lower():
@@ -838,9 +838,9 @@ async def test_task_at_full_risk_budget():
     # Arrange: User with 100% risk budget used
     # Act: Run task
     # Assert: 
-    #   - Suggestions generated ✓
-    #   - Email sent ✓
-    #   - Email shows "CANNOT EXECUTE" status ✓
+    #   - Suggestions generated
+    #   - Email sent
+    #   - Email shows "CANNOT EXECUTE" status
     pass
 
 

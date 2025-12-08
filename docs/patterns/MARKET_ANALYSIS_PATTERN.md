@@ -45,8 +45,8 @@ Strategy._score_market_conditions_impl()
 ### 1. Regime Detection
 
 **Fields:**
-- `regime_primary: RegimeType | None` — Primary market regime
-- `regime_confidence: float` — Confidence score (0-100)
+- `regime_primary: RegimeType | None` - Primary market regime
+- `regime_confidence: float` - Confidence score (0-100)
 
 **Regime Types:**
 ```python
@@ -86,10 +86,10 @@ elif report.regime_primary == RegimeType.BULL:
 ### 2. Extreme Detection
 
 **Fields:**
-- `is_overbought: bool` — 3+ overbought warnings
-- `overbought_warnings: int` — Count of overbought indicators
-- `is_oversold: bool` — 3+ oversold warnings
-- `oversold_warnings: int` — Count of oversold indicators
+- `is_overbought: bool` - 3+ overbought warnings
+- `overbought_warnings: int` - Count of overbought indicators
+- `is_oversold: bool` - 3+ oversold warnings
+- `oversold_warnings: int` - Count of oversold indicators
 
 **Warning Sources:**
 - RSI > 70 (+1 warning), RSI > 80 (+2 warnings)
@@ -145,8 +145,8 @@ elif report.is_oversold and report.momentum_signal == MomentumSignal.EXHAUSTION:
 ### 3. Momentum Assessment
 
 **Fields:**
-- `momentum_signal: MomentumSignal` — Momentum classification
-- `momentum_confidence: float` — Confidence score (0-100)
+- `momentum_signal: MomentumSignal` - Momentum classification
+- `momentum_confidence: float` - Confidence score (0-100)
 
 **Momentum Types:**
 ```python
@@ -419,7 +419,7 @@ if report.hv_iv_ratio < 0.8:
 
 ## Common Pitfalls
 
-### ❌ Ignoring Crisis Detection
+### Ignoring Crisis Detection
 ```python
 # BAD: No crisis check
 if report.regime_primary == RegimeType.BEAR:
@@ -436,7 +436,7 @@ elif report.regime_primary == RegimeType.BEAR:
     score += 30
 ```
 
-### ❌ Overweighting Single Signal
+### Overweighting Single Signal
 ```python
 # BAD: Relying only on RSI
 if report.rsi > 70:
@@ -450,7 +450,7 @@ if report.is_overbought:  # 3+ signals required
     score -= 30
 ```
 
-### ❌ Treating Overbought as Immediate Reversal
+### Treating Overbought as Immediate Reversal
 ```python
 # BAD: Assumes overbought = instant reversal
 if report.is_overbought:
@@ -563,4 +563,4 @@ Epic 32 context-aware analysis achieved **75% accuracy** vs 25% baseline:
 - Reversal detection: 67% accuracy (flash crash bounce identified)
 - Overall improvement: +50 percentage points
 
-**Production Status:** ✅ Validated and deployed
+**Production Status:** Validated and deployed

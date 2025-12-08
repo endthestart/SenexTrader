@@ -79,7 +79,7 @@ class UserStreamManagerTests(AsyncStreamingTestCase):
         manager = UserStreamManager(user.id)
 
         # Patch the OAuth session getter to return None - it's in services.data_access
-        with patch("services.data_access.get_oauth_session") as mock_oauth:
+        with patch("services.core.data_access.get_oauth_session") as mock_oauth:
 
             mock_oauth.return_value = None
 
@@ -92,7 +92,7 @@ class UserStreamManagerTests(AsyncStreamingTestCase):
         manager = UserStreamManager(user.id)
 
         # Patch the OAuth session getter to return None - it's in services.data_access
-        with patch("services.data_access.get_oauth_session") as mock_oauth:
+        with patch("services.core.data_access.get_oauth_session") as mock_oauth:
 
             mock_oauth.return_value = None
 
@@ -106,7 +106,7 @@ class UserStreamManagerTests(AsyncStreamingTestCase):
 
         with StreamingTestPatches():
             # Mock the OAuth session and TradingAccount
-            with patch("services.data_access.get_oauth_session") as mock_oauth:
+            with patch("services.core.data_access.get_oauth_session") as mock_oauth:
                 from unittest.mock import AsyncMock
 
                 mock_oauth.return_value = self.create_mock_oauth_session()
@@ -135,7 +135,7 @@ class UserStreamManagerTests(AsyncStreamingTestCase):
         manager = UserStreamManager(user.id)
 
         with StreamingTestPatches():
-            with patch("services.data_access.get_oauth_session") as mock_oauth:
+            with patch("services.core.data_access.get_oauth_session") as mock_oauth:
                 from unittest.mock import AsyncMock
 
                 mock_oauth.return_value = self.create_mock_oauth_session()
@@ -183,7 +183,7 @@ class UserStreamManagerTests(AsyncStreamingTestCase):
         manager = UserStreamManager(user.id)
 
         with StreamingTestPatches():
-            with patch("services.data_access.get_oauth_session") as mock_oauth:
+            with patch("services.core.data_access.get_oauth_session") as mock_oauth:
                 from unittest.mock import AsyncMock
 
                 mock_oauth.return_value = self.create_mock_oauth_session()

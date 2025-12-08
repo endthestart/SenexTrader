@@ -138,7 +138,7 @@ def automated_daily_trade_cycle():
     # Find accounts with automation enabled
     accounts = TradingAccount.objects.filter(
         is_active=True,
-        is_automated_trading_enabled=True,
+        trading_preferences__is_automated_trading_enabled=True,
         is_token_valid=True
     )
 
@@ -269,7 +269,7 @@ adjusted = max(adjusted, natural_credit)
 - Mid credit: $4.10
 - Minus offset: $4.10 - $0.04 = $4.06
 - Natural credit: $3.86
-- Floor check: `max($4.06, $3.86)` = $4.06 ✓
+- Floor check: `max($4.06, $3.86)` = $4.06
 - **Order sent at $4.06**
 
 **Important**: Case-insensitive comparison (database stores "Credit", code compares "credit")
@@ -369,7 +369,7 @@ finally:
 **Validation** (added for negative credit bug):
 ```python
 if put_credit <= 0 or call_credit <= 0 or total_credit <= 0:
-    logger.error("❌ INVALID PRICING DETECTED")
+    logger.error("INVALID PRICING DETECTED")
     return None  # Triggers retry
 ```
 
@@ -436,7 +436,7 @@ if not is_market_open_now():
 ```python
 accounts = TradingAccount.objects.filter(
     is_active=True,
-    is_automated_trading_enabled=True,
+    trading_preferences__is_automated_trading_enabled=True,
     is_token_valid=True  # Only accounts with valid OAuth tokens
 )
 ```
@@ -449,7 +449,7 @@ accounts = TradingAccount.objects.filter(
 
 ```python
 if not pricing.is_fresh:
-    logger.warning("❌ Pricing rejected as stale")
+    logger.warning("Pricing rejected as stale")
     return None
 ```
 
@@ -668,10 +668,10 @@ for trade in trades:
 
 **Logs to check**:
 ```
-🔍 PRICING DIAGNOSTIC - OCC Symbols and Values
+PRICING DIAGNOSTIC - OCC Symbols and Values
   short_put: QQQ   251219P00622000 | bid=X, ask=Y
   long_put: QQQ   251219P00619000 | bid=X, ask=Y
-📊 PUT SPREAD: short_put bid=$X, long_put ask=$Y
+PUT SPREAD: short_put bid=$X, long_put ask=$Y
   → put_credit = X - Y = $Z
 ```
 
@@ -710,7 +710,7 @@ podman exec celery_beat celery -A senextrader inspect scheduled
 # Check account settings
 podman exec web python manage.py shell -c "
 from accounts.models import TradingAccount
-print(TradingAccount.objects.filter(is_automated_trading_enabled=True).count())
+print(TradingAccount.objects.filter(trading_preferences__is_automated_trading_enabled=True).count())
 "
 ```
 
@@ -756,13 +756,13 @@ print(TradingAccount.objects.filter(is_automated_trading_enabled=True).count())
 User 1: Starting streaming for SPX and QQQ...
 User 1: Waiting 3.0 seconds for streaming data to stabilize...
 User 1: Data stabilization period complete, proceeding...
-✅ Suggestion generated successfully on attempt 1/3 [5.2s]
-✅ Suggestion created for user@example.com: QQQ (expiry: 2025-12-19, credit: $4.10, risk: $190.00) [5.3s]
-✅ Risk validation passed for user@example.com [0.04s]
+Suggestion generated successfully on attempt 1/3 [5.2s]
+Suggestion created for user@example.com: QQQ (expiry: 2025-12-19, credit: $4.10, risk: $190.00) [5.3s]
+Risk validation passed for user@example.com [0.04s]
 Applying automation offset 4¢: mid=4.10 → limit=4.06
 ORDER PRICING BREAKDOWN - Suggestion 130
   → Final Submitted Price: $4.06
-✅ Order submitted successfully
+Order submitted successfully
 🤖 Automated cycle complete. Processed: 1, Succeeded: 1, Failed: 0, Skipped: 0
 ```
 
@@ -770,11 +770,11 @@ ORDER PRICING BREAKDOWN - Suggestion 130
 
 ```
 User user@example.com: Generating suggestion (attempt 1/3)...
-❌ INVALID PRICING DETECTED: Negative put spread credit
+INVALID PRICING DETECTED: Negative put spread credit
   Put credit: $-1.53 (should be POSITIVE for credit spread)
-⚠️ Suggestion generation failed on attempt 1/3 (took 5.2s). Retrying in 5 seconds...
+Suggestion generation failed on attempt 1/3 (took 5.2s). Retrying in 5 seconds...
 User user@example.com: Generating suggestion (attempt 2/3)...
-✅ Suggestion generated successfully on attempt 2/3 [5.1s]
+Suggestion generated successfully on attempt 2/3 [5.1s]
 ```
 
 #### Skip Path

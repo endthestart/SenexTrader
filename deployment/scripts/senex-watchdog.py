@@ -83,26 +83,26 @@ def check_health() -> bool:
         response = requests.get(HEALTH_URL, timeout=HEALTH_TIMEOUT)
 
         if response.status_code == 200:
-            log("✓ Health check passed")
+            log("PASS: Health check passed")
             return True
-        log(f"✗ Health check failed: HTTP {response.status_code}", "WARNING")
+        log(f"FAIL: Health check failed: HTTP {response.status_code}", "WARNING")
         return False
 
     except requests.exceptions.Timeout:
-        log(f"✗ Health check timed out after {HEALTH_TIMEOUT}s", "WARNING")
+        log(f"FAIL: Health check timed out after {HEALTH_TIMEOUT}s", "WARNING")
         return False
     except requests.exceptions.ConnectionError as e:
-        log(f"✗ Health check failed: Connection error - {e}", "WARNING")
+        log(f"FAIL: Health check failed: Connection error - {e}", "WARNING")
         return False
     except Exception as e:
-        log(f"✗ Health check failed: {e}", "ERROR")
+        log(f"FAIL: Health check failed: {e}", "ERROR")
         return False
 
 
 def restart_service() -> bool:
     """Restart the web service."""
     try:
-        log("🔄 Attempting to restart web service...", "WARNING")
+        log("Attempting to restart web service...", "WARNING")
 
         # Use systemctl to restart the user service
         cmd = ["systemctl", "--machine=senex@", "--user", "restart", SERVICE_NAME]
@@ -110,16 +110,16 @@ def restart_service() -> bool:
         result = subprocess.run(cmd, check=False, capture_output=True, text=True, timeout=30)
 
         if result.returncode == 0:
-            log(f"✓ Successfully restarted {SERVICE_NAME}", "WARNING")
+            log(f"PASS: Successfully restarted {SERVICE_NAME}", "WARNING")
             return True
-        log(f"✗ Failed to restart service: {result.stderr}", "ERROR")
+        log(f"FAIL: Failed to restart service: {result.stderr}", "ERROR")
         return False
 
     except subprocess.TimeoutExpired:
-        log("✗ Service restart timed out", "ERROR")
+        log("FAIL: Service restart timed out", "ERROR")
         return False
     except Exception as e:
-        log(f"✗ Failed to restart service: {e}", "ERROR")
+        log(f"FAIL: Failed to restart service: {e}", "ERROR")
         return False
 
 
@@ -151,15 +151,21 @@ def send_email_notification(failure_count: int):
             f')"',
         ]
 
-        result = subprocess.run(email_cmd, check=False, capture_output=True, text=True, timeout=30, shell=True)
+        result = subprocess.run(
+            email_cmd,  # noqa: S603
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
 
         if result.returncode == 0:
-            log("✓ Email notification sent", "INFO")
+            log("PASS: Email notification sent", "INFO")
         else:
-            log(f"✗ Failed to send email: {result.stderr}", "WARNING")
+            log(f"FAIL: Failed to send email: {result.stderr}", "WARNING")
 
     except Exception as e:
-        log(f"✗ Failed to send email notification: {e}", "WARNING")
+        log(f"FAIL: Failed to send email notification: {e}", "WARNING")
 
 
 def main():
@@ -188,7 +194,7 @@ def main():
 
     # Check if we should restart
     if failure_count >= MAX_FAILURES:
-        log(f"⚠️  CRITICAL: Service unhealthy for {failure_count} consecutive checks", "ERROR")
+        log(f"CRITICAL: Service unhealthy for {failure_count} consecutive checks", "ERROR")
         log("Initiating automatic restart...", "ERROR")
 
         if restart_service():
@@ -198,14 +204,14 @@ def main():
 
             # Verify it's working
             if check_health():
-                log("✓ Service restart successful - now healthy", "WARNING")
+                log("PASS: Service restart successful - now healthy", "WARNING")
                 send_email_notification(failure_count)
                 set_failure_count(0)
                 return 0
-            log("✗ Service still unhealthy after restart", "ERROR")
+            log("FAIL: Service still unhealthy after restart", "ERROR")
             send_email_notification(failure_count)
             return 1
-        log("✗ Failed to restart service", "ERROR")
+        log("FAIL: Failed to restart service", "ERROR")
         send_email_notification(failure_count)
         return 1
 

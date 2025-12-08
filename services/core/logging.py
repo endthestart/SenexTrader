@@ -45,7 +45,9 @@ class SensitiveDataFilter(logging.Filter):
                 r"\1[REDACTED_PASSWORD]",
             ),
             (
-                re.compile(r"(pass[\"']?\s*[:=]\s*[\"']?)([^\"'\s,}]+)", re.IGNORECASE),
+                # Match 'pass' only in assignment contexts (quoted key or =value)
+                # Avoids matching "PASS: sufficient" status messages
+                re.compile(r"([\"']pass[\"']?\s*[:=]\s*[\"']?|(?<=\s)pass=)([^\"'\s,}]+)", re.IGNORECASE),
                 r"\1[REDACTED_PASSWORD]",
             ),
             # API keys and secrets

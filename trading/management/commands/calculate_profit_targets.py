@@ -29,7 +29,7 @@ class Command(BaseCommand):
         try:
             position = Position.objects.get(id=options["position"])
 
-            self.stdout.write("\n📊 PROFIT TARGET CALCULATOR")
+            self.stdout.write("\nPROFIT TARGET CALCULATOR")
             self.stdout.write(f"Position: {position.id}")
             self.stdout.write(f"Strategy: {position.strategy_type}")
             self.stdout.write(f"User: {position.user.email}")
@@ -54,14 +54,14 @@ class Command(BaseCommand):
             if position.strategy_type == "senex_trident":
                 self._calculate_senex_targets(suggestion)
             else:
-                self.stdout.write("❌ Only Senex Trident strategy supported")
+                self.stdout.write("Only Senex Trident strategy supported")
 
         except Exception as e:
             raise CommandError(f"Calculation failed: {e!s}")
 
     def _calculate_senex_targets(self, suggestion: TradingSuggestion):
         """Calculate Senex Trident profit targets: 40%, 60%, 50%"""
-        self.stdout.write("\n🎯 SENEX TRIDENT PROFIT TARGETS")
+        self.stdout.write("\nSENEX TRIDENT PROFIT TARGETS")
         self.stdout.write("Original Credits:")
         self.stdout.write(f"  Put Spread Credit: ${suggestion.put_spread_credit}")
         self.stdout.write(f"  Call Spread Credit: ${suggestion.call_spread_credit}")
@@ -99,10 +99,10 @@ class Command(BaseCommand):
             self.stdout.write(f"      Buy-to-Close at: ${target_price_3:.2f}")
             self.stdout.write(f"      Profit: ${profit_3:.2f} ({profit_pct_3:.1f}%)")
 
-        self.stdout.write("\n📋 MANUAL ORDER INSTRUCTIONS:")
+        self.stdout.write("\nMANUAL ORDER INSTRUCTIONS:")
         self.stdout.write("Create 3 separate GTC Buy-to-Close orders in TastyTrade:")
         self.stdout.write("  • Use the exact prices shown above")
         self.stdout.write("  • Set Time-in-Force to GTC (Good Till Cancelled)")
         self.stdout.write("  • Each order should close 1 contract of the respective spread")
 
-        self.stdout.write("\n✅ CALCULATION COMPLETE")
+        self.stdout.write("\nCALCULATION COMPLETE")

@@ -21,7 +21,7 @@ Container build system for Senex Trader using Podman with multi-stage optimizati
 
 ---
 
-## 🚀 Quick Start
+## Quick Start
 
 ### Using build.py (Recommended)
 
@@ -50,7 +50,7 @@ make build TAG=v1.0.0
 
 ---
 
-## ⚙️ Configuration
+## Configuration
 
 ### Build Configuration (.senextrader.json)
 
@@ -173,7 +173,7 @@ curl http://localhost:8000/health/
 
 ---
 
-## 🔐 Registry Authentication
+## Registry Authentication
 
 ### Login to Gitea Registry
 
@@ -195,7 +195,7 @@ podman login gitea.andermic.net
 
 ---
 
-## 📦 Image Structure
+## Image Structure
 
 ### Exposed Ports
 - **8000** - HTTP/WebSocket (Daphne ASGI)
@@ -222,7 +222,7 @@ See `.env.production.example` for complete list.
 
 ---
 
-## 🔧 Build Options
+## Build Options
 
 ### Platform Targeting
 
@@ -249,7 +249,7 @@ podman system prune
 
 ---
 
-## 🐛 Troubleshooting
+## Troubleshooting
 
 ### Build Fails with "Registry auth required"
 

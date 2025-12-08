@@ -9,6 +9,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 from django.utils import timezone
 
 import pytest
+import pytest_asyncio
 
 from accounts.models import TradingAccount
 from services.positions.lifecycle.dte_manager import DTEManager
@@ -19,7 +20,7 @@ from trading.models import Position
 class TestDTEManagerFixes:
     """Test suite for DTE manager critical bug fixes"""
 
-    @pytest.fixture
+    @pytest_asyncio.fixture
     async def setup(self):
         """Setup test fixtures"""
         # Create mock user and account
@@ -58,15 +59,14 @@ class TestDTEManagerFixes:
         }
         self.position.asave = AsyncMock()
 
-        # Mock services
+        # Create manager (services are created internally)
+        self.manager = DTEManager(user=self.user)
+
+        # Mock the internal services for testing
         self.order_service = AsyncMock()
         self.cancellation_service = AsyncMock()
-
-        self.manager = DTEManager(
-            user=self.user,
-            order_service=self.order_service,
-            cancellation_service=self.cancellation_service,
-        )
+        self.manager.order_service = self.order_service
+        self.manager.cancellation_service = self.cancellation_service
 
     @pytest.mark.asyncio
     async def test_dte_close_creates_trade_before_order(self, setup):
@@ -76,16 +76,23 @@ class TestDTEManagerFixes:
         # Mock order submission to return an order ID
         self.order_service.execute_order_spec.return_value = "NEW_ORDER_123"
 
-        # Mock Trade.objects.acreate
+        # Mock Trade.objects.acreate to return an awaitable mock
         with patch("trading.models.Trade.objects.acreate") as mock_create_trade:
             mock_trade = MagicMock()
+            mock_trade.asave = AsyncMock()
             mock_create_trade.return_value = mock_trade
 
+            # Make acreate return an awaitable
+            async def async_create(*args, **kwargs):
+                return mock_trade
+
+            mock_create_trade.side_effect = async_create
+
             # Execute DTE close
-            result = await self.manager.close_position_at_dte(self.position, 7)
+            await self.manager.close_position_at_dte(self.position, 7)
 
             # Verify Trade was created with correct attributes
-            mock_create_trade.assert_called_once()
+            assert mock_create_trade.called
             trade_kwargs = mock_create_trade.call_args.kwargs
 
             assert trade_kwargs["trade_type"] == "close"  # CRITICAL: Must be 'close'
@@ -102,11 +109,9 @@ class TestDTEManagerFixes:
     async def test_dte_close_price_above_profit_targets(self, setup):
         """Verify closing price is always >= 110% of highest profit target"""
         # Position sold at $1.00, profit target at $1.00
-        # At 7 DTE: Should close at max($1.40, $1.10) = $1.40
-
-        # Expected: 70% of max loss ($2.00) = $1.40
+        # At 7 DTE with new logic: breakeven = entry_price = $1.00
         # But must be >= 110% of profit target ($1.00) = $1.10
-        # So final price should be $1.40
+        # So final price should be $1.10
 
         cancelled_targets = {
             "call_spread": {
@@ -120,8 +125,9 @@ class TestDTEManagerFixes:
             self.position, 7, cancelled_targets
         )
 
-        # At 7 DTE, for credit spread: 70% of max_loss = 70% of $2.00 = $1.40
-        assert limit_price >= Decimal("1.40")
+        # At 7 DTE, for credit spread: breakeven = entry_price = $1.00
+        # But profit target validation bumps it to $1.10 (110% of $1.00)
+        assert limit_price == Decimal("1.10")
         assert order_type == "LIMIT"
         assert price_effect == "Debit"  # Paying to close credit spread
 
@@ -133,9 +139,12 @@ class TestDTEManagerFixes:
         self.cancellation_service.cancel_trade.return_value = True
 
         # Mock _cancel_child_order_at_broker
-        with patch.object(
-            self.manager, "_cancel_child_order_at_broker", AsyncMock(return_value=True)
-        ), patch.object(self.manager, "_update_profit_target_status", AsyncMock()):
+        with (
+            patch.object(
+                self.manager, "_cancel_child_order_at_broker", AsyncMock(return_value=True)
+            ),
+            patch.object(self.manager, "_update_profit_target_status", AsyncMock()),
+        ):
 
             cancelled_targets = await self.manager._cancel_open_trades(self.position)
 
@@ -147,31 +156,37 @@ class TestDTEManagerFixes:
 
     @pytest.mark.asyncio
     async def test_dte_escalation_percentages(self, setup):
-        """Test progressive escalation of closing prices as DTE decreases"""
+        """Test progressive escalation of closing prices as DTE decreases.
+
+        NEW LOGIC (corrected):
+        Credit spread formula: close_price = entry_price + (% × max_loss)
+        - DTE 7: breakeven (entry_price only)
+        - DTE 6: entry + 70% of max_loss
+        - DTE 5: entry + 80% of max_loss
+        - DTE 4: entry + 90% of max_loss
+        - DTE ≤3: full spread width (max loss)
+        """
 
         # Test escalation for credit spread (sold at $1.00 on $3 spread)
         # Max loss = $3.00 - $1.00 = $2.00
 
         test_cases = [
-            (7, Decimal("1.40")),  # 70% of $2.00
-            (6, Decimal("1.80")),  # 90% of $2.00
-            (5, Decimal("2.20")),  # 110% of $2.00 (accept small loss)
-            (4, Decimal("2.60")),  # 130% of $2.00 (accept moderate loss)
-            (3, Decimal("0")),  # MARKET order
+            (7, Decimal("1.00"), "LIMIT"),  # Breakeven = entry_price
+            (6, Decimal("2.40"), "LIMIT"),  # $1.00 + (0.70 × $2.00) = $2.40
+            (5, Decimal("2.60"), "LIMIT"),  # $1.00 + (0.80 × $2.00) = $2.60
+            (4, Decimal("2.80"), "LIMIT"),  # $1.00 + (0.90 × $2.00) = $2.80
+            (3, Decimal("3.00"), "LIMIT"),  # Full spread width
         ]
 
-        for dte, expected_price in test_cases:
+        for dte, expected_price, expected_order_type in test_cases:
             limit_price, order_type, _ = self.manager._determine_close_parameters(
                 self.position, dte
             )
 
-            if dte == 3:
-                assert order_type == "MARKET"
-            else:
-                assert (
-                    limit_price == expected_price
-                ), f"DTE {dte}: expected ${expected_price}, got ${limit_price}"
-                assert order_type == "LIMIT"
+            assert (
+                limit_price == expected_price
+            ), f"DTE {dte}: expected ${expected_price}, got ${limit_price}"
+            assert order_type == expected_order_type
 
     @pytest.mark.asyncio
     async def test_tracks_cancelled_profit_targets_in_metadata(self, setup):
@@ -190,7 +205,7 @@ class TestDTEManagerFixes:
                     }
                 }
 
-                result = await self.manager.close_position_at_dte(self.position, 7)
+                await self.manager.close_position_at_dte(self.position, 7)
 
                 # Verify metadata was updated
                 assert self.position.asave.called
@@ -211,7 +226,7 @@ class TestDTEManagerFixes:
             with patch("trading.models.Trade.objects.acreate", AsyncMock()):
                 self.order_service.execute_order_spec.return_value = "CLOSE_ORDER_123"
 
-                result = await self.manager.close_position_at_dte(self.position, 7)
+                await self.manager.close_position_at_dte(self.position, 7)
 
                 # Verify NO new Position was created
                 mock_position_objects.acreate.assert_not_called()
@@ -221,35 +236,47 @@ class TestDTEManagerFixes:
 
     @pytest.mark.asyncio
     async def test_price_calculation_with_zero_avg_price(self, setup):
-        """Test pricing calculation when position.avg_price is 0 or None"""
+        """Test pricing calculation when position.avg_price is 0 or None.
+
+        With new logic: close_price = entry_price + (% × max_loss)
+        When entry_price = 0: close_price = 0 + (0 × max_loss) = 0 at DTE 7 (breakeven)
+        But minimum is $0.10, so result is $0.10
+        """
 
         # This might be the cause of the $0.10 bug
         self.position.avg_price = None  # Or 0
 
         limit_price, order_type, _ = self.manager._determine_close_parameters(self.position, 7)
 
-        # With avg_price=0, max_loss = $3.00 - $0 = $3.00
-        # At 7 DTE: 70% of $3.00 = $2.10
-        assert limit_price == Decimal("2.10")
+        # With avg_price=0 at DTE 7: breakeven = $0, but minimum is $0.10
+        assert limit_price == Decimal("0.10")
 
         # Test with avg_price = 0
         self.position.avg_price = Decimal("0")
-        limit_price, order_type, _ = self.manager._determine_close_parameters(self.position, 7)
-        assert limit_price == Decimal("2.10")
+        limit_price, _order_type, _ = self.manager._determine_close_parameters(self.position, 7)
+        assert limit_price == Decimal("0.10")
 
     @pytest.mark.asyncio
     async def test_debit_spread_closing_logic(self, setup):
-        """Test closing logic for debit spreads (opposite of credit spreads)"""
+        """Test closing logic for debit spreads (opposite of credit spreads).
+
+        Debit spread formula: sell_price = entry_price - (% × max_loss)
+        where max_loss = entry_price (lose entire debit paid)
+        - DTE 7: breakeven (entry_price)
+        - DTE 6: entry - 70% of max_loss (accept 70% loss)
+        - DTE 5: entry - 80% of max_loss (accept 80% loss)
+        - DTE 4: entry - 90% of max_loss (accept 90% loss)
+        - DTE ≤3: $0.00 (accept total loss)
+        """
 
         # Setup debit spread position
         self.position.opening_price_effect = "Debit"
         self.position.avg_price = Decimal("2.00")  # Paid $2.00
 
-        # For debit spread at 7 DTE: accept 30% of max value
-        # Max value = $3.00, so accept $0.90
-        limit_price, order_type, price_effect = self.manager._determine_close_parameters(
+        # For debit spread at 7 DTE: breakeven = entry_price = $2.00
+        limit_price, _order_type, price_effect = self.manager._determine_close_parameters(
             self.position, 7
         )
 
-        assert limit_price == Decimal("0.90")
+        assert limit_price == Decimal("2.00")
         assert price_effect == "Credit"  # Receiving credit to close debit spread

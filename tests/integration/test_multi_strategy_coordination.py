@@ -59,7 +59,7 @@ async def test_strategy_selector_hard_stops():
     stale_data_report = create_stale_data_market()
 
     with patch(
-        "services.market_analysis.MarketAnalyzer.a_analyze_market_conditions"
+        "services.market_data.analysis.MarketAnalyzer.a_analyze_market_conditions"
     ) as mock_analyze:
         mock_analyze.return_value = stale_data_report
 

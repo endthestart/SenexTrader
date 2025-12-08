@@ -4,10 +4,20 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}Senex Trader{% endblock %}</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-T3c6CoIi6uLrA9TneNEoa7RxnatzjcDSCmG1MXxSR1GAsXEV/Dwwykc2MPK8M2HN" crossorigin="anonymous">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css" rel="stylesheet" integrity="sha384-4LISF5TTJX/fLmGSxO53rV4miRxdg84mZsxmO8Rx5jGtp/LbrixFETvWa5a6sESd" crossorigin="anonymous">
     {% load static %}
     <link rel="stylesheet" href="{% static 'css/dark-theme.css' %}">
+    <script>
+        window.APP_DEBUG = {{ APP_DEBUG|yesno:"true,false" }};
+        if (!window.APP_DEBUG && window.console) {
+            ['log', 'info', 'debug'].forEach(function(method) {
+                if (typeof window.console[method] === 'function') {
+                    window.console[method] = function() {};
+                }
+            });
+        }
+    </script>
     {% block extra_css %}{% endblock %}
 </head>
 <body class="bg-dark text-light">
@@ -147,10 +157,29 @@
         </div>
     </footer>
 
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js" integrity="sha384-C6RzsynM9kWDrMNeT87bh95OGNyZPhcTNXj1NW7RuBCsyN/o0jlpcV8Qyq46cDfL" crossorigin="anonymous"></script>
     {% load static %}
     <script src="{% static 'js/utils.js' %}"></script>
     <script src="{% static 'js/realtime-updater-base.js' %}"></script>
+    <script>
+        if (typeof window.STREAMING_DEBUG === 'undefined') {
+            window.STREAMING_DEBUG = false;
+        }
+        if (typeof window.logStreamDebug !== 'function') {
+            window.logStreamDebug = function(...args) {
+                if (window.STREAMING_DEBUG) {
+                    console.debug(...args);
+                }
+            };
+        }
+        if (typeof window.logStreamInfo !== 'function') {
+            window.logStreamInfo = function(...args) {
+                if (window.STREAMING_DEBUG) {
+                    console.log(...args);
+                }
+            };
+        }
+    </script>
 
     {% if user.is_authenticated and has_broker_account %}
     <!-- Global Streamer Initialization -->
@@ -179,7 +208,7 @@
                         handler: handler,
                         context: context || 'unknown'
                     });
-                    console.debug(`Registered handler ${id} from ${context}. Total handlers:`, window.messageHandlerRegistry.size);
+                    window.logStreamDebug(`Registered handler ${id} from ${context}. Total handlers:`, window.messageHandlerRegistry.size);
                     return id;  // Return ID for removal
                 } else {
                     console.error('Handler must be a function');
@@ -192,7 +221,7 @@
                 if (window.messageHandlerRegistry.has(handlerId)) {
                     const handlerInfo = window.messageHandlerRegistry.get(handlerId);
                     window.messageHandlerRegistry.delete(handlerId);
-                    console.debug(`Removed handler ${handlerId} (${handlerInfo.context}). Total handlers:`, window.messageHandlerRegistry.size);
+                    window.logStreamDebug(`Removed handler ${handlerId} (${handlerInfo.context}). Total handlers:`, window.messageHandlerRegistry.size);
                     return true;
                 }
                 return false;
@@ -208,7 +237,7 @@
                     }
                 }
                 if (removed > 0) {
-                    console.debug(`Cleared ${removed} handlers from context "${context}". Total remaining:`, window.messageHandlerRegistry.size);
+                    window.logStreamDebug(`Cleared ${removed} handlers from context "${context}". Total remaining:`, window.messageHandlerRegistry.size);
                 }
                 return removed;
             };
@@ -225,10 +254,10 @@
                                 type: 'ping',
                                 timestamp: new Date().toISOString()
                             }));
-                            console.debug('💓 Heartbeat sent');
+                            window.logStreamDebug('Heartbeat sent');
                         }
                     }, 30000);
-                    console.log('Heartbeat started');
+                    window.logStreamDebug('Heartbeat started');
                 }
             };
 
@@ -236,13 +265,13 @@
                 if (window.heartbeatInterval) {
                     clearInterval(window.heartbeatInterval);
                     window.heartbeatInterval = null;
-                    console.log('Heartbeat cleared');
+                    window.logStreamDebug('Heartbeat cleared');
                 }
             };
 
             // OAuth restoration handler - triggers reconnection
             window.handleOAuthRestored = function(data) {
-                console.log('OAuth restored, reconnecting...');
+                window.logStreamDebug('OAuth restored, reconnecting...');
                 window.reconnectAttempts = 0;
                 if (!window.streamerWebSocket || window.streamerWebSocket.readyState !== WebSocket.OPEN) {
                     initializeStreamers();
@@ -253,7 +282,7 @@
             window.saveStreamingState = function(state) {
                 try {
                     sessionStorage.setItem('streaming_state', JSON.stringify(state));
-                    console.debug('💾 Saved streaming state:', state);
+                    window.logStreamDebug('Saved streaming state:', state);
                 } catch (error) {
                     console.error('Error saving streaming state:', error);
                 }
@@ -264,7 +293,7 @@
                     const stored = sessionStorage.getItem('streaming_state');
                     if (stored) {
                         const state = JSON.parse(stored);
-                        console.debug('📋 Loaded streaming state:', state);
+                        window.logStreamDebug('Loaded streaming state:', state);
                         return state;
                     }
                 } catch (error) {
@@ -318,27 +347,27 @@
 
                 // CRITICAL FIX: Reuse existing WebSocket connection on page navigation
                 // Only create new connection if none exists or it's closed
-                if (window.streamerWebSocket && 
-                    (window.streamerWebSocket.readyState === WebSocket.OPEN || 
+                if (window.streamerWebSocket &&
+                    (window.streamerWebSocket.readyState === WebSocket.OPEN ||
                      window.streamerWebSocket.readyState === WebSocket.CONNECTING)) {
-                    console.log('♻️ Reusing existing WebSocket connection (state:', window.streamerWebSocket.readyState, ')');
-                    
+                    window.logStreamDebug('Reusing existing WebSocket connection (state:', window.streamerWebSocket.readyState, ')');
+
                     // If already ready, emit event immediately for new page
                     if (window.streamersReady) {
-                        console.log('✅ Streamers already ready, emitting event for new page');
-                        window.dispatchEvent(new CustomEvent('streamers-ready', { 
-                            detail: { ready: true, reused: true } 
+                        window.logStreamDebug('Streamers already ready, emitting event for new page');
+                        window.dispatchEvent(new CustomEvent('streamers-ready', {
+                            detail: { ready: true, reused: true }
                         }));
                         return;
                     }
-                    
+
                     // WebSocket exists but streamers not ready - wait for them
                     // This can happen on first page load, after settings nav, or after reconnection
-                    console.log('⏳ WebSocket exists but streamers not ready, checking status...');
+                    window.logStreamDebug('WebSocket exists but streamers not ready, checking status...');
                     // Fall through to the readiness check logic below (don't return)
                 } else {
                     // Connect WebSocket
-                    console.log('🔌 Creating new WebSocket connection');
+                    window.logStreamDebug('Creating new WebSocket connection');
                     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
                     const wsUrl = `${protocol}//${window.location.host}/ws/streaming/`;
 
@@ -346,7 +375,7 @@
 
                     if (window.streamerWebSocket) {
                         window.streamerWebSocket.onopen = async function(e) {
-                        console.log('Global WebSocket connection established.');
+                        window.logStreamDebug('Global WebSocket connection established.');
 
                         // Reset reconnection state
                         window.reconnectAttempts = 0;
@@ -392,7 +421,7 @@
                     };
 
                     window.streamerWebSocket.onclose = function(e) {
-                        console.log('Global WebSocket connection closed:', e.code, e.reason);
+                        window.logStreamDebug('Global WebSocket connection closed:', e.code, e.reason);
                         window.streamersReady = false;
 
                         // Clear reconnection timeout and heartbeat
@@ -414,7 +443,7 @@
 
                         // Don't reconnect for intentional closes
                         if (e.code === 1000 || e.code === 1001) {
-                            console.log('Intentional close, not reconnecting');
+                            window.logStreamDebug('Intentional close, not reconnecting');
                             return;
                         }
 
@@ -432,7 +461,7 @@
                             30000
                         );
 
-                        console.log(`Reconnecting in ${backoffDelay}ms (attempt ${window.reconnectAttempts})`);
+                        window.logStreamDebug(`Reconnecting in ${backoffDelay}ms (attempt ${window.reconnectAttempts})`);
 
                         window.reconnectTimeout = setTimeout(() => {
                             initializeStreamers();
@@ -454,7 +483,7 @@
 
                 // If WebSocket is still connecting, wait for it first
                 if (window.streamerWebSocket && window.streamerWebSocket.readyState === WebSocket.CONNECTING) {
-                    console.log('Waiting for WebSocket to open...');
+                    window.logStreamDebug('Waiting for WebSocket to open...');
                     await new Promise((resolve) => {
                         const checkInterval = setInterval(() => {
                             if (window.streamerWebSocket.readyState === WebSocket.OPEN) {
@@ -475,7 +504,7 @@
                         window.streamersReady = true;
                         window.streamerDetails = status.details || {};
 
-                        console.log('Streamers ready:', status);
+                        window.logStreamDebug('Streamers ready:', status);
                         hideStreamerLoading();
 
                         // Save streamers ready state
@@ -527,7 +556,7 @@
 
             // Initialize on page load
             document.addEventListener('DOMContentLoaded', function() {
-                console.log('Initializing global streamers...');
+                window.logStreamDebug('Initializing global streamers...');
                 initializeStreamers();
             });
         })();

@@ -35,8 +35,7 @@ class SenexTridentStrategy(BaseStrategy):
     TARGET_DTE = 45
 
     def __init__(self, user):
-        super().__init__(user)  # Get common dependencies from BaseStrategy
-        # Add Senex-specific dependencies
+        super().__init__(user)
         self.account_state_service = AccountStateService()
         self.position_calculator = PositionRiskCalculator()
 
@@ -270,7 +269,7 @@ class SenexTridentStrategy(BaseStrategy):
 
         # Score conditions
         logger.info("User %s: Scoring market conditions for %s...", self.user.id, symbol)
-        score, explanation = await self.a_score_market_conditions(report)
+        score, _explanation = await self.a_score_market_conditions(report)
 
         if score < 40:
             logger.info(
@@ -282,7 +281,7 @@ class SenexTridentStrategy(BaseStrategy):
             return None
 
         logger.info(
-            "User %s: ✅ Market conditions acceptable for %s (score=%.1f)",
+            "User %s: Market conditions acceptable for %s (score=%.1f)",
             self.user.id,
             symbol,
             score,
@@ -350,6 +349,7 @@ class SenexTridentStrategy(BaseStrategy):
             strikes,
             min_dte=params.get("min_dte", 30),
             max_dte=params.get("max_dte", 45),
+            strict_matching=True,  # Senex Trident requires exact even/odd strikes
         )
         if not result:
             logger.warning(
@@ -391,7 +391,7 @@ class SenexTridentStrategy(BaseStrategy):
             # NOTE: is_automated will be set by caller (manual=False, automated=True)
         }
 
-        logger.info(f"User {self.user.id}: ✅ Context prepared for suggestion generation")
+        logger.info(f"User {self.user.id}: Context prepared for suggestion generation")
         return context
 
     async def a_request_suggestion_generation(self, report=None, symbol=None) -> None:
@@ -415,7 +415,7 @@ class SenexTridentStrategy(BaseStrategy):
 
         # Dispatch to stream manager
         await self.a_dispatch_to_stream_manager(context)
-        logger.info(f"User {self.user.id}: 🚀 Dispatched suggestion request to stream manager")
+        logger.info(f"User {self.user.id}: Dispatched suggestion request to stream manager")
 
     async def a_calculate_suggestion_from_cached_data(self, context: dict):
         """

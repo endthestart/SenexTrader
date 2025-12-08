@@ -63,16 +63,17 @@ def create_default_watchlist(sender, instance, created, **kwargs):
     """
     if created:
         # Get default watchlist symbols from settings
+        # Format: list of (symbol, description) tuples
         default_symbols = getattr(settings, "DEFAULT_WATCHLIST_SYMBOLS", [])
 
         # Create watchlist items for each symbol
-        for order, symbol in enumerate(default_symbols, start=1):
+        for order, (symbol, description) in enumerate(default_symbols, start=1):
             Watchlist.objects.get_or_create(
                 user=instance,
                 symbol=symbol,
                 defaults={
                     "order": order,
-                    "description": "",  # Will be populated when symbol data is loaded
+                    "description": description,
                 },
             )
 

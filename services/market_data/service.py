@@ -46,15 +46,7 @@ class MarketDataService:
         return run_async(self.get_historical_prices(symbol, days))
 
     async def get_quote(self, symbol: str) -> dict | None:
-        """
-        Get current quote for symbol.
-        1. Check cache first (populated by streaming service)
-        2. Fetch from API if cache miss
-        3. Update cache
-        4. Return data or None
-
-        Returns dict with: bid, ask, last, previous_close, change, change_percent, volume, source
-        """
+        """Get current quote for symbol from cache or API."""
         cache_key = CacheManager.quote(symbol)
 
         cached_data = cache.get(cache_key)
@@ -90,22 +82,22 @@ class MarketDataService:
         db_count = len(db_data) if db_data else 0
 
         if db_data and db_count >= min_acceptable:
-            logger.debug(f"✓ {symbol}: {db_count} days in DB (need {min_acceptable}+)")
+            logger.debug(f"PASS: {symbol}: {db_count} days in DB (need {min_acceptable}+)")
             return db_data
 
         logger.info(
-            f"📊 {symbol}: Insufficient DB data ({db_count}/{min_acceptable} days) - "
+            f"{symbol}: Insufficient DB data ({db_count}/{min_acceptable} days) - "
             f"fetching {days} days from Stooq"
         )
         api_data = await self._fetch_historical_from_api(symbol, days)
 
         if api_data:
-            logger.info(f"✓ {symbol}: Fetched {len(api_data)} days from Stooq")
+            logger.info(f"PASS: {symbol}: Fetched {len(api_data)} days from Stooq")
             await self._store_historical_in_database(symbol, api_data)
             return api_data
 
         logger.warning(
-            f"✗ {symbol}: Failed to fetch historical prices from Stooq - "
+            f"FAIL: {symbol}: Failed to fetch historical prices from Stooq - "
             f"returning insufficient DB data ({db_count} days) as fallback"
         )
         # Return partial data if available, better than None

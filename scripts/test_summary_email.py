@@ -32,10 +32,10 @@ def test_summary_email():
     print("\n1. Testing EmailService initialization...")
     try:
         email_service = EmailService()
-        print("   ✓ EmailService initialized")
-        print(f"   ✓ Default from email: {email_service.default_from_email}")
+        print("   PASS: EmailService initialized")
+        print(f"   PASS: Default from email: {email_service.default_from_email}")
     except Exception as e:
-        print(f"   ✗ Failed to initialize EmailService: {e}")
+        print(f"   FAIL: Failed to initialize EmailService: {e}")
         return
 
     # Check for users with summary preference
@@ -56,11 +56,11 @@ def test_summary_email():
                 last_name="User",
                 email_preference="summary",
             )
-            print(f"   ✓ Created test user: {test_user.email}")
+            print(f"   PASS: Created test user: {test_user.email}")
         else:
             test_user.email_preference = "summary"
             test_user.save()
-            print(f"   ✓ Updated existing user: {test_user.email}")
+            print(f"   PASS: Updated existing user: {test_user.email}")
         users_wanting_summaries = [test_user]
     else:
         for user in users_wanting_summaries:
@@ -106,7 +106,7 @@ def test_summary_email():
                         f"       - {trade.submitted_at.date()}: {trade.trade_type} {trade.status}"
                     )
         else:
-            print("     ✓ User HAS ACTIVITY - would receive email")
+            print("     PASS: User HAS ACTIVITY - would receive email")
 
     # Test email building and sending
     print("\n4. Testing email building and sending...")
@@ -130,7 +130,7 @@ def test_summary_email():
 
         # New positions section
         if new_positions.exists():
-            email_body += f"✅ NEW POSITIONS OPENED ({new_positions.count()})\n"
+            email_body += f"NEW POSITIONS OPENED ({new_positions.count()})\n"
             for trade in new_positions:
                 credit = trade.credit_received or trade.executed_price or "N/A"
                 email_body += (
@@ -149,7 +149,7 @@ def test_summary_email():
 
         # Cancelled/rejected section
         if cancelled.exists():
-            email_body += f"⏭️  CANCELLED/REJECTED ({cancelled.count()})\n"
+            email_body += f"CANCELLED/REJECTED ({cancelled.count()})\n"
             for trade in cancelled:
                 email_body += f"  • {trade.position.symbol} - {trade.status}\n"
             email_body += "\n"
@@ -171,11 +171,11 @@ def test_summary_email():
                 fail_silently=False,  # Don't suppress errors for testing
             )
             if success:
-                print("   ✓ Email sent successfully!")
+                print("   PASS: Email sent successfully!")
             else:
-                print("   ✗ Email send returned False")
+                print("   FAIL: Email send returned False")
         except Exception as e:
-            print(f"   ✗ Email send failed with exception: {e}")
+            print(f"   FAIL: Email send failed with exception: {e}")
             import traceback
 
             traceback.print_exc()

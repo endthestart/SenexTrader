@@ -18,9 +18,9 @@ echo ""
 echo "1. Container Status:"
 for container in postgres redis django celery-worker celery-beat; do
     if podman ps --format "{{.Names}}" | grep -q "^${container}$"; then
-        echo -e "  ${GREEN}✓${NC} $container is running"
+        echo -e "  ${GREEN}[OK]${NC} $container is running"
     else
-        echo -e "  ${RED}✗${NC} $container is NOT running"
+        echo -e "  ${RED}[FAIL]${NC} $container is NOT running"
         check_status=1
     fi
 done
@@ -29,9 +29,9 @@ echo ""
 # Check PostgreSQL
 echo "2. PostgreSQL:"
 if podman exec postgres pg_isready -U senex_user &> /dev/null; then
-    echo -e "  ${GREEN}✓${NC} PostgreSQL is accepting connections"
+    echo -e "  ${GREEN}[OK]${NC} PostgreSQL is accepting connections"
 else
-    echo -e "  ${RED}✗${NC} PostgreSQL is NOT accepting connections"
+    echo -e "  ${RED}[FAIL]${NC} PostgreSQL is NOT accepting connections"
     check_status=1
 fi
 echo ""
@@ -39,9 +39,9 @@ echo ""
 # Check Redis
 echo "3. Redis:"
 if podman exec redis redis-cli -a "${REDIS_PASSWORD:-}" ping &> /dev/null; then
-    echo -e "  ${GREEN}✓${NC} Redis is responding"
+    echo -e "  ${GREEN}[OK]${NC} Redis is responding"
 else
-    echo -e "  ${RED}✗${NC} Redis is NOT responding"
+    echo -e "  ${RED}[FAIL]${NC} Redis is NOT responding"
     check_status=1
 fi
 echo ""
@@ -49,10 +49,10 @@ echo ""
 # Check Django health endpoint
 echo "4. Django Application:"
 if curl -sf http://localhost:8000/health/ > /dev/null; then
-    echo -e "  ${GREEN}✓${NC} Django health endpoint is OK"
+    echo -e "  ${GREEN}[OK]${NC} Django health endpoint is OK"
     curl -s http://localhost:8000/health/ | jq '.' 2>/dev/null || echo "  (jq not installed for JSON formatting)"
 else
-    echo -e "  ${RED}✗${NC} Django health endpoint FAILED"
+    echo -e "  ${RED}[FAIL]${NC} Django health endpoint FAILED"
     check_status=1
 fi
 echo ""
@@ -61,7 +61,7 @@ echo ""
 echo "5. Celery Workers:"
 ACTIVE_WORKERS=$(podman exec django celery -A senextrader inspect active 2>/dev/null | grep -c "celery@" || echo "0")
 if [ "$ACTIVE_WORKERS" -gt 0 ]; then
-    echo -e "  ${GREEN}✓${NC} Celery workers active: $ACTIVE_WORKERS"
+    echo -e "  ${GREEN}[OK]${NC} Celery workers active: $ACTIVE_WORKERS"
 else
     echo -e "  ${YELLOW}⚠${NC} No Celery workers detected"
     check_status=1
@@ -72,11 +72,11 @@ echo ""
 echo "6. Disk Space:"
 DISK_USAGE=$(df -h / | awk 'NR==2 {print $5}' | sed 's/%//')
 if [ "$DISK_USAGE" -lt 80 ]; then
-    echo -e "  ${GREEN}✓${NC} Disk usage: ${DISK_USAGE}%"
+    echo -e "  ${GREEN}[OK]${NC} Disk usage: ${DISK_USAGE}%"
 elif [ "$DISK_USAGE" -lt 90 ]; then
     echo -e "  ${YELLOW}⚠${NC} Disk usage: ${DISK_USAGE}% (warning)"
 else
-    echo -e "  ${RED}✗${NC} Disk usage: ${DISK_USAGE}% (critical)"
+    echo -e "  ${RED}[FAIL]${NC} Disk usage: ${DISK_USAGE}% (critical)"
     check_status=1
 fi
 echo ""
@@ -85,11 +85,11 @@ echo ""
 echo "7. Memory Usage:"
 MEMORY_USAGE=$(free | awk 'NR==2 {printf "%.0f", $3/$2*100}')
 if [ "$MEMORY_USAGE" -lt 80 ]; then
-    echo -e "  ${GREEN}✓${NC} Memory usage: ${MEMORY_USAGE}%"
+    echo -e "  ${GREEN}[OK]${NC} Memory usage: ${MEMORY_USAGE}%"
 elif [ "$MEMORY_USAGE" -lt 90 ]; then
     echo -e "  ${YELLOW}⚠${NC} Memory usage: ${MEMORY_USAGE}% (warning)"
 else
-    echo -e "  ${RED}✗${NC} Memory usage: ${MEMORY_USAGE}% (critical)"
+    echo -e "  ${RED}[FAIL]${NC} Memory usage: ${MEMORY_USAGE}% (critical)"
     check_status=1
 fi
 echo ""
@@ -103,11 +103,11 @@ if command -v openssl &> /dev/null && [ -f "/etc/letsencrypt/live/senextrader.co
     DAYS_UNTIL_EXPIRY=$(( ($EXPIRY_EPOCH - $NOW_EPOCH) / 86400 ))
     
     if [ "$DAYS_UNTIL_EXPIRY" -gt 30 ]; then
-        echo -e "  ${GREEN}✓${NC} SSL certificate expires in ${DAYS_UNTIL_EXPIRY} days"
+        echo -e "  ${GREEN}[OK]${NC} SSL certificate expires in ${DAYS_UNTIL_EXPIRY} days"
     elif [ "$DAYS_UNTIL_EXPIRY" -gt 7 ]; then
         echo -e "  ${YELLOW}⚠${NC} SSL certificate expires in ${DAYS_UNTIL_EXPIRY} days"
     else
-        echo -e "  ${RED}✗${NC} SSL certificate expires in ${DAYS_UNTIL_EXPIRY} days (critical)"
+        echo -e "  ${RED}[FAIL]${NC} SSL certificate expires in ${DAYS_UNTIL_EXPIRY} days (critical)"
         check_status=1
     fi
 else

@@ -40,12 +40,11 @@ class OAuthFlowTests(TestCase):
         assert b"Invalid or expired OAuth state" in resp.content
 
     @patch("accounts.views.GlobalStreamManager.remove_user_manager", new_callable=AsyncMock)
-    @patch("accounts.views.TastyTradeSessionService.clear_user_session", new_callable=AsyncMock)
     @patch("accounts.views.TastyTradeSessionService.get_session_for_user", new_callable=AsyncMock)
     @patch("accounts.views.TastyTradeOAuthClient.fetch_accounts", new_callable=AsyncMock)
     @patch("accounts.views.TastyTradeOAuthClient.exchange_code", new_callable=AsyncMock)
     def test_callback_success_single_account_persists(
-        self, mock_exchange, mock_accounts, mock_session, mock_clear_session, mock_remove_manager
+        self, mock_exchange, mock_accounts, mock_session, mock_remove_manager
     ):
         self.client.force_login(self.user)
         self.client.get(self.initiate_url)
@@ -77,12 +76,11 @@ class OAuthFlowTests(TestCase):
         assert acct.access_token == "at"
 
     @patch("accounts.views.GlobalStreamManager.remove_user_manager", new_callable=AsyncMock)
-    @patch("accounts.views.TastyTradeSessionService.clear_user_session", new_callable=AsyncMock)
     @patch("accounts.views.TastyTradeSessionService.get_session_for_user", new_callable=AsyncMock)
     @patch("accounts.views.TastyTradeOAuthClient.fetch_accounts", new_callable=AsyncMock)
     @patch("accounts.views.TastyTradeOAuthClient.exchange_code", new_callable=AsyncMock)
     def test_callback_success_multi_accounts_requires_selection(
-        self, mock_exchange, mock_accounts, mock_session, mock_clear_session, mock_remove_manager
+        self, mock_exchange, mock_accounts, mock_session, mock_remove_manager
     ):
         self.client.force_login(self.user)
         self.client.get(self.initiate_url)
@@ -108,11 +106,11 @@ class OAuthFlowTests(TestCase):
         from accounts.models import TradingAccount
 
         acct = TradingAccount.objects.get(user=self.user, connection_type="TASTYTRADE")
-        assert acct.account_number == ""
+        assert acct.account_number == "TT123"
         assert "accounts" in acct.metadata
 
-        # Now simulate primary selection
-        resp2 = self.client.post(self.select_primary_url, {"account_number": "TT123"})
+        # User can still select a different primary account afterwards
+        resp2 = self.client.post(self.select_primary_url, {"account_number": "TT999"})
         assert resp2.status_code == 302
         acct.refresh_from_db()
-        assert acct.account_number == "TT123"
+        assert acct.account_number == "TT999"

@@ -442,7 +442,7 @@ class CoveredCallStrategy(BaseStrategy):
 
         if force_generation and score < self.MIN_SCORE_THRESHOLD:
             logger.warning(
-                f"⚠️ Force generating {self.strategy_name} despite low score ({score:.1f})"
+                f"Force generating {self.strategy_name} despite low score ({score:.1f})"
             )
 
         # Check stock ownership
@@ -510,7 +510,7 @@ class CoveredCallStrategy(BaseStrategy):
         }
 
         logger.info(
-            f"User {self.user.id}: ✅ Context prepared for {self.strategy_name} "
+            f"User {self.user.id}: Context prepared for {self.strategy_name} "
             f"(stock: {has_stock}, will need to purchase: {not has_stock})"
         )
         return context
@@ -541,7 +541,7 @@ class CoveredCallStrategy(BaseStrategy):
         # Dispatch to stream manager
         await self.a_dispatch_to_stream_manager(context)
         logger.info(
-            f"User {self.user.id}: 🚀 Dispatched {self.strategy_name} request to stream manager"
+            f"User {self.user.id}: Dispatched {self.strategy_name} request to stream manager"
         )
 
     async def a_calculate_suggestion_from_cached_data(self, context: dict):
@@ -646,7 +646,7 @@ class CoveredCallStrategy(BaseStrategy):
         # Build generation notes if risk warning
         notes = ""
         if risk_warning:
-            notes = f"⚠️ RISK BUDGET EXCEEDED: {risk_warning}"
+            notes = f"RISK BUDGET EXCEEDED: {risk_warning}"
 
         suggestion = await TradingSuggestion.objects.acreate(
             user=self.user,
@@ -676,7 +676,7 @@ class CoveredCallStrategy(BaseStrategy):
         )
 
         logger.info(
-            f"User {self.user.id}: ✅ Covered Call suggestion - "
+            f"User {self.user.id}: Covered Call suggestion - "
             f"Premium: ${premium:.2f}, Strike: ${call_strike}"
         )
         return suggestion

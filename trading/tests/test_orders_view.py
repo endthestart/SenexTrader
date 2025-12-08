@@ -24,6 +24,9 @@ class OrdersViewTestCase(TestCase):
             user=self.user,
             account_number="TEST123",
             is_primary=True,
+            connection_type="TASTYTRADE",
+            is_active=True,
+            access_token="test_token",
         )
         self.client.login(email="test@example.com", password="testpass123")
 
@@ -32,17 +35,17 @@ class OrdersViewTestCase(TestCase):
         url = reverse("trading:orders")
         response = self.client.get(url)
 
-        self.assertEqual(response.status_code, 200)
+        assert response.status_code == 200
         self.assertTemplateUsed(response, "trading/orders.html")
-        self.assertIn("enriched_orders", response.context)
-        self.assertIn("order_count", response.context)
+        assert "enriched_orders" in response.context
+        assert "order_count" in response.context
 
     def test_orders_view_empty_state(self):
         """Test orders view with no active orders."""
         url = reverse("trading:orders")
         response = self.client.get(url)
 
-        self.assertEqual(response.context["order_count"], 0)
+        assert response.context["order_count"] == 0
         self.assertContains(response, "No Active Orders")
 
     def test_orders_view_with_active_order(self):
@@ -56,7 +59,7 @@ class OrdersViewTestCase(TestCase):
             lifecycle_state="pending_entry",
         )
 
-        trade = Trade.objects.create(
+        Trade.objects.create(
             user=self.user,
             position=position,
             trading_account=self.trading_account,
@@ -70,7 +73,7 @@ class OrdersViewTestCase(TestCase):
         url = reverse("trading:orders")
         response = self.client.get(url)
 
-        self.assertEqual(response.context["order_count"], 1)
+        assert response.context["order_count"] == 1
         self.assertContains(response, "QQQ")
         self.assertContains(response, "Senex Trident")
         self.assertNotContains(response, "No Active Orders")
@@ -100,7 +103,7 @@ class OrdersViewTestCase(TestCase):
         url = reverse("trading:orders")
         response = self.client.get(url)
 
-        self.assertEqual(response.context["order_count"], 0)
+        assert response.context["order_count"] == 0
         self.assertNotContains(response, "FILLED_ORDER")
 
     def test_orders_view_filters_unmanaged_positions(self):
@@ -127,7 +130,7 @@ class OrdersViewTestCase(TestCase):
         url = reverse("trading:orders")
         response = self.client.get(url)
 
-        self.assertEqual(response.context["order_count"], 0)
+        assert response.context["order_count"] == 0
         self.assertNotContains(response, "UNMANAGED_ORDER")
 
     def test_orders_view_requires_login(self):
@@ -137,8 +140,8 @@ class OrdersViewTestCase(TestCase):
         response = self.client.get(url)
 
         # Should redirect to login page
-        self.assertEqual(response.status_code, 302)
-        self.assertIn("/accounts/login/", response.url)
+        assert response.status_code == 302
+        assert "/accounts/login/" in response.url
 
     def test_orders_view_enriches_option_legs(self):
         """Test that orders view enriches option leg data."""
@@ -182,39 +185,39 @@ class OrdersViewTestCase(TestCase):
         url = reverse("trading:orders")
         response = self.client.get(url)
 
-        self.assertEqual(response.status_code, 200)
+        assert response.status_code == 200
         enriched_orders = response.context["enriched_orders"]
 
-        self.assertEqual(len(enriched_orders), 1)
+        assert len(enriched_orders) == 1
 
         order_data = enriched_orders[0]
-        self.assertEqual(order_data["order"].id, trade.id)
-        self.assertEqual(len(order_data["parsed_legs"]), 2)
+        assert order_data["order"].id == trade.id
+        assert len(order_data["parsed_legs"]) == 2
 
         # Check first leg (sell 450 call)
         leg1 = order_data["parsed_legs"][0]
-        self.assertEqual(leg1["underlying"], "SPY")
-        self.assertEqual(leg1["strike"], 450.0)
-        self.assertEqual(leg1["option_type"], "Call")
-        self.assertEqual(leg1["action"], "SELL_TO_OPEN")
+        assert leg1["underlying"] == "SPY"
+        assert leg1["strike"] == 450.0
+        assert leg1["option_type"] == "Call"
+        assert leg1["action"] == "SELL_TO_OPEN"
 
         # Check second leg (buy 455 call)
         leg2 = order_data["parsed_legs"][1]
-        self.assertEqual(leg2["underlying"], "SPY")
-        self.assertEqual(leg2["strike"], 455.0)
-        self.assertEqual(leg2["option_type"], "Call")
-        self.assertEqual(leg2["action"], "BUY_TO_OPEN")
+        assert leg2["underlying"] == "SPY"
+        assert leg2["strike"] == 455.0
+        assert leg2["option_type"] == "Call"
+        assert leg2["action"] == "BUY_TO_OPEN"
 
         # Check DTE calculation
-        self.assertIsNotNone(order_data["dte"])
-        self.assertGreater(order_data["dte"], 25)  # Should be around 30 days
-        self.assertLess(order_data["dte"], 35)
+        assert order_data["dte"] is not None
+        assert order_data["dte"] > 25  # Should be around 30 days
+        assert order_data["dte"] < 35
 
     def test_orders_view_displays_profit_targets(self):
-        """Test that profit target orders from CachedOrder are displayed."""
+        """Test that profit target orders from TastyTradeOrderHistory are displayed."""
         from datetime import date, timedelta
 
-        from trading.models import CachedOrder
+        from trading.models import TastyTradeOrderHistory
 
         # Create an open position with profit target details
         position = Position.objects.create(
@@ -233,9 +236,9 @@ class OrdersViewTestCase(TestCase):
             },
         )
 
-        # Create a CachedOrder for the profit target
+        # Create a TastyTradeOrderHistory for the profit target
         expiration = (date.today() + timedelta(days=30)).strftime("%y%m%d")
-        cached_order = CachedOrder.objects.create(
+        TastyTradeOrderHistory.objects.create(
             user=self.user,
             trading_account=self.trading_account,
             broker_order_id="PT_ORDER_123",
@@ -262,25 +265,25 @@ class OrdersViewTestCase(TestCase):
         url = reverse("trading:orders")
         response = self.client.get(url)
 
-        self.assertEqual(response.status_code, 200)
+        assert response.status_code == 200
         enriched_orders = response.context["enriched_orders"]
 
         # Should have 1 profit target order
-        self.assertEqual(len(enriched_orders), 1)
+        assert len(enriched_orders) == 1
 
         order_data = enriched_orders[0]
         order = order_data["order"]
 
         # Check that it's marked as a profit target
-        self.assertTrue(order.is_profit_target)
+        assert order.is_profit_target
 
         # Check basic order properties
-        self.assertEqual(order.broker_order_id, "PT_ORDER_123")
-        self.assertEqual(order.position.id, position.id)
-        self.assertEqual(order.get_trade_type_display(), "Profit Target")
+        assert order.broker_order_id == "PT_ORDER_123"
+        assert order.position.id == position.id
+        assert order.get_trade_type_display() == "Profit Target"
 
         # Check that legs are parsed correctly
-        self.assertEqual(len(order_data["parsed_legs"]), 2)
+        assert len(order_data["parsed_legs"]) == 2
 
         # Verify HTML renders correctly (profit target should not have cancel button)
         self.assertContains(response, "Profit Target")

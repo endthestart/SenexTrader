@@ -91,11 +91,11 @@ tt order filled --days 7
 ```
 
 **Pros**: 
-- ✅ Real-time data directly from TastyTrade
-- ✅ No code required, fast iteration
-- ✅ Shows exact order details, strikes, quantities
-- ✅ Can filter by status (working, filled, cancelled)
-- ✅ Shows actual positions vs our database state
+- Real-time data directly from TastyTrade
+- No code required, fast iteration
+- Shows exact order details, strikes, quantities
+- Can filter by status (working, filled, cancelled)
+- Shows actual positions vs our database state
 
 **Cons**:
 - Interactive (requires selection in menus)
@@ -118,10 +118,10 @@ python manage.py reconcile_qqq_orders --dry-run --cancel-orphaned --clear-invali
 ```
 
 **Output shows**:
-- ✅ Matched positions (orders correct)
-- ⚠️ Positions with invalid orders
+- Matched positions (orders correct)
+- Positions with invalid orders
 - 🔗 Orphaned orders (in TastyTrade, not in DB)
-- ❌ Positions with no orders
+- Positions with no orders
 
 **Pros**:
 - Automated comparison
@@ -208,11 +208,11 @@ for pos in qqq_positions:
 - **SLOWER** but **MORE RELIABLE** for scripts
 
 **When to Use Sync Methods**:
-- ✅ One-off analysis scripts
-- ✅ Reconciliation commands
-- ✅ Management commands (Pattern 1 alternative)
-- ✅ When accuracy > speed
-- ✅ When debugging async issues
+- One-off analysis scripts
+- Reconciliation commands
+- Management commands (Pattern 1 alternative)
+- When accuracy > speed
+- When debugging async issues
 
 **When to Use Async Methods**:
 - Real-time trading decisions
@@ -283,9 +283,9 @@ python manage.py reconcile_qqq_orders --dry-run
 
 **Expected output**:
 ```
-✅ Matched positions: X
-⚠️  Positions with invalid orders: 0
-❌ Positions with no orders: 0
+Matched positions: X
+ Positions with invalid orders: 0
+Positions with no orders: 0
 🔗 Orphaned orders: 0
 ```
 
@@ -474,8 +474,8 @@ async def _fetch_orders_async(self, user, days_lookback):
 
 ### 1. Always Use Management Commands for Bulk Operations
 
-❌ **DON'T**: Run scripts that directly manipulate orders without proper async patterns  
-✅ **DO**: Use management commands that follow Pattern 1
+**DON'T**: Run scripts that directly manipulate orders without proper async patterns  
+**DO**: Use management commands that follow Pattern 1
 
 ### 2. Test Async Patterns in Development First
 
@@ -564,16 +564,16 @@ account.delete_order(session, order_id)
 ```
 
 **Advantages**:
-- ✅ No async context issues
-- ✅ No event loop management
-- ✅ Direct Python - easier to debug
-- ✅ Can use in simple scripts without Django setup complexity
-- ✅ **More reliable for one-off operations**
+- No async context issues
+- No event loop management
+- Direct Python - easier to debug
+- Can use in simple scripts without Django setup complexity
+- **More reliable for one-off operations**
 
 **Disadvantages**:
-- ❌ Slower (blocking I/O)
-- ❌ Can't parallelize multiple requests
-- ❌ Not suitable for high-frequency operations
+- Slower (blocking I/O)
+- Can't parallelize multiple requests
+- Not suitable for high-frequency operations
 
 ### Async Methods (For Production Services)
 
@@ -592,15 +592,15 @@ asyncio.run(main())
 ```
 
 **Advantages**:
-- ✅ Fast (non-blocking I/O)
-- ✅ Can parallelize requests
-- ✅ Better for high-frequency operations
+- Fast (non-blocking I/O)
+- Can parallelize requests
+- Better for high-frequency operations
 
 **Disadvantages**:
-- ❌ Async/sync context issues
-- ❌ Event loop management complexity
-- ❌ Harder to debug
-- ❌ **Can fail silently if context incorrect**
+- Async/sync context issues
+- Event loop management complexity
+- Harder to debug
+- **Can fail silently if context incorrect**
 
 ### Recommendation for Reconciliation
 

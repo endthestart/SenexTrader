@@ -62,7 +62,6 @@ class StopLossExit(ExitStrategy):
         Returns:
             ExitEvaluation indicating whether stop loss triggered
         """
-        # Get current P&L
         current_pnl = position.unrealized_pnl
         if current_pnl is None:
             logger.warning(
@@ -76,7 +75,6 @@ class StopLossExit(ExitStrategy):
 
         current_pnl = Decimal(str(current_pnl))
 
-        # Get initial risk (max loss)
         initial_risk = position.initial_risk
         if initial_risk is None or initial_risk == 0:
             logger.warning(
@@ -90,16 +88,10 @@ class StopLossExit(ExitStrategy):
 
         initial_risk = Decimal(str(initial_risk))
 
-        # Calculate stop loss threshold (negative value)
-        # For credit spreads: initial_risk is positive (credit received)
-        # Max loss is spread_width * contracts * 100 - credit
-        # For simplicity, we'll use initial_risk as the reference
         stop_loss_threshold = -abs(initial_risk) * (self.max_loss_percentage / Decimal("100"))
 
-        # Check if current loss meets or exceeds threshold (more negative)
         should_exit = current_pnl <= stop_loss_threshold
 
-        # Calculate loss percentage
         loss_pct = (
             (current_pnl / abs(initial_risk)) * Decimal("100")
             if initial_risk != 0
@@ -133,7 +125,6 @@ class StopLossExit(ExitStrategy):
 
     def get_name(self) -> str:
         """Return human-readable name."""
-        # Format percentage without unnecessary decimal places
         pct = float(self.max_loss_percentage)
         if pct == int(pct):
             return f"{int(pct)}% Stop Loss"

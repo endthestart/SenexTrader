@@ -108,7 +108,7 @@ class TestCallBackspreadScoring:
         report.iv_rank = 30.0
         report.hv_iv_ratio = 1.25
 
-        score, reasons = await strategy._score_market_conditions_impl(report)
+        _score, reasons = await strategy._score_market_conditions_impl(report)
 
         assert any("strong bullish" in r.lower() and "excellent" in r.lower() for r in reasons)
 
@@ -123,7 +123,7 @@ class TestCallBackspreadScoring:
         score, reasons = await strategy._score_market_conditions_impl(report)
 
         assert score > 50.0
-        assert any("bullish" in r.lower() and "prefer stronger" in r.lower() for r in reasons)
+        assert any("bullish" in r.lower() and "favorable" in r.lower() for r in reasons)
 
     async def test_adx_above_35_excellent(self, strategy):
         """Test excellent score for ADX > 35 (very strong trend)."""
@@ -133,7 +133,7 @@ class TestCallBackspreadScoring:
         report.iv_rank = 30.0
         report.hv_iv_ratio = 1.25
 
-        score, reasons = await strategy._score_market_conditions_impl(report)
+        _score, reasons = await strategy._score_market_conditions_impl(report)
 
         assert any(
             "very strong trend" in r.lower() and "high probability" in r.lower() for r in reasons
@@ -147,7 +147,7 @@ class TestCallBackspreadScoring:
         report.iv_rank = 30.0
         report.hv_iv_ratio = 1.25
 
-        score, reasons = await strategy._score_market_conditions_impl(report)
+        _score, reasons = await strategy._score_market_conditions_impl(report)
 
         assert any("strong trend" in r.lower() and "favorable" in r.lower() for r in reasons)
 
@@ -159,7 +159,7 @@ class TestCallBackspreadScoring:
         report.iv_rank = 30.0
         report.hv_iv_ratio = 1.25
 
-        score, reasons = await strategy._score_market_conditions_impl(report)
+        _score, reasons = await strategy._score_market_conditions_impl(report)
 
         assert any(
             "weak trend" in r.lower() or "insufficient momentum" in r.lower() for r in reasons
@@ -172,7 +172,7 @@ class TestCallBackspreadScoring:
         report.adx = 30.0
         report.iv_rank = 22.0
 
-        score, reasons = await strategy._score_market_conditions_impl(report)
+        _score, reasons = await strategy._score_market_conditions_impl(report)
 
         assert any("cheap to buy" in r.lower() and "ideal" in r.lower() for r in reasons)
 
@@ -183,7 +183,7 @@ class TestCallBackspreadScoring:
         report.adx = 30.0
         report.iv_rank = 35.0
 
-        score, reasons = await strategy._score_market_conditions_impl(report)
+        _score, reasons = await strategy._score_market_conditions_impl(report)
 
         assert any("acceptable for buying calls" in r.lower() for r in reasons)
 
@@ -194,7 +194,7 @@ class TestCallBackspreadScoring:
         report.adx = 30.0
         report.iv_rank = 55.0
 
-        score, reasons = await strategy._score_market_conditions_impl(report)
+        _score, reasons = await strategy._score_market_conditions_impl(report)
 
         assert any("too expensive to buy calls" in r.lower() for r in reasons)
 
@@ -206,7 +206,7 @@ class TestCallBackspreadScoring:
         report.iv_rank = 30.0
         report.hv_iv_ratio = 1.35
 
-        score, reasons = await strategy._score_market_conditions_impl(report)
+        _score, reasons = await strategy._score_market_conditions_impl(report)
 
         assert any("severely underpriced" in r.lower() for r in reasons)
 
@@ -218,7 +218,7 @@ class TestCallBackspreadScoring:
         report.iv_rank = 30.0
         report.hv_iv_ratio = 1.25
 
-        score, reasons = await strategy._score_market_conditions_impl(report)
+        _score, reasons = await strategy._score_market_conditions_impl(report)
 
         assert any("underpriced vs realized" in r.lower() for r in reasons)
 
@@ -230,7 +230,7 @@ class TestCallBackspreadScoring:
         report.iv_rank = 30.0
         report.hv_iv_ratio = 0.95
 
-        score, reasons = await strategy._score_market_conditions_impl(report)
+        _score, reasons = await strategy._score_market_conditions_impl(report)
 
         assert any("not underpriced" in r.lower() for r in reasons)
 
@@ -243,7 +243,7 @@ class TestCallBackspreadScoring:
         report.hv_iv_ratio = 1.25
         report.recent_move_pct = 3.5
 
-        score, reasons = await strategy._score_market_conditions_impl(report)
+        _score, reasons = await strategy._score_market_conditions_impl(report)
 
         assert any(
             "moderate bullish momentum" in r.lower() and "trend developing" in r.lower()
@@ -259,7 +259,7 @@ class TestCallBackspreadScoring:
         report.hv_iv_ratio = 1.25
         report.recent_move_pct = 12.0
 
-        score, reasons = await strategy._score_market_conditions_impl(report)
+        _score, reasons = await strategy._score_market_conditions_impl(report)
 
         assert any("exhausted" in r.lower() or "risky" in r.lower() for r in reasons)
 
@@ -271,7 +271,7 @@ class TestCallBackspreadScoring:
         report.iv_rank = 30.0
         report.hv_iv_ratio = 1.25
 
-        score, reasons = await strategy._score_market_conditions_impl(report)
+        _score, reasons = await strategy._score_market_conditions_impl(report)
 
         assert any("advanced strategy" in r.lower() and "danger zone" in r.lower() for r in reasons)
 

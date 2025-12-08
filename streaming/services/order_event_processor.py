@@ -1,14 +1,4 @@
-"""
-Order Event Processor - Handles order fills and profit target creation.
-
-Extracted from UserStreamManager as part of Phase 5 refactoring to reduce god class complexity.
-
-Architecture:
-- Stateless service class (no internal state)
-- Uses dependency injection for broadcasting
-- Handles order lifecycle events from AlertStreamer
-- Creates and manages profit targets after position entry
-"""
+"""Order Event Processor - Handles order fills and profit target creation."""
 
 from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime
@@ -126,7 +116,7 @@ class OrderEventProcessor:
 
                     if trade.trade_type == "open":
                         position.lifecycle_state = "open_full"
-                        await position.asave()
+                        await position.asave(update_fields=["lifecycle_state"])
                         logger.info(
                             f"User {self.user_id}: Position {position.id} "
                             f"marked as open (order filled)"
@@ -142,17 +132,17 @@ class OrderEventProcessor:
                             sync_result = await sync_service.sync_all_positions(user)
                             if sync_result.get("success"):
                                 logger.info(
-                                    f"User {self.user_id}: ✅ Position sync complete - "
+                                    f"User {self.user_id}: Position sync complete - "
                                     f"avg_price and legs populated for position {position.id}"
                                 )
                             else:
                                 logger.warning(
-                                    f"User {self.user_id}: ⚠️ Position sync failed: "
+                                    f"User {self.user_id}: Position sync failed: "
                                     f"{sync_result.get('error')}"
                                 )
                         except Exception as e:
                             logger.error(
-                                f"User {self.user_id}: ❌ Error during position sync: {e}",
+                                f"User {self.user_id}: Error during position sync: {e}",
                                 exc_info=True,
                             )
 
@@ -163,9 +153,9 @@ class OrderEventProcessor:
                         position.metadata["closure_reason"] = f"order_{new_status}"
                         position.metadata["closure_timestamp"] = dj_timezone.now().isoformat()
                         position.metadata["auto_closed_by"] = "alert_streamer"
-                        await position.asave()
+                        await position.asave(update_fields=["lifecycle_state", "metadata"])
                         logger.info(
-                            f"User {self.user_id}: ✅ Position {position.id} auto-closed "
+                            f"User {self.user_id}: Position {position.id} auto-closed "
                             f"(order {order.id} {new_status})"
                         )
                         await self._broadcast(
@@ -180,7 +170,7 @@ class OrderEventProcessor:
 
                 await trade.asave()
                 logger.info(
-                    f"User {self.user_id}: ✅ Order {order.id} status: {old_status} -> {new_status}"
+                    f"User {self.user_id}: Order {order.id} status: {old_status} -> {new_status}"
                 )
 
                 position_symbol = (await trade.position_async).symbol
@@ -232,7 +222,7 @@ class OrderEventProcessor:
             order: PlacedOrder from AlertStreamer containing fill details
         """
         logger.info(
-            f"User {self.user_id}: 🎯 Profit target fill detected for order {order.id} - "
+            f"User {self.user_id}: Profit target fill detected for order {order.id} - "
             f"other targets remain active (DTE closure at 7 DTE handles cancellation)"
         )
 
@@ -240,18 +230,14 @@ class OrderEventProcessor:
             position = await trade.position_async
             account = await trade.trading_account_async
 
-            # Extract and validate fill data
             fill_data = await self._extract_and_validate_fill_data(trade, order)
 
-            # Prepare position update with P&L calculation
             update_data = await self._prepare_profit_target_update(position, order, fill_data)
 
-            # Atomically update position and record fill
             position = await self._record_profit_target_fill(
                 trade, position, fill_data, update_data
             )
 
-            # Notify user and broadcast update
             await self._notify_profit_target_fill(position, trade, order, account)
 
         except Exception as e:
@@ -494,18 +480,27 @@ class OrderEventProcessor:
         Create profit targets when opening order fills using strategy-specific logic.
 
         This method:
-        1. Identifies the strategy type from the position
-        2. Gets strategy-specific profit target specifications
-        3. Executes each profit target order
-        4. Updates position and trade with profit target details
+        1. Checks if auto profit targets are enabled (except for Senex Trident)
+        2. Identifies the strategy type from the position
+        3. Gets strategy-specific profit target specifications
+        4. Executes each profit target order
+        5. Updates position and trade with profit target details
 
         Args:
             trade: Trade object for the filled opening order
         """
         try:
             from services.execution.order_service import OrderExecutionService
-            from services.strategies.credit_spread_strategy import CreditSpreadStrategy
+            from services.strategies.credit_spread_strategy import (
+                ShortCallVerticalStrategy,
+                ShortPutVerticalStrategy,
+            )
+            from services.strategies.debit_spread_strategy import (
+                LongCallVerticalStrategy,
+                LongPutVerticalStrategy,
+            )
             from services.strategies.senex_trident_strategy import SenexTridentStrategy
+            from trading.models import StrategyConfiguration
 
             user = await trade.user_async
 
@@ -520,11 +515,36 @@ class OrderEventProcessor:
                 )
                 return
 
-            # Get strategy-specific profit target specifications (dynamic strategy selection)
+            # Get trading account and check preferences
+            account = await trade.trading_account_async
+
+            if not account:
+                logger.error(
+                    f"User {self.user_id}: CRITICAL - No trading account found for "
+                    f"trade {trade.id}. Aborting profit target creation."
+                )
+                return
+
+            # Senex Trident ALWAYS creates profit targets (algorithm-driven)
+            # For other strategies, check the auto_profit_targets_enabled preference
+            is_senex_trident = strategy_type == "senex_trident"
+
+            if not is_senex_trident:
+                prefs = await self._get_trading_preferences(account)
+                if prefs and not prefs.auto_profit_targets_enabled:
+                    logger.info(
+                        f"User {self.user_id}: Auto profit targets disabled for account "
+                        f"{account.id} - skipping for {strategy_type}"
+                    )
+                    return
+
+            # Strategy factory map with proper strategy classes
             strategy_map = {
                 "senex_trident": SenexTridentStrategy,
-                "bull_put_spread": lambda user: CreditSpreadStrategy(user, direction="bullish"),
-                "bear_call_spread": lambda user: CreditSpreadStrategy(user, direction="bearish"),
+                "short_put_vertical": ShortPutVerticalStrategy,
+                "short_call_vertical": ShortCallVerticalStrategy,
+                "long_call_vertical": LongCallVerticalStrategy,
+                "long_put_vertical": LongPutVerticalStrategy,
             }
 
             strategy_factory = strategy_map.get(strategy_type)
@@ -537,14 +557,30 @@ class OrderEventProcessor:
 
             strategy = strategy_factory(user)
 
+            # Get user-configured profit target percentage for spread strategies
+            target_pct = None
+            if not is_senex_trident:
+                config = await StrategyConfiguration.objects.filter(
+                    user=user, strategy_id=strategy_type
+                ).afirst()
+                if config and config.parameters:
+                    target_pct = config.parameters.get("profit_target_pct")
+
             # Handle different method signatures: Senex takes (position, trade),
-            # others take (position)
-            if strategy_type == "senex_trident":
+            # others take (position) with optional target_pct
+            if is_senex_trident:
                 profit_target_specs = await strategy.a_get_profit_target_specifications(
                     position, trade
                 )
             else:
-                profit_target_specs = await strategy.a_get_profit_target_specifications(position)
+                if target_pct is not None:
+                    profit_target_specs = await strategy.a_get_profit_target_specifications(
+                        position, target_pct=target_pct
+                    )
+                else:
+                    profit_target_specs = await strategy.a_get_profit_target_specifications(
+                        position
+                    )
 
             if not profit_target_specs:
                 logger.warning(
@@ -553,25 +589,15 @@ class OrderEventProcessor:
                 return
 
             logger.info(
-                f"User {self.user_id}: 🎯 Creating {len(profit_target_specs)} "
+                f"User {self.user_id}: Creating {len(profit_target_specs)} "
                 f"profit targets for filled trade {trade.id}"
             )
-
-            # Verify trading account exists before creating profit targets
-            account = await trade.trading_account_async
-
-            if not account:
-                logger.error(
-                    f"User {self.user_id}: ❌ CRITICAL - No trading account found for trade {trade.id}. "
-                    f"Cannot determine test mode. Aborting profit target creation for safety."
-                )
-                return
 
             # Defensive check: verify is_test field exists
             if not hasattr(account, "is_test"):
                 logger.error(
-                    f"User {self.user_id}: ❌ CRITICAL - Trading account {account.id} missing is_test field. "
-                    f"Database migration issue. Aborting profit target creation."
+                    f"User {self.user_id}: CRITICAL - Trading account {account.id} "
+                    f"missing is_test field. Aborting profit target creation."
                 )
                 return
 
@@ -590,19 +616,21 @@ class OrderEventProcessor:
                 if order_id:
                     order_ids.append(order_id)
                     logger.info(
-                        f"User {self.user_id}: ✅ Created {spec.spread_type} "
+                        f"User {self.user_id}: Created {spec.spread_type} "
                         f"profit target ({spec.profit_percentage}%): {order_id}"
                     )
                 else:
                     logger.error(
-                        f"User {self.user_id}: ❌ Failed to create {spec.spread_type} profit target"
+                        f"User {self.user_id}: Failed to create {spec.spread_type} profit target"
                     )
 
             # Update trade with profit target order IDs
+            # Use update_fields to prevent race conditions with concurrent sync processes
             trade.child_order_ids = order_ids
-            await trade.asave()
+            await trade.asave(update_fields=["child_order_ids"])
 
             # Update position with profit target details
+            # Use update_fields to prevent concurrent sync from overwriting these fields
             position.profit_targets_created = True
             position.profit_target_details = {
                 spec.spread_type: {
@@ -613,25 +641,31 @@ class OrderEventProcessor:
                 }
                 for i, spec in enumerate(profit_target_specs)
             }
-            await position.asave()
+            await position.asave(update_fields=["profit_targets_created", "profit_target_details"])
 
             logger.info(
-                f"User {self.user_id}: ✅ Created {len(order_ids)} profit targets: {order_ids}"
+                f"User {self.user_id}: Created {len(order_ids)} profit targets: {order_ids}"
             )
 
-            await self._broadcast(
-                "profit_targets_created",
-                {
-                    "trade_id": trade.id,
-                    "profit_target_ids": order_ids,
-                    "position_id": position.id,  # Use cached position variable
-                    "target_details": position.profit_target_details,
-                },
-            )
+            # Broadcast is non-critical - don't let failures affect the save
+            try:
+                await self._broadcast(
+                    "profit_targets_created",
+                    {
+                        "trade_id": trade.id,
+                        "profit_target_ids": order_ids,
+                        "position_id": position.id,
+                        "target_details": position.profit_target_details,
+                    },
+                )
+            except Exception as broadcast_error:
+                logger.warning(
+                    f"User {self.user_id}: Broadcast failed (non-critical): {broadcast_error}"
+                )
 
         except Exception as e:
             logger.error(
-                f"User {self.user_id}: ❌ Failed to create profit targets for trade {trade.id}: {e}"
+                f"User {self.user_id}: Failed to create profit targets for trade {trade.id}: {e}"
             )
 
     def _calculate_fill_price_from_legs(self, order: PlacedOrder) -> Decimal | None:
@@ -798,16 +832,40 @@ class OrderEventProcessor:
             position.lifecycle_state = new_lifecycle_state
             position.metadata = metadata
 
+            # Track fields to save
+            fields_to_save = [
+                "quantity",
+                "total_realized_pnl",
+                "profit_target_details",
+                "lifecycle_state",
+                "metadata",
+            ]
+
             # Update is_open status
             if position.quantity <= 0:
                 position.is_open = False
                 position.closed_at = datetime.now(UTC)
+                fields_to_save.extend(["is_open", "closed_at"])
 
-            position.save()
+            position.save(update_fields=fields_to_save)
             logger.info(
-                f"User {self.user_id}: ✅ Atomically updated position {position_id} - "
+                f"User {self.user_id}: Atomically updated position {position_id} - "
                 f"quantity={position.quantity}, state={new_lifecycle_state}, "
                 f"realized_pnl=${realized_pnl}"
             )
 
             return position
+
+    @sync_to_async
+    def _get_trading_preferences(self, account):
+        """
+        Get trading preferences for account.
+
+        Returns TradingAccountPreferences or None if not configured.
+        """
+        from accounts.models import TradingAccountPreferences
+
+        try:
+            return account.trading_preferences
+        except TradingAccountPreferences.DoesNotExist:
+            return None

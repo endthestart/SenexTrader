@@ -124,13 +124,13 @@ document.addEventListener('DOMContentLoaded', function() {
     // Wait for global streamers to be ready
     function initializeStreaming() {
         if (window.streamersReady) {
-            console.log('Risk Settings: Streamers already ready, setting up streaming...');
+            window.logStreamInfo('Risk Settings: Streamers already ready, setting up streaming...');
             setupRiskStreaming();
         } else {
-            console.log('Risk Settings: Waiting for streamers-ready event...');
+            window.logStreamInfo('Risk Settings: Waiting for streamers-ready event...');
 
             window.addEventListener('streamers-ready', function(e) {
-                console.log('Risk Settings: Streamers ready event received:', e.detail);
+                window.logStreamInfo('Risk Settings: Streamers ready event received:', e.detail);
                 setupRiskStreaming();
             }, { once: true });
 
@@ -151,7 +151,7 @@ document.addEventListener('DOMContentLoaded', function() {
             return;
         }
 
-        console.log('Risk Settings: Using global WebSocket for streaming data');
+        window.logStreamInfo('Risk Settings: Using global WebSocket for streaming data');
         streamingHandlers.updateStreamStatus('Connected', 'success');
 
         // Register risk page message handler
@@ -206,15 +206,15 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Initialize risk calculations with pre-populated data
     if (initialAccountState.balance !== null && initialAccountState.buyingPower !== null) {
-        console.log('📊 Initializing with pre-populated data:', initialAccountState);
+        window.logStreamInfo('Initializing with pre-populated data:', initialAccountState);
         updateRiskCalculations(initialAccountState.balance, initialAccountState.buyingPower);
 
         // Show warning if data is stale
         if (initialAccountState.stale) {
-            console.warn('⚠️ Using stale account data from:', initialAccountState.source);
+            console.warn('Using stale account data from:', initialAccountState.source);
         }
     } else {
-        console.log('📊 No initial balance data available, waiting for streaming updates');
+        window.logStreamInfo('No initial balance data available, waiting for streaming updates');
     }
 });
 
@@ -310,10 +310,10 @@ document.getElementById('allocation-method').addEventListener('change', function
     // Use stored real values instead of parsing display text
     if (currentBalance !== null && currentBuyingPower !== null) {
         // Immediately recalculate with current values
-        console.log('Allocation method changed, recalculating with current values');
+        window.logStreamInfo('Allocation method changed, recalculating with current values');
         updateRiskCalculations(currentBalance, currentBuyingPower);
     } else {
-        console.log('Cannot recalculate - balance or buying power not available');
+        window.logStreamInfo('Cannot recalculate - balance or buying power not available');
     }
 });
 

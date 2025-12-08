@@ -273,17 +273,17 @@ class LongCallCalendarStrategy(BaseStrategy):
                 from django.utils import timezone
 
                 today = timezone.now().date()
-                near_dte = (near_exp - today).days
-                far_dte = (far_exp - today).days
+                (near_exp - today).days
+                (far_exp - today).days
 
                 score = 10.0
                 reasons = [
-                    "✅ Proper expiration structure available for calendar spread "
+                    "Proper expiration structure available for calendar spread "
                     "(2 expirations found)"
                 ]
             else:
                 score = 0.0
-                reasons = ["❌ Missing required expirations for calendar spread"]
+                reasons = ["Missing required expirations for calendar spread"]
 
             return (score, reasons)
 
@@ -330,8 +330,8 @@ class LongCallCalendarStrategy(BaseStrategy):
         self,
         report: MarketConditionReport,
         contracts: int = 1,
-        near_term_expiration: str = None,
-        long_term_expiration: str = None,
+        near_term_expiration: str | None = None,
+        long_term_expiration: str | None = None,
         option_type: str = "call",
         directional_bias: str | None = None,
     ) -> list:
@@ -418,8 +418,8 @@ class LongCallCalendarStrategy(BaseStrategy):
         self,
         report: MarketConditionReport,
         contracts: int = 1,
-        near_term_expiration: str = None,
-        long_term_expiration: str = None,
+        near_term_expiration: str | None = None,
+        long_term_expiration: str | None = None,
         option_type: str = "call",
         directional_bias: str | None = None,
     ) -> list:
@@ -622,7 +622,7 @@ class LongCallCalendarStrategy(BaseStrategy):
 
         if force_generation and score < self.MIN_SCORE_THRESHOLD:
             logger.warning(
-                f"⚠️ Force generating {self.strategy_name} despite low score ({score:.1f})"
+                f"Force generating {self.strategy_name} despite low score ({score:.1f})"
             )
 
         # Find optimal expiration pair (TastyTrade methodology with practical flexibility)
@@ -732,7 +732,7 @@ class LongCallCalendarStrategy(BaseStrategy):
             "suggestion_mode": suggestion_mode,
         }
 
-        logger.info(f"User {self.user.id}: ✅ Context prepared for {self.strategy_name}")
+        logger.info(f"User {self.user.id}: Context prepared for {self.strategy_name}")
         return context
 
     async def a_request_suggestion_generation(
@@ -761,7 +761,7 @@ class LongCallCalendarStrategy(BaseStrategy):
         # Dispatch to stream manager
         await self.a_dispatch_to_stream_manager(context)
         logger.info(
-            f"User {self.user.id}: 🚀 Dispatched {self.strategy_name} request to stream manager"
+            f"User {self.user.id}: Dispatched {self.strategy_name} request to stream manager"
         )
 
     async def a_calculate_suggestion_from_cached_data(self, context: dict):
@@ -797,7 +797,7 @@ class LongCallCalendarStrategy(BaseStrategy):
         )
         symbol = context["symbol"]
         near_exp = date.fromisoformat(context["near_expiration"])
-        far_exp = date.fromisoformat(context["far_expiration"])
+        date.fromisoformat(context["far_expiration"])
         strike = Decimal(str(context["strike"]))
         market_data = context["market_data"]
         is_automated = context.get("is_automated", False)
@@ -874,7 +874,7 @@ class LongCallCalendarStrategy(BaseStrategy):
         )
 
         logger.info(
-            f"User {self.user.id}: ✅ Long Call Calendar suggestion - "
+            f"User {self.user.id}: Long Call Calendar suggestion - "
             f"Debit: ${net_debit:.2f}, Strike: ${strike}"
         )
         return suggestion

@@ -40,9 +40,9 @@ class AutomatedTradingService:
                 user=user,
                 is_primary=True,
                 is_active=True,
-                is_automated_trading_enabled=True,
+                trading_preferences__is_automated_trading_enabled=True,
             )
-            .select_related("user")
+            .select_related("user", "trading_preferences")
             .first()
         )()
 
@@ -54,16 +54,20 @@ class AutomatedTradingService:
 
     async def a_process_account(self, account: TradingAccount) -> dict:
         """Process automated trading using a specific account record."""
-        if not account.is_active or not account.is_automated_trading_enabled:
+        # Access properties via sync_to_async to avoid async context DB access
+        is_active = account.is_active
+        is_enabled = await sync_to_async(lambda: account.is_automated_trading_enabled)()
+
+        if not is_active or not is_enabled:
             logger.info(
                 "Account %s not eligible for automation (active=%s, enabled=%s)",
                 account.account_number,
-                account.is_active,
-                account.is_automated_trading_enabled,
+                is_active,
+                is_enabled,
             )
             return {"status": "skipped", "reason": "no_active_account"}
 
-        user = account.user
+        user = await sync_to_async(lambda: account.user)()
         return await self._a_process(user=user, account=account)
 
     async def _a_process(self, *, user, account: TradingAccount) -> dict:
@@ -72,7 +76,7 @@ class AutomatedTradingService:
         start_time = time.time()
 
         logger.info(
-            "🤖 Starting automated trading cycle for user %s (account: %s, offset: %s¢)",
+            "Starting automated trading cycle for user %s (account: %s, offset: %sc)",
             user.email,
             account.account_number,
             account.automated_entry_offset_cents or 0,
@@ -122,7 +126,7 @@ class AutomatedTradingService:
 
                 if suggestion:
                     logger.info(
-                        "✅ Suggestion generated successfully on attempt %d/%d [%.2fs]",
+                        "Suggestion generated successfully on attempt %d/%d [%.2fs]",
                         attempt,
                         MAX_ATTEMPTS,
                         attempt_duration,
@@ -132,7 +136,7 @@ class AutomatedTradingService:
                 # If failed and not last attempt, wait and retry
                 if attempt < MAX_ATTEMPTS:
                     logger.warning(
-                        "⚠️ Suggestion generation failed on attempt %d/%d (took %.2fs). "
+                        "Suggestion generation failed on attempt %d/%d (took %.2fs). "
                         "Retrying in %d seconds...",
                         attempt,
                         MAX_ATTEMPTS,
@@ -143,8 +147,8 @@ class AutomatedTradingService:
 
                     await asyncio.sleep(RETRY_DELAY)
                 else:
-                    logger.info(
-                        "❌ Suggestion generation failed after %d attempts (total %.2fs)",
+                    logger.warning(
+                        "Suggestion generation failed after %d attempts (total %.2fs)",
                         MAX_ATTEMPTS,
                         time.time() - suggestion_start,
                     )
@@ -161,7 +165,7 @@ class AutomatedTradingService:
                 return {"status": "skipped", "reason": "unsuitable_market_conditions"}
 
             logger.info(
-                "✅ Suggestion created for %s: %s (expiry: %s, credit: $%.2f, risk: $%.2f) [%.2fs]",
+                "Suggestion created for %s: %s (expiry: %s, credit: $%.2f, risk: $%.2f) [%.2fs]",
                 user.email,
                 suggestion.underlying_symbol,
                 suggestion.expiration_date,
@@ -191,7 +195,7 @@ class AutomatedTradingService:
                 }
 
             logger.info(
-                "✅ Risk validation passed for %s [%.2fs]",
+                "Risk validation passed for %s [%.2fs]",
                 user.email,
                 validation_duration,
             )
@@ -208,7 +212,7 @@ class AutomatedTradingService:
 
             if isinstance(result, DryRunResult):
                 logger.info(
-                    "🧪 DRY-RUN: Skipped execution for %s - %s",
+                    "DRY-RUN: Skipped execution for %s - %s",
                     user.email,
                     result.message,
                 )
@@ -226,7 +230,7 @@ class AutomatedTradingService:
             position = result
             if not position:
                 logger.warning(
-                    "❌ Execution failed for %s [%.2fs]",
+                    "Execution failed for %s [%.2fs]",
                     user.email,
                     execution_duration,
                 )
@@ -238,7 +242,7 @@ class AutomatedTradingService:
 
             total_duration = time.time() - start_time
             logger.info(
-                "✅ Automated trade executed for %s: Position %s (total: %.2fs, breakdown: suggestion=%.2fs, validation=%.2fs, execution=%.2fs)",
+                "Automated trade executed for %s: Position %s (total: %.2fs, breakdown: suggestion=%.2fs, validation=%.2fs, execution=%.2fs)",
                 user.email,
                 position.id,
                 total_duration,
@@ -246,7 +250,7 @@ class AutomatedTradingService:
                 validation_duration,
                 execution_duration,
             )
-            self.send_notification(user, suggestion, position, custom_credit)
+            await self.send_notification(user, suggestion, position, custom_credit)
 
             return {
                 "status": "success",
@@ -257,7 +261,7 @@ class AutomatedTradingService:
 
         except Exception as exc:  # pragma: no cover - defensive guard
             logger.error(
-                "❌ Failed automation for %s (%s): %s",
+                "Failed automation for %s (%s): %s",
                 user.email,
                 account.account_number,
                 exc,
@@ -317,7 +321,7 @@ class AutomatedTradingService:
                 suggestion.status = "approved"
                 await sync_to_async(suggestion.save)(update_fields=["status"])
                 logger.info(
-                    "User %s: ✅ Automated suggestion %s approved (symbol=%s)",
+                    "User %s: Automated suggestion %s approved (symbol=%s)",
                     user.id,
                     suggestion.id,
                     suggestion.underlying_symbol,
@@ -339,7 +343,7 @@ class AutomatedTradingService:
             if manager:
                 try:
                     await manager.stop_streaming()
-                    logger.info("User %s: ✅ Streaming stopped cleanly after automation", user.id)
+                    logger.info("User %s: Streaming stopped cleanly after automation", user.id)
                 except Exception as cleanup_exc:
                     logger.warning(
                         "User %s: Error stopping streaming (non-fatal): %s",
@@ -347,8 +351,10 @@ class AutomatedTradingService:
                         cleanup_exc,
                     )
 
-    def send_notification(self, user, suggestion, position, custom_credit: float | None) -> None:
-        """Notify user about automated trade execution via email."""
+    async def send_notification(
+        self, user, suggestion, position, custom_credit: float | None
+    ) -> None:
+        """Notify user about automated trade execution via email (async-safe)."""
         try:
             # Respect user email preference - only send immediate emails if enabled
             if user.email_preference != "immediate":
@@ -364,7 +370,7 @@ class AutomatedTradingService:
                 price_line = f"Entry Price Sent: ${custom_credit:.2f}\n"
 
             email_service = EmailService()
-            email_service.send_email(
+            await sync_to_async(email_service.send_email)(
                 subject=f"Automated Trade Executed - {suggestion.underlying_symbol}",
                 body=(
                     "Your automated trade has been executed:\n\n"
@@ -403,7 +409,7 @@ class AutomatedTradingService:
         price = suggestion.total_mid_credit
         if not price:
             logger.error(
-                f"❌ No mid_credit available for suggestion {suggestion.id}. "
+                f"No mid_credit available for suggestion {suggestion.id}. "
                 f"Streaming data incomplete (missing bid/ask). "
                 f"Cannot calculate safe automation entry price. "
                 f"Automation should fail rather than use conservative bid-only pricing."
@@ -445,13 +451,13 @@ class AutomatedTradingService:
             # Log warning if floor was triggered (indicates offset may be too large)
             if adjusted > pre_floor_adjusted:
                 logger.warning(
-                    f"⚠️ Automation offset floored at natural credit!\n"
+                    f"Automation offset floored at natural credit!\n"
                     f"  Suggestion: {suggestion.id}\n"
                     f"  Mid-credit: ${price}\n"
-                    f"  Offset: {offset_cents}¢\n"
+                    f"  Offset: {offset_cents}c\n"
                     f"  Calculated: ${pre_floor_adjusted}\n"
                     f"  Natural credit: ${natural_credit}\n"
-                    f"  → Final: ${adjusted} (floored)\n"
+                    f"  -> Final: ${adjusted} (floored)\n"
                     f"This indicates offset may be too large for current spread."
                 )
 
@@ -462,7 +468,7 @@ class AutomatedTradingService:
             adjusted = price + offset_value
         else:
             logger.error(
-                f"❌ Cannot calculate automation credit: invalid price_effect '{suggestion.price_effect}'\n"
+                f"Cannot calculate automation credit: invalid price_effect '{suggestion.price_effect}'\n"
                 f"  Suggestion: {suggestion.id}\n"
                 f"  Expected: 'Credit' or 'Debit' (case-insensitive)\n"
                 f"  Received: '{suggestion.price_effect}'"

@@ -129,7 +129,7 @@ class TestLongStraddleScoring:
         report.iv_rank = 35.0
         report.hv_iv_ratio = 0.75  # Overpriced
 
-        score, reasons = await strategy._score_market_conditions_impl(report)
+        _score, reasons = await strategy._score_market_conditions_impl(report)
 
         # Note: penalty is -20, but other factors still contribute
         assert any("overpriced" in r.lower() and "poor buying" in r.lower() for r in reasons)
@@ -140,7 +140,7 @@ class TestLongStraddleScoring:
         report.iv_rank = 25.0
         report.adx = 38.0  # Very strong
 
-        score, reasons = await strategy._score_market_conditions_impl(report)
+        _score, reasons = await strategy._score_market_conditions_impl(report)
 
         assert any("very strong trend" in r.lower() and "big move" in r.lower() for r in reasons)
 
@@ -150,7 +150,7 @@ class TestLongStraddleScoring:
         report.iv_rank = 25.0
         report.adx = 28.0  # Strong
 
-        score, reasons = await strategy._score_market_conditions_impl(report)
+        _score, reasons = await strategy._score_market_conditions_impl(report)
 
         assert any("strong trend" in r.lower() for r in reasons)
 
@@ -160,20 +160,22 @@ class TestLongStraddleScoring:
         report.iv_rank = 25.0
         report.adx = 12.0  # Weak
 
-        score, reasons = await strategy._score_market_conditions_impl(report)
+        _score, reasons = await strategy._score_market_conditions_impl(report)
 
         assert any("very weak trend" in r.lower() and "unlikely" in r.lower() for r in reasons)
 
     async def test_neutral_market_ideal(self, strategy):
-        """Test that neutral markets are ideal (direction unknown)."""
+        """Test that neutral markets suggest potential for move."""
         report = create_neutral_market_report()
         report.iv_rank = 25.0
         report.macd_signal = "neutral"
 
-        score, reasons = await strategy._score_market_conditions_impl(report)
+        _score, reasons = await strategy._score_market_conditions_impl(report)
 
+        # "Neutral market - potential for move in either direction"
         assert any(
-            "ideal for straddle" in r.lower() and "direction unknown" in r.lower() for r in reasons
+            "neutral market" in r.lower() and "either direction" in r.lower()
+            for r in reasons
         )
 
     async def test_directional_market_acceptable(self, strategy):
@@ -182,9 +184,10 @@ class TestLongStraddleScoring:
         report.iv_rank = 25.0
         report.macd_signal = "bullish"
 
-        score, reasons = await strategy._score_market_conditions_impl(report)
+        _score, reasons = await strategy._score_market_conditions_impl(report)
 
-        assert any("continuation or reversal" in r.lower() for r in reasons)
+        # "Bullish direction - some potential for move"
+        assert any("potential for move" in r.lower() for r in reasons)
 
     async def test_bollinger_within_bands_consolidation_bonus(self, strategy):
         """Test bonus for price in middle of Bollinger Bands."""
@@ -192,7 +195,7 @@ class TestLongStraddleScoring:
         report.iv_rank = 25.0
         report.bollinger_position = "within_bands"
 
-        score, reasons = await strategy._score_market_conditions_impl(report)
+        _score, reasons = await strategy._score_market_conditions_impl(report)
 
         assert any("consolidation before expansion" in r.lower() for r in reasons)
 
@@ -202,7 +205,7 @@ class TestLongStraddleScoring:
         report.iv_rank = 25.0
         report.bollinger_position = "above_upper"
 
-        score, reasons = await strategy._score_market_conditions_impl(report)
+        _score, reasons = await strategy._score_market_conditions_impl(report)
 
         assert any("extremes" in r.lower() and "big move" in r.lower() for r in reasons)
 
@@ -212,7 +215,7 @@ class TestLongStraddleScoring:
         report.iv_rank = 25.0
         report.market_stress_level = 75.0
 
-        score, reasons = await strategy._score_market_conditions_impl(report)
+        _score, reasons = await strategy._score_market_conditions_impl(report)
 
         assert any(
             "elevated market stress" in r.lower() and "expansion potential" in r.lower()
@@ -225,7 +228,7 @@ class TestLongStraddleScoring:
         report.iv_rank = 25.0
         report.market_stress_level = 15.0
 
-        score, reasons = await strategy._score_market_conditions_impl(report)
+        _score, reasons = await strategy._score_market_conditions_impl(report)
 
         assert any("very low" in r.lower() and "lack catalyst" in r.lower() for r in reasons)
 

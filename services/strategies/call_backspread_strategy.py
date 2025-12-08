@@ -259,7 +259,7 @@ class LongCallRatioBackspreadStrategy(BaseStrategy):
 
         # Add warning about danger zone
         reasons.append(
-            "⚠️ Advanced strategy: Max loss occurs in danger zone at long call strikes (~20-25% probability)"
+            "Advanced strategy: Max loss occurs in danger zone at long call strikes (~20-25% probability)"
         )
 
         return (score, reasons)
@@ -418,7 +418,7 @@ class LongCallRatioBackspreadStrategy(BaseStrategy):
         from services.sdk.instruments import get_option_instruments_bulk
 
         # Get session
-        account = await get_primary_tastytrade_account(position.user)
+        await get_primary_tastytrade_account(position.user)
         session = await TastyTradeSessionService.get_session_for_user(position.user)
 
         # Build spec dictionaries for bulk fetch
@@ -519,7 +519,7 @@ class LongCallRatioBackspreadStrategy(BaseStrategy):
 
         if force_generation and score < 35:
             logger.warning(
-                f"⚠️ Force generating {self.strategy_name} despite low score ({score:.1f})"
+                f"Force generating {self.strategy_name} despite low score ({score:.1f})"
             )
 
         # Calculate strikes for backspread
@@ -596,7 +596,7 @@ class LongCallRatioBackspreadStrategy(BaseStrategy):
             "force_generation": force_generation,
         }
 
-        logger.info(f"User {self.user.id}: ✅ Context prepared for {self.strategy_name}")
+        logger.info(f"User {self.user.id}: Context prepared for {self.strategy_name}")
         return context
 
     async def a_request_suggestion_generation(
@@ -625,7 +625,7 @@ class LongCallRatioBackspreadStrategy(BaseStrategy):
         # Dispatch to stream manager
         await self.a_dispatch_to_stream_manager(context)
         logger.info(
-            f"User {self.user.id}: 🚀 Dispatched {self.strategy_name} request to stream manager"
+            f"User {self.user.id}: Dispatched {self.strategy_name} request to stream manager"
         )
 
     async def a_calculate_suggestion_from_cached_data(self, context: dict):
@@ -733,7 +733,7 @@ class LongCallRatioBackspreadStrategy(BaseStrategy):
         # Build generation notes if risk warning
         notes = ""
         if risk_warning:
-            notes = f"⚠️ RISK BUDGET EXCEEDED: {risk_warning}"
+            notes = f"RISK BUDGET EXCEEDED: {risk_warning}"
 
         suggestion = await TradingSuggestion.objects.acreate(
             user=self.user,
@@ -764,7 +764,7 @@ class LongCallRatioBackspreadStrategy(BaseStrategy):
         )
 
         logger.info(
-            f"User {self.user.id}: ✅ Long Call Ratio Backspread suggestion - "
+            f"User {self.user.id}: Long Call Ratio Backspread suggestion - "
             f"Net: ${net_credit:.2f}, Max Risk: ${max_risk_per_contract:.2f}"
         )
         return suggestion

@@ -77,7 +77,7 @@ class TestPositionSyncService(TestCase):
         self.sync_service.order_history_service = mock_order_service
 
         with (
-            patch("services.data_access.get_oauth_session", return_value=mock_session),
+            patch("services.core.data_access.get_oauth_session", return_value=mock_session),
             patch("tastytrade.Account.a_get", return_value=mock_account),
             patch.object(
                 self.sync_service,
@@ -146,7 +146,7 @@ class TestPositionSyncService(TestCase):
         self.sync_service.order_history_service = mock_order_service
 
         with (
-            patch("services.data_access.get_oauth_session", return_value=mock_session),
+            patch("services.core.data_access.get_oauth_session", return_value=mock_session),
             patch("tastytrade.Account.a_get", return_value=mock_account),
             patch.object(
                 self.sync_service,
@@ -212,7 +212,7 @@ class TestPositionSyncService(TestCase):
         mock_session = AsyncMock()
 
         with (
-            patch("services.data_access.get_oauth_session", return_value=mock_session),
+            patch("services.core.data_access.get_oauth_session", return_value=mock_session),
             patch("tastytrade.Account.a_get", side_effect=Exception("API Error")),
             patch.object(
                 self.sync_service,
@@ -238,7 +238,7 @@ class TestPositionSyncService(TestCase):
         self.sync_service.order_history_service = mock_order_service
 
         with (
-            patch("services.data_access.get_oauth_session", return_value=mock_session),
+            patch("services.core.data_access.get_oauth_session", return_value=mock_session),
             patch("tastytrade.Account.a_get", return_value=mock_account),
             patch.object(
                 self.sync_service,
@@ -270,7 +270,7 @@ class TestPositionSyncService(TestCase):
         mock_tt_account.a_get_positions = AsyncMock(return_value=[])
 
         with (
-            patch("services.data_access.get_oauth_session", return_value=mock_session),
+            patch("services.core.data_access.get_oauth_session", return_value=mock_session),
             patch.object(Account, "a_get", return_value=mock_tt_account),
             patch.object(
                 self.sync_service,
@@ -320,7 +320,7 @@ class TestPositionSyncService(TestCase):
         self.sync_service.order_history_service = mock_order_service
 
         with (
-            patch("services.data_access.get_oauth_session", return_value=mock_session),
+            patch("services.core.data_access.get_oauth_session", return_value=mock_session),
             patch("tastytrade.Account.a_get", return_value=mock_account),
             patch.object(
                 self.sync_service,
@@ -371,7 +371,7 @@ class TestPositionSyncService(TestCase):
         self.sync_service.order_history_service = mock_order_service
 
         with (
-            patch("services.data_access.get_oauth_session", return_value=mock_session),
+            patch("services.core.data_access.get_oauth_session", return_value=mock_session),
             patch("tastytrade.Account.a_get", return_value=mock_account),
             patch.object(
                 self.sync_service,
@@ -434,7 +434,7 @@ class TestPositionSyncService(TestCase):
         self.sync_service.order_history_service = mock_order_service
 
         with (
-            patch("services.data_access.get_oauth_session", return_value=mock_session),
+            patch("services.core.data_access.get_oauth_session", return_value=mock_session),
             patch("tastytrade.Account.a_get", return_value=mock_account),
             patch.object(
                 self.sync_service,
@@ -457,7 +457,7 @@ class TestPositionSyncService(TestCase):
         """
         from django.utils import timezone
 
-        from trading.models import CachedOrder
+        from trading.models import TastyTradeOrderHistory
 
         # Create a position with profit targets
         position = await sync_to_async(Position.objects.create)(
@@ -483,7 +483,7 @@ class TestPositionSyncService(TestCase):
         )
 
         # Create a filled profit target order with proper structure
-        await sync_to_async(CachedOrder.objects.create)(
+        await sync_to_async(TastyTradeOrderHistory.objects.create)(
             broker_order_id="ORDER-PT-25",
             user=self.user,
             trading_account=self.trading_account,

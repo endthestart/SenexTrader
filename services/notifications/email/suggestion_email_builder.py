@@ -70,8 +70,8 @@ class SuggestionEmailBuilder:
         self,
         user,
         candidates: list[dict],
-        failed_symbols: list[dict] = None,
-        watchlist: list[str] = None,
+        failed_symbols: list[dict] | None = None,
+        watchlist: list[str] | None = None,
     ) -> tuple[str, str]:
         """
         Build consolidated multi-symbol email with global top-3 ranking.
@@ -184,7 +184,7 @@ class SuggestionEmailBuilder:
             body += f"View dashboard: {self.base_url}/trading/\n"
             body += f"Manage watchlist: {self.base_url}/trading/watchlist/\n\n"
             body += "Conditions will be re-evaluated in the next daily cycle.\n"
-            body += "Markets change—what's unsuitable today may be perfect tomorrow."
+            body += "Markets change - what's unsuitable today may be perfect tomorrow."
             return (subject, body)
 
         # Top 3 opportunities
@@ -205,14 +205,14 @@ class SuggestionEmailBuilder:
             body += "-" * 70 + "\n\n"
 
             # Trade Structure
-            body += "   📋 TRADE STRUCTURE\n"
+            body += "   TRADE STRUCTURE\n"
             body += f"   • Underlying Price: ${suggestion.underlying_price}\n"
             body += f"   • Expiration: {suggestion.expiration_date.strftime('%b %d, %Y')}\n"
             body += f"   • Strategy Type: {suggestion.price_effect}\n"
             body += "\n"
 
             # Leg Details
-            body += "   📊 POSITION LEGS\n"
+            body += "   POSITION LEGS\n"
 
             # Check if this is a spread strategy or single option strategy
             has_put_spread = suggestion.short_put_strike and suggestion.long_put_strike
@@ -255,7 +255,7 @@ class SuggestionEmailBuilder:
                 body += "\n\n"
 
             # Financial Summary
-            body += "   💰 FINANCIAL SUMMARY\n"
+            body += "   FINANCIAL SUMMARY\n"
             credit = suggestion.total_mid_credit or suggestion.total_credit
             if suggestion.price_effect == "Credit":
                 body += f"   • Total Credit: ${abs(credit):.2f}\n"
@@ -275,7 +275,7 @@ class SuggestionEmailBuilder:
 
             # Market snapshot for this symbol
             if report:
-                body += "   📈 MARKET CONDITIONS\n"
+                body += "   MARKET CONDITIONS\n"
                 iv_rank = getattr(report, "iv_rank", None)
                 market_stress = getattr(report, "market_stress_level", None)
                 if iv_rank is not None:
@@ -284,7 +284,7 @@ class SuggestionEmailBuilder:
                     body += f"   • Market Stress: {market_stress:.1f}\n"
                 body += "\n"
 
-            body += f"   👉 Execute: {self.base_url}/trading/?suggestion={suggestion.id}\n\n"
+            body += f"   Execute: {self.base_url}/trading/?suggestion={suggestion.id}\n\n"
 
             if idx < len(top_3) - 1:
                 body += "---\n\n"
@@ -398,7 +398,7 @@ class SuggestionEmailBuilder:
         top_strategy_name = self.format_strategy_name(suggestions_list[0][0])
         all_scores = global_context.get("all_scores", {})
         top_score = all_scores.get(suggestions_list[0][0], {}).get("score", 0)
-        confidence = self.get_confidence(top_score)
+        self.get_confidence(top_score)
 
         subject = (
             f"Daily Suggestions: {num_suggestions} Trades ({top_strategy_name} Top Pick) - {today}"
@@ -422,7 +422,7 @@ class SuggestionEmailBuilder:
         body += "=" * 60 + "\n\n"
 
         # Build each suggestion
-        for idx, (strategy_name, suggestion, explanation) in enumerate(suggestions_list):
+        for idx, (strategy_name, suggestion, _explanation) in enumerate(suggestions_list):
             medal = self.MEDALS[idx] if idx < 3 else f"#{idx+1}"
             score = all_scores.get(strategy_name, {}).get("score", 0)
             strategy_display = self.format_strategy_name(strategy_name)
@@ -451,7 +451,7 @@ class SuggestionEmailBuilder:
             body += f"   • Max Risk: ${suggestion.max_risk}\n\n"
 
             # Execute link
-            body += f"   👉 Execute: {self.base_url}/trading/?suggestion={suggestion.id}\n\n"
+            body += f"   Execute: {self.base_url}/trading/?suggestion={suggestion.id}\n\n"
 
             if idx < len(suggestions_list) - 1:
                 body += "---\n\n"

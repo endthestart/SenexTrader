@@ -71,7 +71,7 @@ class TestStrikesListInitialization:
     def test_strikes_list_defensive_initialization(self):
         """Verify strikes_list is initialized before the loop to prevent UnboundLocalError."""
         # Read the source file directly to verify the fix
-        with open("services/option_chain_service.py") as f:
+        with open("services/market_data/option_chains.py") as f:
             source = f.read()
 
         # Verify defensive initialization exists
@@ -104,16 +104,16 @@ class TestADXDirectionalGating:
     @pytest.mark.asyncio
     async def test_bear_put_no_adx_bonus_in_bull_trend(self, mock_user):
         """Bear Put should NOT get ADX bonus when MACD shows strong bullish trend."""
-        from services.strategies.debit_spread_strategy import BearPutSpreadStrategy
+        from services.strategies.debit_spread_strategy import LongPutVerticalStrategy
 
-        strategy = BearPutSpreadStrategy(mock_user)
+        strategy = LongPutVerticalStrategy(mock_user)
 
         # Strong bull trend: High ADX + strong_bullish MACD
         report = create_neutral_market_report()
         report.macd_signal = "strong_bullish"  # Wrong direction for Bear Put
         report.adx = 35.0  # Strong trend (> OPTIMAL_ADX=30)
 
-        score, explanation = await strategy.a_score_market_conditions(report)
+        _score, explanation = await strategy.a_score_market_conditions(report)
 
         # The key test: verify ADX bonus was NOT awarded due to wrong direction
         assert "wrong direction" in explanation.lower() or "no adx bonus" in explanation.lower()
@@ -124,16 +124,16 @@ class TestADXDirectionalGating:
     @pytest.mark.asyncio
     async def test_bull_call_no_adx_bonus_in_bear_trend(self, mock_user):
         """Bull Call should NOT get ADX bonus when MACD shows strong bearish trend."""
-        from services.strategies.debit_spread_strategy import BullCallSpreadStrategy
+        from services.strategies.debit_spread_strategy import LongCallVerticalStrategy
 
-        strategy = BullCallSpreadStrategy(mock_user)
+        strategy = LongCallVerticalStrategy(mock_user)
 
         # Strong bear trend: High ADX + strong_bearish MACD
         report = create_neutral_market_report()
         report.macd_signal = "strong_bearish"  # Wrong direction for Bull Call
         report.adx = 35.0  # Strong trend (> OPTIMAL_ADX=30)
 
-        score, explanation = await strategy.a_score_market_conditions(report)
+        _score, explanation = await strategy.a_score_market_conditions(report)
 
         # The key test: verify ADX bonus was NOT awarded due to wrong direction
         assert "wrong direction" in explanation.lower() or "no adx bonus" in explanation.lower()
@@ -144,16 +144,16 @@ class TestADXDirectionalGating:
     @pytest.mark.asyncio
     async def test_bear_put_gets_adx_bonus_in_bear_trend(self, mock_user):
         """Bear Put SHOULD get ADX bonus when MACD shows strong bearish trend."""
-        from services.strategies.debit_spread_strategy import BearPutSpreadStrategy
+        from services.strategies.debit_spread_strategy import LongPutVerticalStrategy
 
-        strategy = BearPutSpreadStrategy(mock_user)
+        strategy = LongPutVerticalStrategy(mock_user)
 
         # Strong bear trend: High ADX + strong_bearish MACD (correct direction)
         report = create_neutral_market_report()
         report.macd_signal = "strong_bearish"  # Correct direction for Bear Put
         report.adx = 35.0  # Strong trend
 
-        score, explanation = await strategy.a_score_market_conditions(report)
+        _score, explanation = await strategy.a_score_market_conditions(report)
 
         # Verify ADX bonus WAS awarded
         assert (

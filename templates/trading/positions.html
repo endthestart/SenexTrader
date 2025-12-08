@@ -830,7 +830,7 @@ function subscribePositionLegsForGreeks() {
 // Handle position sync complete (register global handler)
 window.addMessageHandler(function(data) {
     if (data.type === 'position_sync_complete') {
-        console.log('Position sync complete:', data);
+        window.logStreamInfo('Position sync complete:', data);
         handlePositionSyncComplete(data);
     }
 });

@@ -29,9 +29,6 @@ from services.market_data.utils.indicator_utils import (
 logger = get_logger(__name__)
 
 
-# === EPIC 32: CONTEXT ENUMS ===
-
-
 class RegimeType(str, Enum):
     """
     Market regime classification.
@@ -166,8 +163,6 @@ class MarketConditionReport:
         else:
             self.hv_iv_ratio = 1.0  # Neutral if data unavailable
 
-        # === EPIC 32: ENHANCED CONTEXT DETECTION ===
-
         # Task 004: Regime Detection
         self._detect_regime()
 
@@ -293,15 +288,12 @@ class MarketConditionReport:
         confidence = 0.0
 
         # Exhaustion signals (extreme + overbought/oversold)
-        if self.is_overbought or self.is_oversold:
-            if self.trend_strength == "strong":
-                # Strong trend but extreme conditions = exhaustion
-                self.momentum_signal = MomentumSignal.EXHAUSTION
-                confidence = 50.0 + (
-                    min(max(self.overbought_warnings, self.oversold_warnings), 5) * 10
-                )
-                self.momentum_confidence = min(confidence, 100.0)
-                return
+        if (self.is_overbought or self.is_oversold) and self.trend_strength == "strong":
+            # Strong trend but extreme conditions = exhaustion
+            self.momentum_signal = MomentumSignal.EXHAUSTION
+            confidence = 50.0 + (min(max(self.overbought_warnings, self.oversold_warnings), 5) * 10)
+            self.momentum_confidence = min(confidence, 100.0)
+            return
 
         # Continuation signals (strong trend, NOT extreme)
         if self.trend_strength == "strong":

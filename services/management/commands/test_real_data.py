@@ -53,7 +53,7 @@ class Command(AsyncCommand):
         # Clear cache unless skipped
         if not options["skip_cache_clear"]:
             await sync_to_async(cache.clear)()
-            self.stdout.write(self.style.SUCCESS("✓ Cache cleared"))
+            self.stdout.write(self.style.SUCCESS("PASS: Cache cleared"))
 
         # Get user using utility function
         user = await aget_user_from_options(options, require_user=True)
@@ -74,7 +74,7 @@ class Command(AsyncCommand):
                 )
             )
         else:
-            self.stdout.write(f"✓ Found TastyTrade account: {account.account_number}")
+            self.stdout.write(f"PASS: Found TastyTrade account: {account.account_number}")
 
         # Run async tests
         await self.run_tests(user, symbol)
@@ -95,7 +95,7 @@ class Command(AsyncCommand):
         await self.test_option_chain_service(user, symbol)
 
         self.stdout.write("\n" + "=" * 60)
-        self.stdout.write(self.style.SUCCESS("✓ All tests completed"))
+        self.stdout.write(self.style.SUCCESS("PASS: All tests completed"))
         self.stdout.write("=" * 60)
 
     async def test_market_data_service(self, user, symbol):
@@ -110,7 +110,7 @@ class Command(AsyncCommand):
 
         if quote:
             self.stdout.write(
-                self.style.SUCCESS(f"✓ Quote fetched from {quote.get('source', 'unknown')}")
+                self.style.SUCCESS(f"PASS: Quote fetched from {quote.get('source', 'unknown')}")
             )
             self.stdout.write(
                 f"  Bid: {quote.get('bid')}, Ask: {quote.get('ask')}, " f"Last: {quote.get('last')}"
@@ -118,7 +118,7 @@ class Command(AsyncCommand):
 
             # Check source
             if quote.get("source") == "tastytrade_api":
-                self.stdout.write(self.style.SUCCESS("✓ Data from REAL API"))
+                self.stdout.write(self.style.SUCCESS("PASS: Data from REAL API"))
             elif quote.get("source") == "cache":
                 self.stdout.write("  Data from cache (previously fetched from API)")
         else:
@@ -132,7 +132,7 @@ class Command(AsyncCommand):
         if option_chain:
             self.stdout.write(
                 self.style.SUCCESS(
-                    f"✓ Option chain fetched from " f"{option_chain.get('source', 'unknown')}"
+                    f"PASS: Option chain fetched from " f"{option_chain.get('source', 'unknown')}"
                 )
             )
             self.stdout.write(f"  Expiration: {option_chain.get('expiration')}")
@@ -146,11 +146,11 @@ class Command(AsyncCommand):
             if len(put_strikes) == 41 and all(float(s) % 2 == 0 for s in put_strikes):
                 self.stdout.write(
                     self.style.ERROR(
-                        "✗ WARNING: This looks like MOCK DATA " "(exactly 41 even strikes)!"
+                        "FAIL: WARNING: This looks like MOCK DATA " "(exactly 41 even strikes)!"
                     )
                 )
             else:
-                self.stdout.write(self.style.SUCCESS("✓ Confirmed REAL option chain"))
+                self.stdout.write(self.style.SUCCESS("PASS: Confirmed REAL option chain"))
         else:
             self.stdout.write(
                 self.style.WARNING("⚠ Option chain unavailable (check TastyTrade credentials)")
@@ -162,7 +162,7 @@ class Command(AsyncCommand):
 
         if metrics:
             self.stdout.write(
-                self.style.SUCCESS(f"✓ Metrics fetched from {metrics.get('source', 'unknown')}")
+                self.style.SUCCESS(f"PASS: Metrics fetched from {metrics.get('source', 'unknown')}")
             )
             if metrics.get("iv30"):
                 self.stdout.write(f"  IV30: {metrics.get('iv30')}")
@@ -184,7 +184,7 @@ class Command(AsyncCommand):
         conditions = analyzer.get_market_conditions(symbol)
 
         if conditions.get("data_available"):
-            self.stdout.write(self.style.SUCCESS("✓ Market conditions retrieved"))
+            self.stdout.write(self.style.SUCCESS("PASS: Market conditions retrieved"))
 
             bollinger = conditions.get("bollinger_bands", {})
             if bollinger.get("current_price"):
@@ -206,7 +206,7 @@ class Command(AsyncCommand):
         bands = analyzer.calculate_bollinger_bands_realtime(symbol)
 
         if bands.get("current"):
-            self.stdout.write(self.style.SUCCESS("✓ Bollinger Bands calculated"))
+            self.stdout.write(self.style.SUCCESS("PASS: Bollinger Bands calculated"))
             self.stdout.write(f"  Upper: ${bands.get('upper'):.2f}")
             self.stdout.write(f"  Middle: ${bands.get('middle'):.2f}")
             self.stdout.write(f"  Lower: ${bands.get('lower'):.2f}")
@@ -226,7 +226,7 @@ class Command(AsyncCommand):
         chain_data = await service.get_option_chain(user, symbol, 45)
 
         if chain_data:
-            self.stdout.write(self.style.SUCCESS("✓ Option chain fetched"))
+            self.stdout.write(self.style.SUCCESS("PASS: Option chain fetched"))
             self.stdout.write(f"  Symbol: {chain_data.get('symbol')}")
             self.stdout.write(f"  Expiration: {chain_data.get('expiration')}")
 
@@ -238,13 +238,13 @@ class Command(AsyncCommand):
             self.stdout.write(f"  Call strikes: {len(call_strikes)}")
 
             if chain_data.get("source") == "tastytrade_api":
-                self.stdout.write(self.style.SUCCESS("✓ From TastyTrade API"))
+                self.stdout.write(self.style.SUCCESS("PASS: From TastyTrade API"))
 
             # Check for mock data pattern
             if len(put_strikes) == 41 and all(float(s) % 2 == 0 for s in put_strikes):
-                self.stdout.write(self.style.ERROR("✗ ERROR: This appears to be MOCK DATA!"))
+                self.stdout.write(self.style.ERROR("FAIL: ERROR: This appears to be MOCK DATA!"))
             else:
-                self.stdout.write(self.style.SUCCESS("✓ Confirmed REAL option chain data"))
+                self.stdout.write(self.style.SUCCESS("PASS: Confirmed REAL option chain data"))
 
                 # Show sample strikes
                 if put_strikes:

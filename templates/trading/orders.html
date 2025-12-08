@@ -290,7 +290,7 @@ const MAX_ORDER_RETRIES = 20;
 function setupOrderUpdates() {
     const orderRows = document.querySelectorAll('.order-row');
     if (orderRows.length === 0) {
-        console.log('No orders on page, skipping order status updates');
+        window.logStreamInfo('No orders on page, skipping order status updates');
         return;
     }
 
@@ -300,12 +300,12 @@ function setupOrderUpdates() {
             return;
         }
         orderUpdatesRetryCount++;
-        console.log(`WebSocket not available, retrying in 500ms... (${orderUpdatesRetryCount}/${MAX_ORDER_RETRIES})`);
+        window.logStreamInfo(`WebSocket not available, retrying in 500ms... (${orderUpdatesRetryCount}/${MAX_ORDER_RETRIES})`);
         setTimeout(setupOrderUpdates, 500);
         return;
     }
 
-    console.log('Real-time order updates initialized');
+    window.logStreamInfo('Real-time order updates initialized');
 }
 
 // Register message handler for order status updates
@@ -334,7 +334,7 @@ function handleOrderStatusUpdate(data) {
     const newStatus = data.status;
     const oldStatus = data.old_status;
     
-    console.log(`Order ${tradeId}: ${oldStatus} → ${newStatus}`);
+    window.logStreamInfo(`Order ${tradeId}: ${oldStatus} → ${newStatus}`);
     
     const statusBadge = document.getElementById(`status-badge-${tradeId}`);
     if (statusBadge) {
@@ -413,7 +413,7 @@ const MAX_MIDPRICE_RETRIES = 20;
 function setupMidPriceUpdates() {
     const orderRows = document.querySelectorAll('.order-row');
     if (orderRows.length === 0) {
-        console.log('No orders on page, skipping mid-price updates');
+        window.logStreamInfo('No orders on page, skipping mid-price updates');
         return;
     }
 
@@ -423,7 +423,7 @@ function setupMidPriceUpdates() {
             return;
         }
         midPriceRetryCount++;
-        console.log(`WebSocket not available for mid-price updates, retrying in 500ms... (${midPriceRetryCount}/${MAX_MIDPRICE_RETRIES})`);
+        window.logStreamInfo(`WebSocket not available for mid-price updates, retrying in 500ms... (${midPriceRetryCount}/${MAX_MIDPRICE_RETRIES})`);
         setTimeout(setupMidPriceUpdates, 500);
         return;
     }
@@ -472,12 +472,12 @@ function setupMidPriceUpdates() {
         }
     });
 
-    console.log(`Extracted ${allSymbols.size} unique option symbols from ${orderRows.length} orders`);
+    window.logStreamInfo(`Extracted ${allSymbols.size} unique option symbols from ${orderRows.length} orders`);
 
     // Subscribe to all option symbols
     if (allSymbols.size > 0) {
         const symbolArray = Array.from(allSymbols);
-        console.log('Subscribing to option quotes:', symbolArray);
+        window.logStreamInfo('Subscribing to option quotes:', symbolArray);
         
         window.streamerWebSocket.send(JSON.stringify({
             type: 'subscribe_legs',
@@ -485,7 +485,7 @@ function setupMidPriceUpdates() {
         }));
     }
 
-    console.log('Real-time mid-price updates initialized');
+    window.logStreamInfo('Real-time mid-price updates initialized');
 }
 
 // Register message handler for quote updates
@@ -500,7 +500,7 @@ window.addMessageHandler(function(data) {
         }
         
         if (data.type === 'subscribe_legs_ack') {
-            console.log(`✅ Subscribed to ${data.symbols_count} option symbols`);
+            window.logStreamInfo(`Subscribed to ${data.symbols_count} option symbols`);
             
             // Store symbol mapping if provided
             if (data.symbol_mapping) {
@@ -508,7 +508,7 @@ window.addMessageHandler(function(data) {
                     symbolMapping.set(occ, dxfeed);
                     reverseSymbolMapping.set(dxfeed, occ);
                 });
-                console.log(`📍 Stored mapping for ${Object.keys(data.symbol_mapping).length} symbols`);
+                window.logStreamInfo(`📍 Stored mapping for ${Object.keys(data.symbol_mapping).length} symbols`);
             }
         }
     } catch (error) {

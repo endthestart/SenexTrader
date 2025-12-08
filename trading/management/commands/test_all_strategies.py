@@ -80,13 +80,13 @@ class Command(AsyncCommand):
 
             if not streaming_ready:
                 self.stdout.write(
-                    self.style.ERROR("\n❌ Failed to start streaming - cannot run tests\n")
+                    self.style.ERROR("\nFailed to start streaming - cannot run tests\n")
                 )
                 return
 
-            self.stdout.write(self.style.SUCCESS("✅ Streaming ready\n"))
+            self.stdout.write(self.style.SUCCESS("Streaming ready\n"))
         except Exception as e:
-            self.stdout.write(self.style.ERROR(f"\n❌ Streaming error: {e}\n"))
+            self.stdout.write(self.style.ERROR(f"\nStreaming error: {e}\n"))
             return
 
         try:
@@ -127,9 +127,9 @@ class Command(AsyncCommand):
             self.stdout.write("Stopping streaming...")
             try:
                 await stream_manager.stop_streaming()
-                self.stdout.write(self.style.SUCCESS("✅ Streaming stopped"))
+                self.stdout.write(self.style.SUCCESS("Streaming stopped"))
             except Exception as e:
-                self.stdout.write(self.style.WARNING(f"⚠️  Error stopping: {e}"))
+                self.stdout.write(self.style.WARNING(f"Error stopping: {e}"))
             self.stdout.write("=" * 80 + "\n")
 
     async def _test_strategy(self, user, strategy_name, symbol, report, stream_manager, idx, total):
@@ -150,7 +150,7 @@ class Command(AsyncCommand):
                 error_msg = (
                     "Context preparation returned None (likely no suitable strikes/expirations)"
                 )
-                self.stdout.write(f"{prefix} {self.style.ERROR('✗ FAIL')} - {error_msg}")
+                self.stdout.write(f"{prefix} {self.style.ERROR('[FAIL] FAIL')} - {error_msg}")
                 return {"strategy": strategy_name, "passed": False, "error": error_msg}
 
             # Mark as automated
@@ -161,15 +161,15 @@ class Command(AsyncCommand):
             suggestion = await stream_manager.a_process_suggestion_request(context)
 
             if suggestion:
-                self.stdout.write(f"{prefix} {self.style.SUCCESS('✓ PASS')}")
+                self.stdout.write(f"{prefix} {self.style.SUCCESS('[OK] PASS')}")
                 return {"strategy": strategy_name, "passed": True, "error": None}
             error_msg = "Stream manager returned None"
-            self.stdout.write(f"{prefix} {self.style.ERROR('✗ FAIL')} - {error_msg}")
+            self.stdout.write(f"{prefix} {self.style.ERROR('[FAIL] FAIL')} - {error_msg}")
             return {"strategy": strategy_name, "passed": False, "error": error_msg}
 
         except Exception as e:
             error_msg = str(e)
-            self.stdout.write(f"{prefix} {self.style.ERROR('✗ FAIL')} - {error_msg}")
+            self.stdout.write(f"{prefix} {self.style.ERROR('[FAIL] FAIL')} - {error_msg}")
             return {"strategy": strategy_name, "passed": False, "error": error_msg}
 
     def _print_summary(self, results, elapsed):
@@ -181,9 +181,9 @@ class Command(AsyncCommand):
         self.stdout.write(self.style.SUCCESS("SUMMARY"))
         self.stdout.write("=" * 80)
         self.stdout.write(f"Total:   {len(results)}")
-        self.stdout.write(f"Passed:  {passed} {self.style.SUCCESS('✓')}")
+        self.stdout.write(f"Passed:  {passed} {self.style.SUCCESS('[OK]')}")
         if failed > 0:
-            self.stdout.write(f"Failed:  {failed} {self.style.ERROR('✗')}")
+            self.stdout.write(f"Failed:  {failed} {self.style.ERROR('[FAIL]')}")
         self.stdout.write(f"Time:    {elapsed:.1f}s")
 
         # Show failed strategies

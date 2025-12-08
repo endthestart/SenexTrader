@@ -22,14 +22,14 @@ class TestEmailService:
 
     def test_init_uses_settings_default(self):
         """Test initialization uses settings if no default provided."""
-        with patch("services.email.email_service.settings") as mock_settings:
+        with patch("services.notifications.email.email_service.settings") as mock_settings:
             mock_settings.DEFAULT_FROM_EMAIL = "settings@example.com"
             service = EmailService()
             assert service.default_from_email == "settings@example.com"
 
     def test_send_email_success(self, email_service):
         """Test successful email send."""
-        with patch("services.email.email_service.django_send_mail") as mock_send:
+        with patch("services.notifications.email.email_service.django_send_mail") as mock_send:
             result = email_service.send_email(
                 subject="Test Subject",
                 body="Test Body",
@@ -47,7 +47,7 @@ class TestEmailService:
 
     def test_send_email_custom_from_email(self, email_service):
         """Test email send with custom from_email."""
-        with patch("services.email.email_service.django_send_mail") as mock_send:
+        with patch("services.notifications.email.email_service.django_send_mail") as mock_send:
             email_service.send_email(
                 subject="Test",
                 body="Body",
@@ -59,8 +59,8 @@ class TestEmailService:
 
     def test_send_email_retry_on_failure(self, email_service):
         """Test email send retries on transient failure."""
-        with patch("services.email.email_service.django_send_mail") as mock_send:
-            with patch("services.email.email_service.time.sleep"):
+        with patch("services.notifications.email.email_service.django_send_mail") as mock_send:
+            with patch("services.notifications.email.email_service.time.sleep"):
                 # Fail twice, succeed on third attempt
                 mock_send.side_effect = [
                     Exception("Temp failure"),
@@ -80,8 +80,8 @@ class TestEmailService:
 
     def test_send_email_max_retries_exceeded(self, email_service):
         """Test email send fails after max retries."""
-        with patch("services.email.email_service.django_send_mail") as mock_send:
-            with patch("services.email.email_service.time.sleep"):
+        with patch("services.notifications.email.email_service.django_send_mail") as mock_send:
+            with patch("services.notifications.email.email_service.time.sleep"):
                 mock_send.side_effect = Exception("Permanent failure")
 
                 result = email_service.send_email(
@@ -96,8 +96,8 @@ class TestEmailService:
 
     def test_send_email_raises_on_fail_silently_false(self, email_service):
         """Test email send raises exception when fail_silently=False."""
-        with patch("services.email.email_service.django_send_mail") as mock_send:
-            with patch("services.email.email_service.time.sleep"):
+        with patch("services.notifications.email.email_service.django_send_mail") as mock_send:
+            with patch("services.notifications.email.email_service.time.sleep"):
                 mock_send.side_effect = Exception("Fatal error")
 
                 with pytest.raises(Exception, match="Fatal error"):
@@ -111,7 +111,7 @@ class TestEmailService:
     @pytest.mark.asyncio
     async def test_asend_email_success(self, email_service):
         """Test async email send."""
-        with patch("services.email.email_service.django_send_mail") as mock_send:
+        with patch("services.notifications.email.email_service.django_send_mail") as mock_send:
             result = await email_service.asend_email(
                 subject="Async Test",
                 body="Async Body",
@@ -129,7 +129,7 @@ class TestEmailService:
             {"subject": "Email 3", "body": "Body 3", "recipient": "user3@example.com"},
         ]
 
-        with patch("services.email.email_service.django_send_mail"):
+        with patch("services.notifications.email.email_service.django_send_mail"):
             results = email_service.send_batch(emails)
 
             assert results["sent"] == 3
@@ -142,8 +142,8 @@ class TestEmailService:
             {"subject": "Email 2", "body": "Body 2", "recipient": "user2@example.com"},
         ]
 
-        with patch("services.email.email_service.django_send_mail") as mock_send:
-            with patch("services.email.email_service.time.sleep"):
+        with patch("services.notifications.email.email_service.django_send_mail") as mock_send:
+            with patch("services.notifications.email.email_service.time.sleep"):
                 # First email fails all retries, second succeeds
                 mock_send.side_effect = [
                     Exception("Fail"),
@@ -165,7 +165,7 @@ class TestEmailService:
             {"subject": "Email 2", "body": "Body 2", "recipient": "user2@example.com"},
         ]
 
-        with patch("services.email.email_service.django_send_mail"):
+        with patch("services.notifications.email.email_service.django_send_mail"):
             results = await email_service.asend_batch(emails)
 
             assert results["sent"] == 2
@@ -173,8 +173,8 @@ class TestEmailService:
 
     def test_logging_on_success(self, email_service):
         """Test structured logging on successful send."""
-        with patch("services.email.email_service.django_send_mail"):
-            with patch("services.email.email_service.logger") as mock_logger:
+        with patch("services.notifications.email.email_service.django_send_mail"):
+            with patch("services.notifications.email.email_service.logger") as mock_logger:
                 email_service.send_email(
                     subject="Test",
                     body="Body",
@@ -189,9 +189,9 @@ class TestEmailService:
 
     def test_logging_on_failure(self, email_service):
         """Test structured logging on failure."""
-        with patch("services.email.email_service.django_send_mail") as mock_send:
-            with patch("services.email.email_service.time.sleep"):
-                with patch("services.email.email_service.logger") as mock_logger:
+        with patch("services.notifications.email.email_service.django_send_mail") as mock_send:
+            with patch("services.notifications.email.email_service.time.sleep"):
+                with patch("services.notifications.email.email_service.logger") as mock_logger:
                     mock_send.side_effect = Exception("Test error")
 
                     email_service.send_email(

@@ -60,7 +60,7 @@ class BaseCreditSpreadStrategy(BaseStrategy):
     MIN_SCORE_THRESHOLD = 35  # Minimum score to generate suggestion
 
     def __init__(self, user):
-        super().__init__(user)  # Get common dependencies from BaseStrategy
+        super().__init__(user)
 
     @property
     @abstractmethod
@@ -326,10 +326,8 @@ class BaseCreditSpreadStrategy(BaseStrategy):
         Returns:
             Optional[dict]: Context dict ready for stream manager, or None if unsuitable
         """
-        # Get active config if available (optional for simple strategies)
         config = await self.a_get_active_config()
 
-        # Get market report if not provided
         if report is None:
             from services.market_data.analysis import MarketAnalyzer
 
@@ -341,24 +339,21 @@ class BaseCreditSpreadStrategy(BaseStrategy):
 
         logger.info(f"{self.strategy_name} score for {symbol}: {score:.1f} - {explanation}")
 
-        # Check threshold (allow bypass in force mode)
         if score < self.MIN_SCORE_THRESHOLD and not force_generation:
             logger.info(f"Score too low ({score:.1f}) - not generating {self.strategy_name}")
             return None
 
         if force_generation and score < self.MIN_SCORE_THRESHOLD:
             logger.warning(
-                f"⚠️ Force generating {self.strategy_name} despite low score ({score:.1f}) - "
+                f"Force generating {self.strategy_name} despite low score ({score:.1f}) - "
                 f"user explicitly requested"
             )
 
-        # Calculate spread width
         tradeable_capital, is_available = await self.risk_manager.a_get_tradeable_capital()
         spread_width = (
             config.get_spread_width(tradeable_capital) if (config and is_available) else 3
         )
 
-        # Get target criteria (NEW PATTERN: criteria instead of calculated strikes)
         target_criteria = self._get_target_criteria(
             Decimal(str(report.current_price)), spread_width, report
         )
@@ -425,7 +420,7 @@ class BaseCreditSpreadStrategy(BaseStrategy):
             # NOTE: is_automated will be set by caller
         }
 
-        logger.info(f"User {self.user.id}: ✅ Context prepared for {self.strategy_name}")
+        logger.info(f"User {self.user.id}: Context prepared for {self.strategy_name}")
         return context
 
     async def a_request_suggestion_generation(
@@ -454,7 +449,7 @@ class BaseCreditSpreadStrategy(BaseStrategy):
         # Dispatch to stream manager
         await self.a_dispatch_to_stream_manager(context)
         logger.info(
-            f"User {self.user.id}: 🚀 Dispatched {self.strategy_name} request to stream manager"
+            f"User {self.user.id}: Dispatched {self.strategy_name} request to stream manager"
         )
 
     async def a_calculate_suggestion_from_cached_data(self, context: dict):
@@ -566,7 +561,7 @@ class BaseCreditSpreadStrategy(BaseStrategy):
         # Build generation notes if risk warning
         notes = ""
         if risk_warning:
-            notes = f"⚠️ RISK BUDGET EXCEEDED: {risk_warning}"
+            notes = f"RISK BUDGET EXCEEDED: {risk_warning}"
 
         # Create TradingSuggestion with REAL pricing
         suggestion = await TradingSuggestion.objects.acreate(
@@ -597,7 +592,7 @@ class BaseCreditSpreadStrategy(BaseStrategy):
             # Status
             status="pending",
             expires_at=timezone.now() + timedelta(hours=24),
-            has_real_pricing=True,  # ✅ We have real pricing!
+            has_real_pricing=True,  # We have real pricing!
             pricing_source="streaming",
             # Mark as automated if from Celery
             is_automated=is_automated,
@@ -612,19 +607,23 @@ class BaseCreditSpreadStrategy(BaseStrategy):
         # Stream manager handles serialization for WebSocket broadcast
         return suggestion
 
-    async def a_get_profit_target_specifications(self, position) -> list:
+    async def a_get_profit_target_specifications(
+        self, position, *args, target_pct: int | None = None
+    ) -> list:
         """
         Generate profit target for credit spread.
 
-        Standard target: 50% profit (buy back at 50% of credit received).
+        Default target: 50% profit (buy back at 50% of credit received).
+        User can configure 40%, 50%, or 60% via target_pct parameter.
 
         For credit spreads:
         - Entry: Receive credit (e.g., $1.25 per spread)
-        - Target: Buy back at 50% of credit (e.g., $0.625 per spread)
-        - Profit: 50% of max profit (keep $0.625, profit is 50% of $1.25)
+        - Target: Buy back at (100 - target_pct)% of credit
+        - Example: 50% profit target = buy back at 50% of original credit
 
         Args:
             position: Position object with metadata['suggestion_id']
+            target_pct: Optional profit target percentage (40, 50, or 60). Defaults to 50.
 
         Returns:
             List of profit target specifications
@@ -633,6 +632,9 @@ class BaseCreditSpreadStrategy(BaseStrategy):
 
         profit_targets = []
 
+        # Use provided target_pct or default to PROFIT_TARGET_PCT (50)
+        actual_target_pct = target_pct if target_pct is not None else self.PROFIT_TARGET_PCT
+
         # Get original suggestion
         try:
             suggestion = await TradingSuggestion.objects.aget(id=position.metadata["suggestion_id"])
@@ -640,7 +642,7 @@ class BaseCreditSpreadStrategy(BaseStrategy):
             logger.error(f"Error fetching suggestion for profit target: {e}")
             return profit_targets
 
-        # Calculate 50% profit target based on spread type
+        # Calculate profit target based on spread type
         mid_credit = None
         spread_type = ""
 
@@ -652,19 +654,22 @@ class BaseCreditSpreadStrategy(BaseStrategy):
             spread_type = "Bear Call Spread"
 
         if mid_credit:
-            target_price = mid_credit * Decimal("0.50")
+            # For credit spreads: target_price = credit * (1 - target_pct/100)
+            # E.g., 50% profit target = buy back at 50% of credit
+            multiplier = Decimal(str(1 - actual_target_pct / 100))
+            target_price = mid_credit * multiplier
 
             profit_targets.append(
                 {
-                    "percentage": 50,
+                    "percentage": actual_target_pct,
                     "target_price": target_price,
-                    "description": f"{spread_type} - 50% Profit Target",
+                    "description": f"{spread_type} - {actual_target_pct}% Profit Target",
                 }
             )
 
             logger.info(
                 f"{spread_type} profit target: Buy back at ${target_price:.2f} "
-                f"(50% of ${mid_credit:.2f} credit)"
+                f"({actual_target_pct}% profit of ${mid_credit:.2f} credit)"
             )
 
         return profit_targets

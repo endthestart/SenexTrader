@@ -2,7 +2,7 @@
 
 **Last Updated**: 2025-10-30
 **Server**: your-domain.com
-**Status**: ✅ Production Active
+**Status**: Production Active
 
 This document reflects the **actual current deployment** as of October 30, 2025, and supersedes earlier planning documents for day-to-day operations.
 
@@ -111,14 +111,14 @@ All container services run as systemd user units under the `senex` user:
 
 | Service | Type | Status | Description |
 |---------|------|--------|-------------|
-| **web.service** | Container | ✅ Running | Daphne ASGI server (Django + WebSocket) |
-| **celery-worker.service** | Container | ✅ Running | Celery background task worker |
-| **celery-beat.service** | Container | ✅ Running | Celery periodic task scheduler |
-| **postgres.service** | Container | ✅ Running | PostgreSQL 15 database |
-| **redis.service** | Container | ✅ Running | Redis 7 (cache, broker, channels) |
-| **postgres-backup.service** | Oneshot | ⚠️ Failed | Database backup (timer-triggered) |
-| **postgres-backup.timer** | Timer | ✅ Active | Daily backup at 02:00 UTC |
-| **nginx.service** | System | ✅ Running | Reverse proxy (root service) |
+| **web.service** | Container | Running | Daphne ASGI server (Django + WebSocket) |
+| **celery-worker.service** | Container | Running | Celery background task worker |
+| **celery-beat.service** | Container | Running | Celery periodic task scheduler |
+| **postgres.service** | Container | Running | PostgreSQL 15 database |
+| **redis.service** | Container | Running | Redis 7 (cache, broker, channels) |
+| **postgres-backup.service** | Oneshot | Failed | Database backup (timer-triggered) |
+| **postgres-backup.timer** | Timer | Active | Daily backup at 02:00 UTC |
+| **nginx.service** | System | Running | Reverse proxy (root service) |
 
 ### Service Dependencies
 
@@ -423,7 +423,7 @@ ssh root@your-domain.com 'df -h /opt/senex-trader/'
 ## Known Issues
 
 1. **postgres-backup.service failing**
-   - Status: ⚠️ Failed (as of Oct 30, 2025)
+   - Status: Failed (as of Oct 30, 2025)
    - Impact: Automated backups not running via timer
    - Workaround: Manual backups being created (backups directory shows activity)
    - Action Required: Debug backup service failure
@@ -490,6 +490,6 @@ For production issues:
 
 ---
 
-**Document Status**: ✅ Reflects actual production deployment
+**Document Status**: Reflects actual production deployment
 **Last Verified**: 2025-10-30
 **Next Review**: 2025-11-30

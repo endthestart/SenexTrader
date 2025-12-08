@@ -28,9 +28,9 @@ def automated_user(db):
         is_primary=True,
         is_active=True,
     )
-    TradingAccountPreferences.objects.create(
+    TradingAccountPreferences.objects.update_or_create(
         account=account,
-        is_automated_trading_enabled=True,
+        defaults={"is_automated_trading_enabled": True},
     )
     return user
 
@@ -75,6 +75,8 @@ def automated_position(automated_user):
         lifecycle_state="open_full",
         avg_price=Decimal("2.40"),
         metadata=metadata,
+        is_app_managed=True,
+        profit_targets_created=True,
     )
 
 

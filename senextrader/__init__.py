@@ -1,5 +1,5 @@
-# This will make sure the app is always imported when
-# Django starts so that shared_task will use this app.
+"""Senex Trader package initialization."""
+
 from .celery import app as celery_app
 
 __all__ = ("celery_app",)
@@ -9,13 +9,11 @@ def validate_redis_connection():
     """
     Validate Redis connection at startup.
 
-    P1.3: Production Redis validation to prevent crashes on first user request.
     Only runs in production environments to avoid disrupting development.
     """
     import os
     import sys
 
-    # Only validate in production
     if not os.environ.get("DJANGO_SETTINGS_MODULE", "").endswith("production"):
         return
 
@@ -23,7 +21,6 @@ def validate_redis_connection():
         from django.core.cache import cache
         from django.core.exceptions import ImproperlyConfigured
 
-        # Test cache write/read
         test_key = "startup_health_check"
         test_value = "ok"
 
@@ -35,7 +32,7 @@ def validate_redis_connection():
 
         cache.delete(test_key)
 
-        print("✓ Redis connection validated successfully")
+        print("[OK] Redis connection validated successfully")
 
     except Exception as e:
         print(
@@ -46,5 +43,4 @@ def validate_redis_connection():
         sys.exit(1)
 
 
-# Call during initialization (production only)
 validate_redis_connection()

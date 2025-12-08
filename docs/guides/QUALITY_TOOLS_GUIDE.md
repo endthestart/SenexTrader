@@ -44,10 +44,10 @@ black . && ruff check --fix . && mypy . && pytest
 **Speed**: 10-100x faster than flake8/pylint
 
 **What it replaces:**
-- ✅ flake8 (style checking)
-- ✅ isort (import sorting)
-- ✅ pyupgrade (code modernization)
-- ✅ Many flake8 plugins
+- flake8 (style checking)
+- isort (import sorting)
+- pyupgrade (code modernization)
+- Many flake8 plugins
 
 **Common commands:**
 ```bash
@@ -381,11 +381,11 @@ ruff check --fix --select UP .
 
 | Tool | Speed | Coverage |
 |------|-------|----------|
-| Ruff | ⚡⚡⚡⚡⚡ | 800+ rules |
-| flake8 | ⚡ | ~100 rules |
-| pylint | ⚡ | ~200 rules |
-| Black | ⚡⚡⚡⚡ | Formatting |
-| isort | ⚡⚡⚡ | Imports |
+| Ruff | Fast| 800+ rules |
+| flake8 | | ~100 rules |
+| pylint | | ~200 rules |
+| Black | Med| Formatting |
+| isort | Slow| Imports |
 
 **Ruff advantage**: Runs all checks in ~100ms vs 5-10 seconds for traditional stack
 

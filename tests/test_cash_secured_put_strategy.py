@@ -112,7 +112,7 @@ class TestCashSecuredPutScoring:
         report.iv_rank = 55.0  # Above minimum
         report.hv_iv_ratio = 0.75  # HV > IV, options cheap
 
-        score, reasons = await strategy._score_market_conditions_impl(report)
+        _score, reasons = await strategy._score_market_conditions_impl(report)
 
         # Note: penalty is -10, but other factors still contribute
         assert any("underpriced" in r.lower() for r in reasons)
@@ -123,7 +123,7 @@ class TestCashSecuredPutScoring:
         report.iv_rank = 60.0
         report.macd_signal = "neutral"
 
-        score, reasons = await strategy._score_market_conditions_impl(report)
+        _score, reasons = await strategy._score_market_conditions_impl(report)
 
         assert any("ideal for cash-secured puts" in r.lower() for r in reasons)
 
@@ -133,7 +133,7 @@ class TestCashSecuredPutScoring:
         report.iv_rank = 60.0
         report.macd_signal = "bullish"
 
-        score, reasons = await strategy._score_market_conditions_impl(report)
+        _score, reasons = await strategy._score_market_conditions_impl(report)
 
         assert any(
             "favorable" in r.lower() and "lower assignment risk" in r.lower() for r in reasons
@@ -145,7 +145,7 @@ class TestCashSecuredPutScoring:
         report.iv_rank = 60.0
         report.bollinger_position = "below_lower"
 
-        score, reasons = await strategy._score_market_conditions_impl(report)
+        _score, reasons = await strategy._score_market_conditions_impl(report)
 
         assert any("lower bollinger" in r.lower() and "bounce" in r.lower() for r in reasons)
 
@@ -155,7 +155,7 @@ class TestCashSecuredPutScoring:
         report.iv_rank = 60.0
         report.bollinger_position = "above_upper"
 
-        score, reasons = await strategy._score_market_conditions_impl(report)
+        _score, reasons = await strategy._score_market_conditions_impl(report)
 
         assert any("upper bollinger" in r.lower() and "extended" in r.lower() for r in reasons)
 
@@ -165,7 +165,7 @@ class TestCashSecuredPutScoring:
         report.iv_rank = 60.0
         report.market_stress_level = 30.0  # Low
 
-        score, reasons = await strategy._score_market_conditions_impl(report)
+        _score, reasons = await strategy._score_market_conditions_impl(report)
 
         assert any("low market stress" in r.lower() for r in reasons)
 
@@ -175,7 +175,7 @@ class TestCashSecuredPutScoring:
         report.iv_rank = 60.0
         report.market_stress_level = 75.0  # High
 
-        score, reasons = await strategy._score_market_conditions_impl(report)
+        _score, reasons = await strategy._score_market_conditions_impl(report)
 
         assert any("elevated market stress" in r.lower() for r in reasons)
         assert any("75" in r for r in reasons)

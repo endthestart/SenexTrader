@@ -22,7 +22,7 @@ def _get_fernet() -> Fernet | None:
 
                 # Print loud warning to console
                 print("\n" + "=" * 80)
-                print("⚠️  WARNING: AUTO-GENERATED TEMPORARY ENCRYPTION KEY")
+                print(" WARNING: AUTO-GENERATED TEMPORARY ENCRYPTION KEY")
                 print("=" * 80)
                 print("No FIELD_ENCRYPTION_KEY found in settings.")
                 print("Generated temporary key for development use.")

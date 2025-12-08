@@ -18,3 +18,8 @@ def privacy_mode(request):
         "privacy_mode": primary_account.privacy_mode if primary_account else False,
         "primary_account": primary_account,
     }
+
+
+def app_environment(request):
+    """Expose environment flags (e.g., DEBUG) to templates."""
+    return {"APP_DEBUG": settings.DEBUG}

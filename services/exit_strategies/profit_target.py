@@ -57,7 +57,6 @@ class ProfitTargetExit(ExitStrategy):
         Returns:
             ExitEvaluation indicating whether profit target reached
         """
-        # Get current P&L
         current_pnl = position.unrealized_pnl
         if current_pnl is None:
             logger.warning(
@@ -71,7 +70,6 @@ class ProfitTargetExit(ExitStrategy):
 
         current_pnl = Decimal(str(current_pnl))
 
-        # Get initial risk (max profit for credit spreads)
         initial_risk = position.initial_risk
         if initial_risk is None or initial_risk == 0:
             logger.warning(
@@ -85,15 +83,10 @@ class ProfitTargetExit(ExitStrategy):
 
         initial_risk = Decimal(str(initial_risk))
 
-        # Calculate profit target
-        # For credit spreads: initial_risk is the credit received (max profit)
-        # Target is percentage of that credit
         profit_target = abs(initial_risk) * (self.target_percentage / Decimal("100"))
 
-        # Check if current profit meets or exceeds target
         should_exit = current_pnl >= profit_target
 
-        # Calculate profit percentage achieved
         profit_pct = (
             (current_pnl / abs(initial_risk)) * Decimal("100")
             if initial_risk != 0
@@ -127,7 +120,6 @@ class ProfitTargetExit(ExitStrategy):
 
     def get_name(self) -> str:
         """Return human-readable name."""
-        # Format percentage without unnecessary decimal places
         pct = float(self.target_percentage)
         if pct == int(pct):
             return f"{int(pct)}% Profit Target"

@@ -22,7 +22,7 @@ This document provides project-specific best practices for using the TastyTrade 
 
 ## Session Management
 
-### ✅ DO: Use Singleton Pattern with Automatic Refresh
+### DO: Use Singleton Pattern with Automatic Refresh
 
 **Pattern:** `services/brokers/tastytrade_session.py:TastyTradeSessionService`
 
@@ -52,7 +52,7 @@ else:
 - Handles OAuth token rotation (user reconnection)
 - Thread-safe for Celery tasks
 
-### ✅ DO: Always Call `a_refresh()` After Creating Session
+### DO: Always Call `a_refresh()` After Creating Session
 
 ```python
 from tastytrade import OAuthSession
@@ -69,17 +69,17 @@ await session.a_refresh()
 
 **Reference:** `services/brokers/tastytrade_session.py:159-165`
 
-### ❌ DON'T: Create Sessions Directly in Strategy Code
+### DON'T: Create Sessions Directly in Strategy Code
 
 **Bad:**
 ```python
-# ❌ Creates orphaned sessions, no refresh, token waste
+# Creates orphaned sessions, no refresh, token waste
 session = OAuthSession(secret, token)
 ```
 
 **Good:**
 ```python
-# ✅ Uses managed singleton with automatic lifecycle
+# Uses managed singleton with automatic lifecycle
 session = await TastyTradeSessionService.get_session_for_user(...)
 ```
 
@@ -87,7 +87,7 @@ session = await TastyTradeSessionService.get_session_for_user(...)
 
 ## Instrument Handling
 
-### ✅ DO: Use SDK's `Option.a_get()` for Symbol Validation
+### DO: Use SDK's `Option.a_get()` for Symbol Validation
 
 **Pattern:** `services/utils/sdk_instruments.py:get_option_instrument()`
 
@@ -114,7 +114,7 @@ occ_symbol = option.symbol  # 'SPY   251107P00591000'
 - Auto-updates if TastyTrade changes OCC format
 - Type-safe Pydantic models
 
-### ✅ DO: Batch Fetch Instruments for Multi-Leg Orders
+### DO: Batch Fetch Instruments for Multi-Leg Orders
 
 **Pattern:** `services/utils/sdk_instruments.py:get_option_instruments_bulk()`
 
@@ -130,7 +130,7 @@ options = await get_option_instruments_bulk(session, specs)
 
 **Performance:** Single batch fetch vs N sequential fetches.
 
-### ✅ DO: Use `build_occ_symbol()` for Backward Compatibility
+### DO: Use `build_occ_symbol()` for Backward Compatibility
 
 **Pattern:** `services/utils/sdk_instruments.py:build_occ_symbol()`
 
@@ -148,17 +148,17 @@ occ = build_occ_symbol('SPY', date(2025, 11, 7), Decimal('591.00'), 'P')
 - Testing without API calls
 - Symbol parsing/validation
 
-### ❌ DON'T: Hand-Craft OCC Symbols with String Formatting
+### DON'T: Hand-Craft OCC Symbols with String Formatting
 
 **Bad:**
 ```python
-# ❌ Error-prone, no validation, breaks if format changes
+# Error-prone, no validation, breaks if format changes
 symbol = f"{ticker}{exp_str}C{strike_int:08d}"
 ```
 
 **Good:**
 ```python
-# ✅ Uses tested utility with validation
+# Uses tested utility with validation
 symbol = build_occ_symbol(ticker, exp_date, strike, 'C')
 ```
 
@@ -166,7 +166,7 @@ symbol = build_occ_symbol(ticker, exp_date, strike, 'C')
 
 ## Order Construction
 
-### ✅ DO: Use `tastytrade.order.Leg` for Order Legs
+### DO: Use `tastytrade.order.Leg` for Order Legs
 
 **Pattern:** `services/utils/order_builder_utils.py:build_opening_spread_legs()`
 
@@ -184,7 +184,7 @@ leg = Leg(
 
 **Reference:** `services/senex_trident_strategy.py:745-813`
 
-### ✅ DO: Use Enums for Type Safety
+### DO: Use Enums for Type Safety
 
 ```python
 from tastytrade.order import InstrumentType, OrderAction, OrderType, OrderTimeInForce
@@ -208,7 +208,7 @@ OrderTimeInForce.DAY       # Good for day
 OrderTimeInForce.GTC       # Good till cancelled
 ```
 
-### ✅ DO: Use Shared Leg Builders
+### DO: Use Shared Leg Builders
 
 **Pattern:** `services/utils/order_builder_utils.py`
 
@@ -232,7 +232,7 @@ legs = await build_opening_spread_legs(
 - Shared helper handles SDK plumbing
 - Consistent across all strategies
 
-### ✅ DO: Understand Credit vs Debit Price Effects
+### DO: Understand Credit vs Debit Price Effects
 
 **Pattern:** `services/utils/trading_utils.py:PriceEffect`
 
@@ -255,17 +255,17 @@ effect = PriceEffect.CREDIT if price > 0 else PriceEffect.DEBIT
 
 **Reference:** `services/execution/order_service.py:141-149`
 
-### ❌ DON'T: Mix Up Credit/Debit Signs
+### DON'T: Mix Up Credit/Debit Signs
 
 **Bad:**
 ```python
-# ❌ Credit order with negative price (SDK will reject)
+# Credit order with negative price (SDK will reject)
 order = NewOrder(price=-Decimal('2.50'), ...)  # Wrong!
 ```
 
 **Good:**
 ```python
-# ✅ Credit = positive, Debit = negative
+# Credit = positive, Debit = negative
 credit_price = Decimal('2.50')   # Positive
 debit_price = -Decimal('3.00')   # Negative
 ```
@@ -274,7 +274,7 @@ debit_price = -Decimal('3.00')   # Negative
 
 ## Error Handling
 
-### ✅ DO: Categorize Errors for Smart Retry Logic
+### DO: Categorize Errors for Smart Retry Logic
 
 **Pattern:** `services/brokers/tastytrade_session.py:categorize_error()`
 
@@ -310,7 +310,7 @@ except Exception as e:
 - `TEMPORARY_ERROR` - Server issue (retry)
 - `SDK_ERROR` - Bug or version mismatch (no retry)
 
-### ✅ DO: Use Timeouts for All SDK Calls
+### DO: Use Timeouts for All SDK Calls
 
 **Pattern:** `services/brokers/tastytrade_session.py:163-172`
 
@@ -331,7 +331,7 @@ except TimeoutError:
 - Option chain fetch: 15 seconds
 - Order placement: 10 seconds
 
-### ✅ DO: Use Custom Exceptions for Business Logic
+### DO: Use Custom Exceptions for Business Logic
 
 **Pattern:** `services/exceptions.py`
 
@@ -363,24 +363,24 @@ if pricing_age > max_age:
 
 ## Async Patterns
 
-### ✅ DO: Use Async SDK Methods (Prefer `a_*` Methods)
+### DO: Use Async SDK Methods (Prefer `a_*` Methods)
 
 **Pattern:** All async code paths
 
 ```python
-# ✅ Async methods (preferred)
+# Async methods (preferred)
 await session.a_refresh()
 await session.a_validate()
 option = await TastytradeOption.a_get(session, symbol)
 accounts = await Account.a_get(session)
 
-# ❌ Sync methods (avoid in async contexts)
+# Sync methods (avoid in async contexts)
 session.refresh()  # Blocks event loop!
 ```
 
 **Why:** Non-blocking I/O, better concurrency, Django Channels compatibility.
 
-### ✅ DO: Handle Event Loop Lifecycle
+### DO: Handle Event Loop Lifecycle
 
 **Pattern:** `services/brokers/tastytrade_session.py:429-458`
 
@@ -396,18 +396,18 @@ if hasattr(session, '_session') and hasattr(session._session, '_loop'):
 
 **Critical for:** Celery tasks, background workers, Django Channels consumers.
 
-### ❌ DON'T: Mix Sync and Async Code
+### DON'T: Mix Sync and Async Code
 
 **Bad:**
 ```python
-# ❌ Blocking in async function
+# Blocking in async function
 def some_function():
     session.refresh()  # Sync call blocks event loop
 ```
 
 **Good:**
 ```python
-# ✅ Async all the way
+# Async all the way
 async def some_function():
     await session.a_refresh()  # Non-blocking
 ```
@@ -416,7 +416,7 @@ async def some_function():
 
 ## Testing & Sandbox
 
-### ✅ DO: Use `is_test` Flag for Sandbox Mode
+### DO: Use `is_test` Flag for Sandbox Mode
 
 **Pattern:** `services/brokers/tastytrade_session.py:80-86`
 
@@ -440,19 +440,19 @@ session = OAuthSession(
 
 **Reference:** `services/execution/order_service.py:74-79`
 
-### ✅ DO: Log Sandbox Mode Clearly
+### DO: Log Sandbox Mode Clearly
 
 ```python
 if account.is_test:
     logger.warning(
-        f"🧪 SANDBOX MODE: Order for {symbol} "
+        f"SANDBOX MODE: Order for {symbol} "
         f"will be submitted to TastyTrade sandbox environment"
     )
 ```
 
 **Prevents:** Accidentally thinking sandbox orders are real trades.
 
-### ✅ DO: Use `dry_run=True` for Order Validation
+### DO: Use `dry_run=True` for Order Validation
 
 ```python
 from tastytrade.order import NewOrder
@@ -475,23 +475,23 @@ response = account.place_order(session, order, dry_run=False)
 
 ## Common Pitfalls
 
-### ❌ PITFALL 1: Forgetting to Refresh New Sessions
+### PITFALL 1: Forgetting to Refresh New Sessions
 
 **Problem:**
 ```python
 session = OAuthSession(secret, token)
-# ❌ No a_refresh() call - session_token might be stale
+# No a_refresh() call - session_token might be stale
 await TastytradeOption.a_get(session, symbol)  # May fail!
 ```
 
 **Solution:**
 ```python
 session = OAuthSession(secret, token)
-await session.a_refresh()  # ✅ Generates fresh session_token
+await session.a_refresh()  # Generates fresh session_token
 await TastytradeOption.a_get(session, symbol)
 ```
 
-### ❌ PITFALL 2: Reusing Sessions Across Event Loops
+### PITFALL 2: Reusing Sessions Across Event Loops
 
 **Problem:**
 ```python
@@ -499,25 +499,25 @@ await TastytradeOption.a_get(session, symbol)
 session = await create_session()
 
 # Celery Task B tries to reuse session (different event loop)
-await session.a_validate()  # ❌ RuntimeError: Event loop is closed
+await session.a_validate()  # RuntimeError: Event loop is closed
 ```
 
 **Solution:**
 ```python
 # Use singleton pattern that detects closed loops
 session_result = await TastyTradeSessionService.get_session_for_user(user_id, token)
-# ✅ Automatically creates new session if loop changed
+# Automatically creates new session if loop changed
 ```
 
 **Reference:** `services/brokers/tastytrade_session.py:429-458`
 
-### ❌ PITFALL 3: Ignoring OAuth Token Rotation
+### PITFALL 3: Ignoring OAuth Token Rotation
 
 **Problem:**
 ```python
 # User reconnects broker (new refresh token)
 # Cached session still uses old token
-await session.a_refresh()  # ❌ Fails: token invalid
+await session.a_refresh()  # Fails: token invalid
 ```
 
 **Solution:**
@@ -531,14 +531,14 @@ if cached_token != database_token:
 
 **Reference:** `services/brokers/tastytrade_session.py:414-422`
 
-### ❌ PITFALL 4: Not Handling Session Expiration Mid-Task
+### PITFALL 4: Not Handling Session Expiration Mid-Task
 
 **Problem:**
 ```python
 session = get_session()
 # Long-running task (20 minutes)
 await process_data()  # Session expires after 15 minutes
-await place_order(session)  # ❌ Session expired!
+await place_order(session)  # Session expired!
 ```
 
 **Solution:**
@@ -553,23 +553,23 @@ await place_order(session_result['session'])
 
 **Reference:** `services/brokers/tastytrade_session.py:863-1013`
 
-### ❌ PITFALL 5: Incorrect Price Signs for Credit/Debit
+### PITFALL 5: Incorrect Price Signs for Credit/Debit
 
 **Problem:**
 ```python
 # Selling a spread (credit)
 net_credit = Decimal('2.50')
-order = NewOrder(price=-net_credit, ...)  # ❌ Wrong sign!
+order = NewOrder(price=-net_credit, ...)  # Wrong sign!
 ```
 
 **Solution:**
 ```python
 # Credit = positive, Debit = negative
 net_credit = Decimal('2.50')
-order = NewOrder(price=net_credit, ...)  # ✅ Positive for credit
+order = NewOrder(price=net_credit, ...)  # Positive for credit
 
 net_debit = Decimal('3.00')
-order = NewOrder(price=-net_debit, ...)  # ✅ Negative for debit
+order = NewOrder(price=-net_debit, ...)  # Negative for debit
 ```
 
 ---
@@ -757,11 +757,11 @@ async def fetch_iron_condor_instruments(session, symbol, expiration):
 
 When adding new SDK usage patterns:
 
-1. ✅ Use existing utilities (`get_option_instrument`, `build_opening_spread_legs`)
-2. ✅ Add timeout handling for all SDK calls
-3. ✅ Categorize errors and log with context
-4. ✅ Test with both `is_test=True` and `is_test=False`
-5. ✅ Document non-obvious SDK behaviors
-6. ✅ Add examples to this guide
+1. Use existing utilities (`get_option_instrument`, `build_opening_spread_legs`)
+2. Add timeout handling for all SDK calls
+3. Categorize errors and log with context
+4. Test with both `is_test=True` and `is_test=False`
+5. Document non-obvious SDK behaviors
+6. Add examples to this guide
 
 **Questions?** Use `/tastytrade:tt-check <function-name>` to verify SDK usage patterns.

@@ -9,28 +9,49 @@ Production WebSocket consumer for real-time market data streaming.
 from __future__ import annotations
 
 import json
-from typing import Any
+from typing import Any, Protocol, cast
 
 from django.conf import settings
+from django.contrib.auth.models import AnonymousUser
 
+from channels.auth import UserLazyObject
 from channels.generic.websocket import AsyncWebsocketConsumer
 
+from services.core.data_access import get_primary_tastytrade_account
 from services.core.logging import get_logger
-from streaming.services.stream_manager import GlobalStreamManager
+from streaming.services.stream_manager import GlobalStreamManager, UserStreamManager
+from trading.models import Watchlist
 
 logger = get_logger(__name__)
 
 
+class _AuthenticatedUser(Protocol):
+    id: Any
+    is_authenticated: bool
+
+
 class StreamingConsumer(AsyncWebsocketConsumer):
+    """WebSocket consumer for real-time market data streaming."""
+
+    # Instance attributes set during connection lifecycle
+    user: _AuthenticatedUser
+    stream_manager: UserStreamManager
+    control_group_name: str
+
     async def connect(self) -> None:
-        self.user = self.scope["user"]
-        if not self.user.is_authenticated:
+        scope_user: _AuthenticatedUser | AnonymousUser | UserLazyObject | None = self.scope.get(
+            "user"
+        )
+        if scope_user is None:
+            logger.warning("Scope missing user object, closing WebSocket connection")
             await self.close()
             return
 
-        # Check if user has a configured broker account before initializing streamers
-        from services.core.data_access import get_primary_tastytrade_account
+        if not scope_user.is_authenticated:
+            await self.close()
+            return
 
+        self.user = cast(_AuthenticatedUser, scope_user)
         account = await get_primary_tastytrade_account(self.user)
         if not account or not account.is_configured:
             logger.info(
@@ -47,9 +68,6 @@ class StreamingConsumer(AsyncWebsocketConsumer):
         # Only start streaming if this will be the first connection
         if will_start_streaming:
             logger.info(f"User {self.user.id}: First connection, starting streamers")
-            # Get user's watchlist symbols for initial streaming subscription
-            from trading.models import Watchlist
-
             watchlist_symbols = [
                 item.symbol
                 async for item in Watchlist.objects.filter(user=self.user).order_by(
@@ -59,7 +77,9 @@ class StreamingConsumer(AsyncWebsocketConsumer):
 
             # Fallback to DEFAULT_WATCHLIST_SYMBOLS if watchlist is empty
             if not watchlist_symbols:
-                watchlist_symbols = getattr(settings, "DEFAULT_WATCHLIST_SYMBOLS", [])
+                # Extract symbols from (symbol, description) tuples
+                default_list = getattr(settings, "DEFAULT_WATCHLIST_SYMBOLS", [])
+                watchlist_symbols = [s[0] for s in default_list]
                 logger.info(
                     f"User {self.user.id}: Empty watchlist, using default symbols: {watchlist_symbols}"
                 )
@@ -77,8 +97,7 @@ class StreamingConsumer(AsyncWebsocketConsumer):
 
         await self.accept()
 
-        # CRITICAL: Only register the connection AFTER accept() succeeds
-        # This prevents zombie channels if connection setup fails
+        # Register the connection after accept() succeeds to prevent zombie channels
         self.stream_manager.context.add_channel(self.channel_name)
         ref_count = self.stream_manager.context.reference_count
 
@@ -87,21 +106,15 @@ class StreamingConsumer(AsyncWebsocketConsumer):
             f"({self.channel_name}), ref_count={ref_count}"
         )
 
-        # Send initial cached QQQ data if available
-        from django.core.cache import cache
-
-        from services.core.cache import CacheManager
-
-        qqq_quote = cache.get(CacheManager.quote("QQQ"))
-        if qqq_quote:
-            await self.send(text_data=json.dumps({"type": "quote_update", **qqq_quote}))
-            logger.debug(f"User {self.user.id}: Sent initial cached QQQ data")
-
     async def disconnect(self, close_code: int) -> None:
-        if not self.user.is_authenticated:
+        # Handle case where connection was rejected before user was set
+        if not hasattr(self, "user") or not self.user.is_authenticated:
             return
 
-        # CRITICAL FIX: Unregister this connection
+        if not hasattr(self, "stream_manager"):
+            logger.warning(f"User {self.user.id}: Disconnected before stream_manager was set")
+            return
+
         self.stream_manager.context.remove_channel(self.channel_name)
         ref_count = self.stream_manager.context.reference_count
 
@@ -127,10 +140,6 @@ class StreamingConsumer(AsyncWebsocketConsumer):
 
         # Handle heartbeat ping-pong
         if message_type == "ping":
-            # Track streamer activity to keep connection alive
-            from streaming.services.stream_manager import GlobalStreamManager
-
-            # Record streamer activity
             await GlobalStreamManager.record_activity(self.user.id)
 
             await self.send(
@@ -168,49 +177,42 @@ class StreamingConsumer(AsyncWebsocketConsumer):
     # Handlers for messages from the channel layer, proxied to the client
 
     async def ensure_subscriptions(self, event: dict[str, Any]) -> None:
-        """
-        Handles the request to ensure specific subscriptions are active.
-        """
+        """Handles the request to ensure specific subscriptions are active."""
         symbols: list[str] = event.get("symbols", [])
         subscribe_to_account: bool = event.get("account", False)
 
-        if (symbols or subscribe_to_account) and self.stream_manager:
+        if (symbols or subscribe_to_account) and hasattr(self, "stream_manager"):
             logger.info(f"Consumer received request to ensure subscriptions: {event}")
             await self.stream_manager.ensure_subscriptions(
                 symbols=symbols, subscribe_to_account=subscribe_to_account
             )
 
     async def subscribe_legs(self, event: dict[str, Any]) -> None:
-        """
-        Handles the request to subscribe to new option leg symbols.
-        """
+        """Handles the request to subscribe to new option leg symbols."""
         logger.info(f"Consumer received subscribe_legs event: {event}")
         symbols: list[str] | None = event.get("symbols")
-        if symbols and self.stream_manager:
+        if symbols and hasattr(self, "stream_manager"):
             await self.stream_manager.subscribe_to_new_symbols(symbols)
 
     async def generate_suggestion(self, event: dict[str, Any]) -> None:
-        """
-        Handles the request to generate a trading suggestion.
-        """
-        logger.info(f"User {self.user.id}: 📬 CONSUMER RECEIVED generate_suggestion event")
-        logger.info(f"User {self.user.id}: 📬 Event keys: {list(event.keys())}")
+        """Handles the request to generate a trading suggestion."""
+        logger.info(f"User {self.user.id}: Received generate_suggestion event")
+        logger.debug(f"User {self.user.id}: Event keys: {list(event.keys())}")
 
         context: dict[str, Any] | None = event.get("context")
         if not context:
-            logger.error(f"User {self.user.id}: ❌ No context in generate_suggestion event")
+            logger.error(f"User {self.user.id}: No context in generate_suggestion event")
             return
 
-        if not self.stream_manager:
-            logger.error(f"User {self.user.id}: ❌ No stream_manager available")
+        if not hasattr(self, "stream_manager"):
+            logger.error(f"User {self.user.id}: No stream_manager available")
             return
 
-        # Extract and log the OCC bundle info before passing to StreamManager
         occ_bundle: dict[str, Any] = context.get("occ_bundle", {})
         legs: dict[str, Any] = occ_bundle.get("legs", {})
         leg_symbols: list[Any] = list(legs.values())
         logger.info(
-            f"User {self.user.id}: 🎯 About to process suggestion with "
+            f"User {self.user.id}: Processing suggestion with "
             f"{len(legs)} option legs: {leg_symbols}"
         )
 
@@ -248,6 +250,11 @@ class StreamingConsumer(AsyncWebsocketConsumer):
         logger.info(f"User {self.user.id}: Order filled: {event}")
         await self.send(text_data=json.dumps(event))
 
+    async def profit_target_update(self, event: dict[str, Any]) -> None:
+        """Forwards profit target status updates to the client."""
+        logger.info(f"User {self.user.id}: Profit target update: {event}")
+        await self.send(text_data=json.dumps(event))
+
     async def position_sync_complete(self, event: dict[str, Any]) -> None:
         """Forwards position sync completion to the client."""
         logger.info(f"User {self.user.id}: Position sync complete: {event}")
@@ -261,16 +268,7 @@ class StreamingConsumer(AsyncWebsocketConsumer):
         await self.send(text_data=json.dumps(event))
 
     async def position_metrics_update(self, event: dict[str, Any]) -> None:
-        """
-        Forwards unified position metrics (Greeks + P&L + Balance) to the client.
-
-        This is the new unified update that combines:
-        - Position Greeks (delta, gamma, theta, vega, rho)
-        - Position P&L (unrealized)
-        - Account balance and buying power
-
-        Replaces separate balance_update and position_pnl_update broadcasts.
-        """
+        """Forwards unified position metrics (Greeks + P&L + Balance) to the client."""
         position_count = len(event.get("positions", []))
         has_balance = "balance" in event
         logger.debug(

@@ -57,10 +57,8 @@ class ProfitCalculator:
             if trade.status != "filled":
                 continue
 
-            if trade.realized_pnl is not None:
-                trade_pnl = to_decimal(trade.realized_pnl) or Decimal("0")
-            else:
-                trade_pnl = self.calculate_trade_pnl(trade)
+            # NOTE: Trade.realized_pnl removed - always calculate from trade data
+            trade_pnl = self.calculate_trade_pnl(trade)
             realised_total += trade_pnl
 
         return realised_total.quantize(_DECIMAL_PLACES, rounding=ROUND_HALF_UP)

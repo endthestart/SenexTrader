@@ -136,7 +136,7 @@ class CashSecuredPutStrategy(BaseStrategy):
             # Severe penalty for insufficient IV - continue but warn strongly
             score -= 30
             reasons.append(
-                f"⚠️ CRITICAL: IV Rank {report.iv_rank:.1f} below minimum {self.MIN_IV_RANK} - "
+                f"CRITICAL: IV Rank {report.iv_rank:.1f} below minimum {self.MIN_IV_RANK} - "
                 f"insufficient premium environment. DO NOT EXECUTE. "
                 f"Wait for IV Rank > {self.MIN_IV_RANK}% before selling premium."
             )
@@ -323,7 +323,7 @@ class CashSecuredPutStrategy(BaseStrategy):
 
         if force_generation and score < self.MIN_SCORE_THRESHOLD:
             logger.warning(
-                f"⚠️ Force generating {self.strategy_name} despite low score ({score:.1f}) - "
+                f"Force generating {self.strategy_name} despite low score ({score:.1f}) - "
                 f"user explicitly requested"
             )
 
@@ -389,7 +389,7 @@ class CashSecuredPutStrategy(BaseStrategy):
             # NOTE: is_automated will be set by caller
         }
 
-        logger.info(f"User {self.user.id}: ✅ Context prepared for {self.strategy_name}")
+        logger.info(f"User {self.user.id}: Context prepared for {self.strategy_name}")
         return context
 
     async def a_request_suggestion_generation(
@@ -418,7 +418,7 @@ class CashSecuredPutStrategy(BaseStrategy):
         # Dispatch to stream manager
         await self.a_dispatch_to_stream_manager(context)
         logger.info(
-            f"User {self.user.id}: 🚀 Dispatched {self.strategy_name} request to stream manager"
+            f"User {self.user.id}: Dispatched {self.strategy_name} request to stream manager"
         )
 
     async def a_calculate_suggestion_from_cached_data(self, context: dict):
@@ -519,7 +519,7 @@ class CashSecuredPutStrategy(BaseStrategy):
         # Build generation notes if risk warning
         notes = ""
         if risk_warning:
-            notes = f"⚠️ RISK BUDGET EXCEEDED: {risk_warning}"
+            notes = f"RISK BUDGET EXCEEDED: {risk_warning}"
 
         suggestion = await TradingSuggestion.objects.acreate(
             user=self.user,
@@ -549,7 +549,7 @@ class CashSecuredPutStrategy(BaseStrategy):
         )
 
         logger.info(
-            f"User {self.user.id}: ✅ Cash-Secured Put suggestion - "
+            f"User {self.user.id}: Cash-Secured Put suggestion - "
             f"Premium: ${premium:.2f}, Max Risk: ${max_risk_per_contract:.2f}"
         )
         return suggestion
@@ -587,7 +587,7 @@ class CashSecuredPutStrategy(BaseStrategy):
         """
         return strike_price - premium_received
 
-    def _select_strike(self, current_price: Decimal, target_delta: float = None) -> Decimal:
+    def _select_strike(self, current_price: Decimal, target_delta: float | None = None) -> Decimal:
         """
         Select strike for cash-secured put.
 
@@ -607,9 +607,7 @@ class CashSecuredPutStrategy(BaseStrategy):
         strike_target = current_price * Decimal("0.93")
 
         # Round to nearest standard strike
-        strike = round_to_even_strike(strike_target)
-
-        return strike
+        return round_to_even_strike(strike_target)
 
     def _calculate_assignment_probability(self, delta: float) -> float:
         """
@@ -705,7 +703,7 @@ class CashSecuredPutStrategy(BaseStrategy):
         from services.sdk.instruments import get_option_instruments_bulk
 
         # Get session using correct pattern
-        account = await get_primary_tastytrade_account(position.user)
+        await get_primary_tastytrade_account(position.user)
         session = await TastyTradeSessionService.get_session_for_user(position.user)
 
         # Build spec dictionary for the put option

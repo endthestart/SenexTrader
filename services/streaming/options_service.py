@@ -50,26 +50,23 @@ class StreamingOptionsDataService:
         return underlying
 
     def read_spread_pricing(self, bundle: SenexOccBundle) -> SenexPricing | None:
-        # Use module-level logger - no need to recreate
-
         leg_names = list(bundle.legs.keys())
-        logger.info(f"🎯 READ_SPREAD_PRICING called for {bundle.underlying} with legs: {leg_names}")
+        logger.info(f"read_spread_pricing called for {bundle.underlying} with legs: {leg_names}")
 
         try:
             pricing = self.cache.build_pricing(bundle)
             if not pricing:
-                logger.warning(f"❌ cache.build_pricing returned None for {bundle.underlying}")
+                logger.warning(f"cache.build_pricing returned None for {bundle.underlying}")
                 return None
 
             logger.info(
-                f"✅ Successfully built pricing: put_credit={pricing.put_credit}, "
+                f"Successfully built pricing: put_credit={pricing.put_credit}, "
                 f"call_credit={pricing.call_credit}, total_credit={pricing.total_credit}"
             )
 
-            # Return SenexPricing directly (no need for PricingResult wrapper)
             return pricing
         except Exception as e:
-            logger.error(f"❌ Exception in read_spread_pricing: {e}", exc_info=True)
+            logger.error(f"Exception in read_spread_pricing: {e}", exc_info=True)
             return None
 
     def read_greeks(self, occ_symbol: str) -> OptionGreeks | None:
@@ -97,12 +94,12 @@ class StreamingOptionsDataService:
                 return None
 
             logger.debug(
-                f"✅ Greeks for {occ_symbol}: delta={greeks.delta}, "
+                f"Greeks for {occ_symbol}: delta={greeks.delta}, "
                 f"gamma={greeks.gamma}, theta={greeks.theta}, vega={greeks.vega}"
             )
             return greeks
         except Exception as e:
-            logger.error(f"❌ Exception reading Greeks for {occ_symbol}: {e}", exc_info=True)
+            logger.error(f"Exception reading Greeks for {occ_symbol}: {e}", exc_info=True)
             return None
 
     def ensure_leg_stream(self, symbol: str, expiration: date, occ_symbols: list[str]) -> None:
@@ -139,7 +136,7 @@ class StreamingOptionsDataService:
     ) -> SenexOccBundle | None:
         """Build OCC bundle from strikes and cached option chain."""
         logger.info(
-            f"User {self.user.id}: 🎯 Building OCC bundle for {symbol} expiring {expiration}"
+            f"User {self.user.id}: Building OCC bundle for {symbol} expiring {expiration}"
         )
         chain = await self._get_option_chain(symbol, expiration)
         if not chain:
@@ -236,35 +233,33 @@ class StreamingOptionsDataService:
 
         # Use exact expiration if provided, otherwise use default DTE
         if expiration:
-            # Fetch chain for EXACT expiration date (no DTE conversion/rounding)
             cache_key = CacheManager.option_chain_with_expiration(symbol, expiration)
-            logger.info(f"User {self.user.id}: 📅 Using EXACT expiration {expiration}")
+            logger.info(f"User {self.user.id}: Using exact expiration {expiration}")
 
             cached_chain = cache.get(cache_key)
             if cached_chain:
-                logger.info(f"User {self.user.id}: ✅ Using cached option chain for {symbol}")
+                logger.info(f"User {self.user.id}: Using cached option chain for {symbol}")
                 return cached_chain
 
             logger.info(
-                f"User {self.user.id}: 🔄 Fetching option chain for {symbol} "
+                f"User {self.user.id}: Fetching option chain for {symbol} "
                 f"at exact expiration {expiration}"
             )
             chain_data = await option_chain_service.get_option_chain_by_expiration(
                 self.user, symbol, target_expiration=expiration
             )
         else:
-            # Use DTE-based fetch with default (rounds to next Friday)
             target_dte = 45
             cache_key = CacheManager.full_option_chain(symbol)
-            logger.info(f"User {self.user.id}: 📅 Using default DTE: {target_dte}")
+            logger.info(f"User {self.user.id}: Using default DTE: {target_dte}")
 
             cached_chain = cache.get(cache_key)
             if cached_chain:
-                logger.info(f"User {self.user.id}: ✅ Using cached option chain for {symbol}")
+                logger.info(f"User {self.user.id}: Using cached option chain for {symbol}")
                 return cached_chain
 
             logger.info(
-                f"User {self.user.id}: 🔄 Fetching option chain for {symbol} "
+                f"User {self.user.id}: Fetching option chain for {symbol} "
                 f"with target_dte={target_dte}"
             )
             chain_data = await option_chain_service.get_option_chain(
@@ -272,10 +267,8 @@ class StreamingOptionsDataService:
             )
 
         if chain_data:
-            # Convert to the format expected by streaming service
-            # Epic 28 Task 010: Include Strike objects with OCC symbols
             chain = {
-                "strikes": chain_data.get("strikes", []),  # Full Strike objects
+                "strikes": chain_data.get("strikes", []),
             }
             cache.set(cache_key, chain, timeout=OPTION_CHAIN_CACHE_TTL)
             strikes_list = chain["strikes"]
@@ -283,20 +276,19 @@ class StreamingOptionsDataService:
             num_calls = len(extract_call_strikes(strikes_list))
             num_strikes = len(strikes_list)
             logger.info(
-                f"User {self.user.id}: ✅ Option chain fetched and cached for {symbol} "
+                f"User {self.user.id}: Option chain fetched and cached for {symbol} "
                 f"(strikes: {num_strikes}, puts: {num_puts}, calls: {num_calls})"
             )
             return chain
 
-        # Log appropriate error based on what was requested
         if expiration:
             logger.warning(
-                f"User {self.user.id}: ❌ Failed to fetch option chain for {symbol} "
+                f"User {self.user.id}: Failed to fetch option chain for {symbol} "
                 f"at exact expiration {expiration}"
             )
         else:
             logger.warning(
-                f"User {self.user.id}: ❌ Failed to fetch option chain for {symbol} "
+                f"User {self.user.id}: Failed to fetch option chain for {symbol} "
                 f"with target_dte={target_dte}"
             )
         return None

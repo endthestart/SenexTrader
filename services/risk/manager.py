@@ -81,7 +81,7 @@ class EnhancedRiskManager:
             tradeable_capital = buying_power + app_managed_risk
 
             logger.info(
-                f"💰 TRADEABLE CAPITAL - Buying Power: ${buying_power}, "
+                f"TRADEABLE CAPITAL - Buying Power: ${buying_power}, "
                 f"App Managed Risk: ${app_managed_risk}, "
                 f"Total Tradeable Capital: ${tradeable_capital}"
             )
@@ -143,7 +143,7 @@ class EnhancedRiskManager:
 
         tolerance_pct = risk_tolerance * 100
         logger.info(
-            f"🎯 STRATEGY POWER - Tradeable Capital: ${tradeable_capital}, "
+            f"STRATEGY POWER - Tradeable Capital: ${tradeable_capital}, "
             f"Risk Tolerance ({tolerance_type}): {risk_tolerance} ({tolerance_pct}%), "
             f"Strategy Power: ${strategy_power}"
         )
@@ -160,7 +160,7 @@ class EnhancedRiskManager:
         remaining_budget = strategy_power - used_risk
 
         logger.info(
-            f"📊 BUDGET CALC - Strategy Power: ${strategy_power}, "
+            f"BUDGET CALC - Strategy Power: ${strategy_power}, "
             f"Used Risk: ${used_risk}, Remaining Budget: ${remaining_budget}"
         )
         return remaining_budget, True
@@ -273,7 +273,7 @@ class EnhancedRiskManager:
             max_spreads = self.calculate_max_spreads(strategy_power, spread_width)
 
             logger.info(
-                f"💰 RISK BUDGET DATA - User {self.user.id}: "
+                f"RISK BUDGET DATA - User {self.user.id}: "
                 f"Strategy Power: ${strategy_power}, Current Risk: ${current_risk}, "
                 f"Remaining: ${remaining}, Utilization: {utilization:.1f}%, "
                 f"Spread Width: {spread_width}, Max Spreads: {max_spreads}"

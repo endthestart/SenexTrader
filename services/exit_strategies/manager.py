@@ -124,7 +124,7 @@ class ExitManager:
                 # Find which strategies triggered
                 triggered = [
                     (strategy.get_name(), eval.reason)
-                    for strategy, eval in zip(self.strategies, evaluations)
+                    for strategy, eval in zip(self.strategies, evaluations, strict=False)
                     if eval.should_exit
                 ]
                 combined_reason = "Exit triggered by: " + "; ".join(
@@ -140,13 +140,13 @@ class ExitManager:
             if should_exit:
                 combined_reason = "All exit conditions met: " + "; ".join(
                     f"{strategy.get_name()} ({eval.reason})"
-                    for strategy, eval in zip(self.strategies, evaluations)
+                    for strategy, eval in zip(self.strategies, evaluations, strict=False)
                 )
             else:
                 # Find which strategies NOT triggered
                 not_triggered = [
                     strategy.get_name()
-                    for strategy, eval in zip(self.strategies, evaluations)
+                    for strategy, eval in zip(self.strategies, evaluations, strict=False)
                     if not eval.should_exit
                 ]
                 combined_reason = "Not all exit conditions met. Waiting on: " + ", ".join(

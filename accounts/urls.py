@@ -46,6 +46,11 @@ urlpatterns = [
         api_views.privacy_mode_toggle,
         name="api_privacy_mode_toggle",
     ),
+    path(
+        "api/profit-target-settings/",
+        api_views.profit_target_settings,
+        name="api_profit_target_settings",
+    ),
     # OAuth (Phase 2)
     path(
         "oauth/tastytrade/initiate/",

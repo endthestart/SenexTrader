@@ -147,7 +147,7 @@ class TestMarketConditionValidator:
                 validator.market_service, "get_market_metrics", side_effect=mock_get_metrics
             ),
             patch(
-                "services.technical_indicator_calculator.TechnicalIndicatorCalculator.a_calculate_indicators",
+                "services.market_data.indicators.TechnicalIndicatorCalculator.a_calculate_indicators",
                 side_effect=mock_calc_indicators,
             ),
         ):
@@ -193,7 +193,7 @@ class TestMarketConditionValidator:
                 validator.market_service, "get_market_metrics", side_effect=mock_get_metrics
             ),
             patch(
-                "services.technical_indicator_calculator.TechnicalIndicatorCalculator.a_calculate_indicators",
+                "services.market_data.indicators.TechnicalIndicatorCalculator.a_calculate_indicators",
                 side_effect=mock_calc_indicators,
             ),
         ):
@@ -225,7 +225,7 @@ class TestMarketConditionValidator:
                 validator.market_service, "get_market_metrics", side_effect=mock_get_metrics
             ),
             patch(
-                "services.technical_indicator_calculator.TechnicalIndicatorCalculator.a_calculate_indicators",
+                "services.market_data.indicators.TechnicalIndicatorCalculator.a_calculate_indicators",
                 side_effect=mock_calc_indicators,
             ),
         ):

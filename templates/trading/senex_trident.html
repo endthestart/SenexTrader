@@ -336,13 +336,13 @@
         // Wait for global streamers using dashboard pattern
         function initializeSenexPage() {
             if (window.streamersReady) {
-                console.log('Streamers already ready, initializing Senex page...');
+                window.logStreamInfo('Streamers already ready, initializing Senex page...');
                 setupSenexPage();
             } else {
-                console.log('Waiting for streamers-ready event...');
+                window.logStreamInfo('Waiting for streamers-ready event...');
 
                 window.addEventListener('streamers-ready', function(e) {
-                    console.log('Senex: Streamers ready event received:', e.detail);
+                    window.logStreamInfo('Senex: Streamers ready event received:', e.detail);
                     setupSenexPage();
                 }, { once: true });
 
@@ -362,7 +362,7 @@
                 return;
             }
 
-            console.log('Senex page setup complete, WebSocket connected');
+            window.logStreamInfo('Senex page setup complete, WebSocket connected');
 
             // Load risk budget on page initialization
             loadRiskBudget();
@@ -376,21 +376,21 @@
             // Register message handler for Senex-specific updates
             function senexMessageHandler(data) {
                 if (data.type === 'suggestion_update') {
-                    console.log('📨 Senex: Received suggestion_update:', data);
+                    window.logStreamInfo('📨 Senex: Received suggestion_update:', data);
                     hideLoadingState();
                     hideProgressIndicator();
-                    showStatus('success', '✅ Senex Trident suggestion ready!');
+                    showStatus('success', 'Senex Trident suggestion ready!');
                     displaySuggestion(data.suggestion);
                     loadRiskBudget(true);
                 } else if (data.type === 'error') {
-                    console.log('📨 Senex: Received error:', data);
+                    window.logStreamInfo('📨 Senex: Received error:', data);
                     hideLoadingState();
                     hideProgressIndicator();
                     const errorMsg = data.message || 'Failed to generate suggestion';
                     window.showResultModal('error', 'Suggestion Generation Failed', errorMsg);
                     showStatus('danger', errorMsg);
                 } else if (data.type === 'trade_update') {
-                    console.log('📨 Senex: Received trade_update:', data);
+                    window.logStreamInfo('📨 Senex: Received trade_update:', data);
                     showStatus('info', `Trade ${data.status}: ${data.symbol}`);
                     loadRiskBudget(true);
                 }
@@ -398,7 +398,7 @@
 
             // Add handler to global message broadcasting system
             window.addMessageHandler(senexMessageHandler);
-            console.log('✅ Senex: Message handler registered for suggestion_update events');
+            window.logStreamInfo('Senex: Message handler registered for suggestion_update events');
         }
 
         // Start initialization
@@ -407,7 +407,7 @@
 
     // Global utility functions (must be global for onclick handlers)
     function displaySuggestion(suggestion) {
-        console.log('🎯 Senex: displaySuggestion() called with:', suggestion);
+        window.logStreamInfo('Senex: displaySuggestion() called with:', suggestion);
         const container = document.getElementById('suggestionContainer');
         const content = document.getElementById('suggestionContent');
         const timestamp = document.getElementById('suggestionTimestamp');
@@ -623,7 +623,7 @@
             displayBidAskSpread(suggestion);
         }
         
-        console.log('✅ Senex: Suggestion container displayed');
+        window.logStreamInfo('Senex: Suggestion container displayed');
     }
 
     function displayBidAskSpread(suggestion) {

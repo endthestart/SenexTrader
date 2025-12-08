@@ -1,5 +1,5 @@
 """
-Stream Manager - Real-time market data and order management system.
+Stream Manager - Coordinates market data streaming, cache priming, and order updates.
 
 Architecture Overview:
     GlobalStreamManager (Singleton)
@@ -8,29 +8,29 @@ Architecture Overview:
     └── Provides centralized streaming coordination
 
     UserStreamManager (Per User)
-    ├── DXLinkStreamer: Real-time market data (quotes, greeks)
-    ├── AlertStreamer: Order status updates and fills
-    ├── WebSocket Broadcasting: Updates to connected clients
-    └── Profit Target Creation: Triggered on order fills
+    ├── DXLinkStreamer: Quote, Trade, Summary, and Greeks feeds
+    ├── AlertStreamer: Order status/account updates fan-out
+    ├── WebSocket broadcasting to connected clients
+    └── StreamSubscriptionManager: First-data gating + lifecycle limits
 
 Key Components:
-- GlobalStreamManager: Simple singleton managing all user streams
-- UserStreamManager: Individual user's streaming session with TastyTrade
-- DXLinkStreamer: Market data streaming (quotes, greeks)
-- AlertStreamer: Order and account updates streaming
+- GlobalStreamManager: In-memory singleton that tracks managers, activity, and cleanup
+- UserStreamManager: Owns DXLink/Alert streamers, cache wiring, broadcast helpers
+- StreamSubscriptionManager: Normalizes symbols and exposes pending-data events
+- AlertStreamer integration: Feeds OrderEventProcessor for actionable events
 
 Event Flow:
-1. User connects → GlobalStreamManager creates UserStreamManager
-2. Strategy requests pricing → Stream manager subscribes to symbols
-3. Market data arrives → Broadcast to WebSocket clients
-4. Order fills → AlertStreamer triggers profit target creation
-5. User disconnects → Clean shutdown of streamers and resources
+1. User connects → GlobalStreamManager provisions a UserStreamManager
+2. Strategy requests pricing → Stream manager subscribes and seeds pending events
+3. Market data arrives → Cache updates + WebSocket broadcasts unblock waiters
+4. Order events/fills → AlertStreamer relays to OrderEventProcessor for follow-up
+5. User disconnects/inactive → Timed cleanup closes streamers and frees resources
 
-Production implementation:
-- One streamer per user
-- Multiple WebSocket connections support
-- Comprehensive options data (Quote, Greeks, TheoPrice, etc.)
-- Cache integration for real-time updates
+Production facts:
+- One DXLinkStreamer per user, shared across multiple web clients
+- Redis/Enhanced cache stores quotes to reduce downstream load
+- Subscription limit enforcement + stale data cleanup
+- Inactivity and grace-period cleanup to prevent orphaned streamers
 """
 
 import asyncio
@@ -39,17 +39,18 @@ from datetime import UTC, datetime
 from typing import Optional
 
 from django.core.cache import cache
-from django.utils import timezone as dj_timezone
 
 from channels.layers import get_channel_layer
 from tastytrade import DXLinkStreamer
 from tastytrade.dxfeed import Greeks, Quote, Summary, Trade
+from websockets.exceptions import ConnectionClosedOK
 
 from accounts.models import TradingAccount
 from services.core.cache import CacheManager
 from services.core.logging import get_logger
 from services.sdk.instruments import parse_occ_symbol
 from streaming.constants import (
+    AUTOMATION_READY_POLL_INTERVAL,
     AUTOMATION_TIMEOUT,
     CACHE_WAIT_TIMEOUT,
     CANCELLATION_TIMEOUT,
@@ -61,6 +62,7 @@ from streaming.constants import (
     METRICS_UPDATE_INTERVAL,
     QUOTE_CACHE_TTL,
     STREAMER_CLOSE_TIMEOUT,
+    STREAMING_CLEANUP_GRACE_PERIOD,
     STREAMING_DATA_WAIT_TIMEOUT,
     STREAMING_TASK_TIMEOUT,
     SUMMARY_CACHE_TTL,
@@ -71,6 +73,11 @@ from trading.models import HistoricalGreeks
 
 from .order_event_processor import OrderEventProcessor
 from .position_metrics_calculator import PositionMetricsCalculator
+from .quote_cache_service import (
+    build_quote_payload,
+    build_summary_payload,
+    build_trade_payload,
+)
 from .stream_helpers import (
     extract_leg_symbols,
     format_timestamp,
@@ -105,19 +112,26 @@ class UserStreamManager:
         self.order_processor = OrderEventProcessor(user_id, self._broadcast)
         self.metrics_calculator = PositionMetricsCalculator(user_id)
         self.subscription_manager = StreamSubscriptionManager(user_id)
+        self._greeks_persist_semaphore = asyncio.Semaphore(25)
+
+    def _reset_data_flags(self) -> None:
+        """Clear cached streaming state so readiness reflects fresh data."""
+        self.has_received_data = False
+        self.last_quote_received = None
 
     async def start_streaming(
         self, symbols: list[str], subscribe_to_account: bool = False, subscribe_to_pnl: bool = False
     ):
         """Ensures the streaming process is running for the user - now idempotent."""
         logger.info(
-            f"User {self.user_id}: 🔧 DEBUG - start_streaming called, current state={self.connection_state}, is_streaming={self.is_streaming}"
+            f"User {self.user_id}: start_streaming called, "
+            f"state={self.connection_state}, is_streaming={self.is_streaming}"
         )
         async with self.lock:
             # CRITICAL FIX: Check both streaming AND connecting states
             if self.is_streaming or self.connection_state == "connecting":
                 logger.info(
-                    f"User {self.user_id}: 🔧 DEBUG - Stream already active or connecting "
+                    f"User {self.user_id}: Stream already active or connecting "
                     f"(state={self.connection_state}), skipping duplicate start"
                 )
                 if self.is_streaming:
@@ -129,6 +143,7 @@ class UserStreamManager:
             logger.info(
                 f"User {self.user_id}: Starting streaming service (entering connecting state)"
             )
+            self._reset_data_flags()
 
             from django.contrib.auth import get_user_model
 
@@ -172,7 +187,7 @@ class UserStreamManager:
     async def stop_streaming(self):
         """Stops the streaming service for the user."""
         logger.info(
-            f"User {self.user_id}: 🔧 DEBUG - stop_streaming called, state={self.connection_state}"
+            f"User {self.user_id}: stop_streaming called, state={self.connection_state}"
         )
         streaming_task = None
         metrics_task = None
@@ -182,14 +197,15 @@ class UserStreamManager:
         async with self.lock:
             # Early exit if nothing to stop
             if self.connection_state == "disconnected" and not self.streaming_task:
-                logger.info(f"User {self.user_id}: 🔧 DEBUG - Nothing to stop, early exit")
+                logger.info(f"User {self.user_id}: Nothing to stop, early exit")
                 return
 
-            logger.info(f"User {self.user_id}: 🔧 DEBUG - Proceeding with stop, collecting tasks")
+            logger.info(f"User {self.user_id}: Proceeding with stop, collecting tasks")
 
             # Mark as disconnected first
             self.is_streaming = False
             self.connection_state = "disconnected"
+            self._reset_data_flags()
 
             # Collect all resources to clean
             streaming_task = self.streaming_task
@@ -260,7 +276,7 @@ class UserStreamManager:
         # Give streaming task extra time after closing streamers - listeners should exit naturally
         await _await_task(streaming_task, "streaming task", timeout=STREAMING_TASK_TIMEOUT)
 
-        logger.info(f"User {self.user_id}: ✅ Streaming service stopped successfully")
+        logger.info(f"User {self.user_id}: Streaming service stopped successfully")
 
     async def ensure_streaming_for_automation(self, symbols: list[str]) -> bool:
         """
@@ -286,7 +302,7 @@ class UserStreamManager:
                 should_start = True
 
         if should_start:
-            logger.info(f"User {self.user_id}: 🤖 Starting streamers for automated task")
+            logger.info(f"User {self.user_id}: Starting streamers for automated task")
 
             try:
                 # Start streaming with AlertStreamer (will timeout internally after 60s)
@@ -296,12 +312,12 @@ class UserStreamManager:
                 )  # Allows AlertStreamer connection + buffer
 
             except TimeoutError:
-                logger.error(f"User {self.user_id}: ❌ Streaming startup timeout for automation")
+                logger.error(f"User {self.user_id}: Streaming startup timeout for automation")
                 async with self.lock:
                     self.is_streaming = False
                 return False
             except Exception as e:
-                logger.error(f"User {self.user_id}: ❌ Failed to start streaming: {e}")
+                logger.error(f"User {self.user_id}: Failed to start streaming: {e}")
                 async with self.lock:
                     self.is_streaming = False
                 return False
@@ -324,15 +340,15 @@ class UserStreamManager:
                         break
 
                 if all_symbols_ready:
-                    logger.info(f"User {self.user_id}: ✅ Streaming ready with data after {i+1}s")
+                    logger.info(f"User {self.user_id}: Streaming ready with data after {i+1}s")
                     # Ensure all symbols are subscribed
                     await self.subscribe_to_new_symbols(symbols)
                     return True
 
-            await asyncio.sleep(1)
+            await asyncio.sleep(AUTOMATION_READY_POLL_INTERVAL)
 
         logger.warning(
-            f"User {self.user_id}: ⚠️ Timeout waiting for streaming data after {max_wait}s"
+            f"User {self.user_id}: Timeout waiting for streaming data after {max_wait}s"
         )
         return False
 
@@ -366,20 +382,18 @@ class UserStreamManager:
 
         Supports multiple strategies via strategy dispatch pattern.
         """
-        logger.info(f"User {self.user_id}: 🎯 SUGGESTION REQUEST STARTED - Processing context")
+        logger.info(f"User {self.user_id}: Suggestion request started - processing context")
 
-        # Check if this is an automated request
         is_automated = context.get("is_automated", False)
 
         occ_bundle = context.get("occ_bundle")
         if not occ_bundle:
-            logger.warning(f"User {self.user_id}: ❌ No occ_bundle in context")
+            logger.warning(f"User {self.user_id}: No occ_bundle in context")
             return None
 
-        # Extract leg symbols and subscribe
         leg_symbols = extract_leg_symbols(occ_bundle)
         logger.info(
-            f"User {self.user_id}: 📊 Extracted {len(leg_symbols)} leg symbols: {leg_symbols}"
+            f"User {self.user_id}: Extracted {len(leg_symbols)} leg symbols: {leg_symbols}"
         )
 
         await self.subscribe_to_new_symbols(leg_symbols)
@@ -434,7 +448,7 @@ class UserStreamManager:
                 )
             return None
 
-        logger.info(f"User {self.user_id}: 🔧 Using strategy: {strategy_type}")
+        logger.info(f"User {self.user_id}: Using strategy: {strategy_type}")
 
         # Calculate suggestion with pricing
         suggestion = await strategy.a_calculate_suggestion_from_cached_data(context)
@@ -488,7 +502,7 @@ class UserStreamManager:
                 await self._broadcast("suggestion_update", {"suggestion": suggestion_dict})
             else:
                 logger.info(
-                    f"User {self.user_id}: 🤖 Skipping WebSocket broadcast for automated suggestion"
+                    f"User {self.user_id}: Skipping WebSocket broadcast for automated suggestion"
                 )
         else:
             logger.warning(f"User {self.user_id}: Failed to generate suggestion from cached data.")
@@ -551,60 +565,70 @@ class UserStreamManager:
                             data_time = data_time.replace(tzinfo=UTC)
                         age_seconds = (django_timezone.now() - data_time).total_seconds()
                         if age_seconds <= DEFAULT_MAX_AGE:
-                            # Data is fresh, no need to wait
                             needs_fresh_data = False
                             logger.debug(
-                                f"User {self.user_id}: ✅ Symbol {symbol} has fresh data "
+                                f"User {self.user_id}: Symbol {symbol} has fresh data "
                                 f"(age={age_seconds:.1f}s)"
                             )
 
-            # If we need fresh data, check for pending event or create one
             if needs_fresh_data:
                 event = self.subscription_manager.get_pending_event(streamer_symbol)
-                if not event:
-                    # No pending event - create one to wait for fresh data
-                    # This will be signaled when fresh data arrives
-                    import asyncio
-
-                    event = asyncio.Event()
-                    self.subscription_manager.pending_symbol_events[streamer_symbol] = event
+                if event:
+                    pending_events.append(event)
+                    pending_symbol_names.append(streamer_symbol)
                     logger.debug(
-                        f"User {self.user_id}: ⏳ Symbol {streamer_symbol} data is stale or missing, "
-                        f"waiting for fresh data"
+                        f"User {self.user_id}: Symbol {streamer_symbol} pending, will wait for data"
                     )
-                pending_events.append(event)
-                pending_symbol_names.append(streamer_symbol)
+                else:
+                    quote_data_recheck = options_cache.get_quote_payload(symbol)
+                    if (
+                        quote_data_recheck
+                        and quote_data_recheck.get("bid")
+                        and quote_data_recheck.get("ask")
+                    ):
+                        logger.debug(
+                            f"User {self.user_id}: Symbol {symbol} data arrived "
+                            f"(race condition avoided)"
+                        )
+                        needs_fresh_data = False
+                    else:
+                        event = asyncio.Event()
+                        self.subscription_manager.pending_symbol_events[streamer_symbol] = event
+                        pending_events.append(event)
+                        pending_symbol_names.append(streamer_symbol)
+                        logger.debug(
+                            f"User {self.user_id}: Symbol {streamer_symbol} data missing, "
+                            f"created new event"
+                        )
 
         # Await events for symbols that need first data
         if pending_events:
             logger.info(
-                f"User {self.user_id}: ⏳ Awaiting first data for "
+                f"User {self.user_id}: Awaiting first data for "
                 f"{len(pending_events)} new symbols"
             )
 
             try:
-                # Wait for ALL pending symbols to receive first quote
                 await asyncio.wait_for(
                     asyncio.gather(*[event.wait() for event in pending_events]),
-                    timeout=timeout,  # Safety timeout
+                    timeout=timeout,
                 )
                 logger.info(
-                    f"User {self.user_id}: ✅ All {len(pending_events)} symbols "
+                    f"User {self.user_id}: All {len(pending_events)} symbols "
                     f"received first data"
                 )
             except TimeoutError:
                 logger.warning(
-                    f"User {self.user_id}: ⏱️ Timeout waiting for symbols: "
+                    f"User {self.user_id}: Timeout waiting for symbols: "
                     f"{pending_symbol_names}"
                 )
                 return False
             finally:
-                # Cleanup: Remove events for symbols that were pending
                 for symbol in pending_symbol_names:
                     self.subscription_manager.remove_pending_event(symbol)
         else:
             logger.info(
-                f"User {self.user_id}: ✅ All symbols already have data "
+                f"User {self.user_id}: All symbols already have data "
                 f"(no pending subscriptions)"
             )
 
@@ -671,13 +695,13 @@ class UserStreamManager:
 
         if invalid_symbols:
             logger.warning(
-                f"User {self.user_id}: ⚠️ {len(invalid_symbols)} symbols "
+                f"User {self.user_id}: {len(invalid_symbols)} symbols "
                 f"missing valid fresh bid/ask: {invalid_symbols}"
             )
             return False
 
         logger.info(
-            f"User {self.user_id}: ✅ All {len(symbols)} symbols validated with fresh bid/ask"
+            f"User {self.user_id}: All {len(symbols)} symbols validated with fresh bid/ask"
         )
         return True
 
@@ -733,18 +757,18 @@ class UserStreamManager:
                             self.is_streaming = True
                             self.connection_state = "connected"
                             logger.info(
-                                f"User {self.user_id}: ✅ DXLinkStreamer connected "
+                                f"User {self.user_id}: DXLinkStreamer connected "
                                 f"successfully. Starting listeners."
                             )
 
-                            logger.info(
-                                f"User {self.user_id}: 🔍 DEBUG - About to call subscribe_to_new_symbols "
-                                f"with symbols: {symbols}, is_streaming={self.is_streaming}, "
+                            logger.debug(
+                                f"User {self.user_id}: About to subscribe to symbols: {symbols}, "
+                                f"is_streaming={self.is_streaming}, "
                                 f"streamer={self.context.data_streamer is not None}"
                             )
                             await self.subscribe_to_new_symbols(symbols)
-                            logger.info(
-                                f"User {self.user_id}: 🔍 DEBUG - Finished subscribe_to_new_symbols call"
+                            logger.debug(
+                                f"User {self.user_id}: Finished subscribe_to_new_symbols call"
                             )
 
                             if subscribe_to_account or subscribe_to_pnl:
@@ -754,14 +778,14 @@ class UserStreamManager:
                                 )
 
                             logger.info(
-                                f"User {self.user_id}: ✅ Connection setup complete, "
+                                f"User {self.user_id}: Connection setup complete, "
                                 f"starting indefinite streaming..."
                             )
 
                     except TimeoutError:
                         self.connection_state = "error"
                         logger.error(
-                            f"User {self.user_id}: ❌ DXLink connection timeout after "
+                            f"User {self.user_id}: DXLink connection timeout after "
                             f"{DXLINK_CONNECTION_TIMEOUT}s. This often indicates an invalid session token "
                             f"or a network issue."
                         )
@@ -782,8 +806,35 @@ class UserStreamManager:
                         f"User {self.user_id}: 🎧 Starting {len(listeners)} listeners "
                         f"for indefinite streaming"
                     )
-                    await asyncio.gather(*listeners, return_exceptions=True)
+                    results = await asyncio.gather(*listeners, return_exceptions=True)
 
+                    first_exception: BaseException | None = None
+                    for result in results:
+                        if isinstance(result, BaseException):
+                            if isinstance(result, asyncio.CancelledError):
+                                logger.info(f"User {self.user_id}: Listener cancelled: {result}")
+                                continue
+
+                            logger.error(
+                                f"User {self.user_id}: Listener error: {result}",
+                                exc_info=(
+                                    type(result),
+                                    result,
+                                    result.__traceback__,
+                                ),
+                            )
+                            if not first_exception:
+                                first_exception = result
+
+                    if first_exception:
+                        self.connection_state = "error"
+                        raise first_exception
+
+            except ConnectionClosedOK:
+                # Normal websocket closure - user disconnected or streamer closed cleanly
+                logger.info(f"User {self.user_id}: DXLink connection closed normally")
+                self.connection_state = "disconnected"
+                self.is_streaming = False
             except Exception as e:
                 # Check if OAuth related error FIRST
                 if await self._is_oauth_error(e):
@@ -791,12 +842,15 @@ class UserStreamManager:
                     raise  # Re-raise to exit the streamer context
                 self.connection_state = "error"
                 logger.error(
-                    f"User {self.user_id}: ❌ An unexpected error occurred during "
+                    f"User {self.user_id}: An unexpected error occurred during "
                     f"DXLink streaming: {e}",
                     exc_info=True,
                 )
                 self.is_streaming = False
 
+        except ConnectionClosedOK:
+            # Normal websocket closure at outer level
+            logger.info(f"User {self.user_id}: DXLink connection closed normally")
         except Exception as e:
             # Already handled OAuth errors above, this catches other exceptions
             if not await self._is_oauth_error(e):
@@ -809,6 +863,7 @@ class UserStreamManager:
             # Clean up our connection state
             self.connection_state = "disconnected"
             self.is_streaming = False
+            self._reset_data_flags()
 
             self.context.data_streamer = None
             if self.context.account_streamer:
@@ -820,197 +875,103 @@ class UserStreamManager:
                     self.context.account_streamer = None
             logger.info(f"User {self.user_id}: Streaming stopped.")
 
-    async def _listen_quotes(self):
-        """Listens for quote events and puts them on the cache."""
+    async def _listen_stream(self, event_type, handler, label: str):
         streamer = self.context.data_streamer
         if not streamer:
             return
 
-        async for quote in streamer.listen(Quote):
+        async for event in streamer.listen(event_type):
             try:
-                # Mark that we've received data
-                if not self.has_received_data:
-                    self.has_received_data = True
-                    from django.utils import timezone
-
-                    self.last_quote_received = timezone.now()
-
-                # Write directly to main quote cache (not dxfeed namespace)
-                key = CacheManager.quote(quote.event_symbol)
-                # Convert to a dict for caching
-                bid_price = safe_float(quote.bid_price)
-                ask_price = safe_float(quote.ask_price)
-                # Calculate midpoint as proxy for last price (quotes don't have last price)
-                last_price = None
-                if bid_price is not None and ask_price is not None:
-                    last_price = (bid_price + ask_price) / 2.0
-
-                # Get existing quote data to preserve previous_close and other fields
-                existing_quote = cache.get(key) or {}
-                previous_close = existing_quote.get("previous_close")
-
-                # Merge new quote data with existing data to preserve all fields
-                existing_quote.update(
-                    {
-                        "symbol": quote.event_symbol,
-                        "bid": bid_price,
-                        "ask": ask_price,
-                        "last": last_price,  # May be overridden by trade data later
-                        "updated_at": format_timestamp(quote.event_time),
-                        "source": "consolidated_streaming",
-                    }
-                )
-
-                # Calculate daily change if we have both last and previous_close
-                if last_price and previous_close:
-                    daily_change = float(last_price) - float(previous_close)
-                    daily_change_percent = (daily_change / float(previous_close)) * 100
-                    existing_quote.update(
-                        {"change": daily_change, "change_percent": round(daily_change_percent, 2)}
-                    )
-
-                await enhanced_cache.set(key, existing_quote, ttl=QUOTE_CACHE_TTL)
-
-                # Signal any pending subscriptions waiting for first data
-                self.subscription_manager.signal_data_received(quote.event_symbol)
-
-                # Log quote reception with special attention to option symbols
-                if is_option_symbol(quote.event_symbol):  # Option symbol (OCC or streamer format)
-                    logger.debug(
-                        f"User {self.user_id}: Option quote: {quote.event_symbol} "
-                        f"bid={bid_price}, ask={ask_price}"
-                    )
-
-                # Broadcast complete quote data including previous_close
-                await self._broadcast("quote_update", existing_quote)
+                await handler(event)
+            except asyncio.CancelledError:
+                # Propagate cancellation so stop_streaming() can unwind cleanly
+                raise
             except Exception as e:
-                logger.error(f"Error processing quote: {e}", exc_info=True)
+                logger.error(f"Error processing {label}: {e}", exc_info=True)
+
+    async def _listen_quotes(self):
+        await self._listen_stream(Quote, self._handle_quote_event, "quote")
 
     async def _listen_trades(self):
-        """Listen for Trade events with actual last traded prices"""
-        streamer = self.context.data_streamer
-        if not streamer:
-            return
-
-        async for trade in streamer.listen(Trade):
-            try:
-                # Merge trade data into main quote cache
-                quote_key = CacheManager.quote(trade.event_symbol)
-                existing_quote = cache.get(quote_key) or {}
-
-                # Update existing quote with trade information
-                existing_quote.update(
-                    {
-                        "symbol": trade.event_symbol,
-                        "last": safe_float(
-                            trade.price
-                        ),  # Actual last traded price (overrides calculated midpoint)
-                        "volume": trade.day_volume,
-                        "trade_change": safe_float(trade.change),
-                        "trade_size": trade.size,
-                        "updated_at": format_timestamp(trade.time),
-                    }
-                )
-
-                await enhanced_cache.set(quote_key, existing_quote, ttl=QUOTE_CACHE_TTL)
-
-                # Signal any pending subscriptions waiting for first data
-                self.subscription_manager.signal_data_received(trade.event_symbol)
-
-                # Don't broadcast trade updates as quote updates to avoid duplicates
-                # The quote listener already handles quote updates
-            except Exception as e:
-                logger.error(f"Error processing trade: {e}", exc_info=True)
+        await self._listen_stream(Trade, self._handle_trade_event, "trade")
 
     async def _listen_summary(self):
-        """Listen for Summary events with previous day close"""
-        streamer = self.context.data_streamer
-        if not streamer:
-            return
-
-        async for summary in streamer.listen(Summary):
-            try:
-                # Merge summary data into main quote cache
-                quote_key = CacheManager.quote(summary.event_symbol)
-                existing_quote = cache.get(quote_key) or {}
-
-                # Update existing quote with summary information
-                previous_close = safe_float(summary.prev_day_close_price)
-                existing_quote.update(
-                    {
-                        "symbol": summary.event_symbol,
-                        "previous_close": previous_close,
-                        "day_open": safe_float(summary.day_open_price),
-                        "day_high": safe_float(summary.day_high_price),
-                        "day_low": safe_float(summary.day_low_price),
-                        "updated_at": dj_timezone.now().isoformat(),
-                    }
-                )
-
-                # Calculate daily change if we have both last price and previous close
-                if existing_quote.get("last") and previous_close:
-                    last_price = float(existing_quote["last"])
-                    daily_change = last_price - float(previous_close)
-                    daily_change_percent = (daily_change / float(previous_close)) * 100
-                    existing_quote.update(
-                        {"change": daily_change, "change_percent": round(daily_change_percent, 2)}
-                    )
-
-                await enhanced_cache.set(quote_key, existing_quote, ttl=SUMMARY_CACHE_TTL)
-                # Broadcast summary update
-                await self._broadcast(
-                    "summary_update",
-                    {"symbol": summary.event_symbol, "prev_day_close": previous_close},
-                )
-
-            except Exception as e:
-                logger.error(f"Error processing summary: {e}", exc_info=True)
+        await self._listen_stream(Summary, self._handle_summary_event, "summary")
 
     async def _listen_greeks(self):
-        """Listen for Greeks events for option pricing data"""
-        streamer = self.context.data_streamer
-        if not streamer:
-            return
+        await self._listen_stream(Greeks, self._handle_greeks_event, "greeks")
 
-        async for greeks in streamer.listen(Greeks):
-            try:
-                # Use separate Greeks cache key to avoid overwriting real quotes
-                key = CacheManager.dxfeed_greeks(greeks.event_symbol)
+    async def _handle_quote_event(self, quote):
+        if not self.has_received_data:
+            self.has_received_data = True
+            from django.utils import timezone
 
-                # Greeks provide theoretical pricing data for options
-                theoretical_price = safe_float(greeks.price)
-                delta = safe_float(greeks.delta)
-                gamma = safe_float(greeks.gamma)
-                theta = safe_float(greeks.theta)
-                vega = safe_float(greeks.vega)
-                rho = safe_float(greeks.rho)
+            self.last_quote_received = timezone.now()
 
-                # Store ONLY Greeks values - NO fake bid/ask pricing
-                data = {
-                    "symbol": greeks.event_symbol,
-                    # Keep for reference but don't use for bid/ask
-                    "theoretical_price": theoretical_price,
-                    "delta": delta,
-                    "gamma": gamma,
-                    "theta": theta,
-                    "vega": vega,
-                    "rho": rho,
-                    "updated_at": format_timestamp(greeks.event_time),
-                }
+        key = CacheManager.quote(quote.event_symbol)
+        existing_quote = cache.get(key) or {}
+        payload = build_quote_payload(quote, existing_quote)
 
-                await enhanced_cache.set(key, data, ttl=GREEKS_CACHE_TTL)
-                logger.debug(
-                    f"User {self.user_id}: Greeks: {greeks.event_symbol} "
-                    f"delta={delta}, gamma={gamma}, theo={theoretical_price}"
-                )
+        await enhanced_cache.set(key, payload, ttl=QUOTE_CACHE_TTL)
+        self.subscription_manager.signal_data_received(quote.event_symbol)
 
-                # NEW: Persist to database (fire-and-forget, non-blocking)
-                asyncio.create_task(self._persist_greeks(greeks))
+        if is_option_symbol(quote.event_symbol):
+            bid_price = payload.get("bid")
+            ask_price = payload.get("ask")
+            logger.debug(
+                f"User {self.user_id}: Option quote: {quote.event_symbol} "
+                f"bid={bid_price}, ask={ask_price}"
+            )
 
-                # Don't broadcast greeks updates to avoid UI spam
-                # The suggestion system will get this from cache
-            except Exception as e:
-                logger.error(f"Error processing greeks: {e}", exc_info=True)
+        await self._broadcast("quote_update", payload)
+
+    async def _handle_trade_event(self, trade):
+        quote_key = CacheManager.quote(trade.event_symbol)
+        existing_quote = cache.get(quote_key) or {}
+        payload = build_trade_payload(trade, existing_quote)
+
+        await enhanced_cache.set(quote_key, payload, ttl=QUOTE_CACHE_TTL)
+        self.subscription_manager.signal_data_received(trade.event_symbol)
+
+    async def _handle_summary_event(self, summary):
+        quote_key = CacheManager.quote(summary.event_symbol)
+        existing_quote = cache.get(quote_key) or {}
+        payload = build_summary_payload(summary, existing_quote)
+
+        await enhanced_cache.set(quote_key, payload, ttl=SUMMARY_CACHE_TTL)
+        await self._broadcast(
+            "summary_update",
+            {"symbol": summary.event_symbol, "prev_day_close": payload.get("previous_close")},
+        )
+
+    async def _handle_greeks_event(self, greeks):
+        key = CacheManager.dxfeed_greeks(greeks.event_symbol)
+        data = {
+            "symbol": greeks.event_symbol,
+            "theoretical_price": safe_float(greeks.price),
+            "delta": safe_float(greeks.delta),
+            "gamma": safe_float(greeks.gamma),
+            "theta": safe_float(greeks.theta),
+            "vega": safe_float(greeks.vega),
+            "rho": safe_float(greeks.rho),
+            "updated_at": format_timestamp(greeks.event_time),
+        }
+
+        await enhanced_cache.set(key, data, ttl=GREEKS_CACHE_TTL)
+        logger.debug(
+            f"User {self.user_id}: Greeks: {greeks.event_symbol} "
+            f"delta={data['delta']}, gamma={data['gamma']}, theo={data['theoretical_price']}"
+        )
+
+        asyncio.create_task(self._persist_greeks_limited(greeks))
+
+    async def _persist_greeks_limited(self, greeks_event):
+        """Throttle persistence tasks so they cannot exhaust the event loop."""
+        await self._greeks_persist_semaphore.acquire()
+        try:
+            await self._persist_greeks(greeks_event)
+        finally:
+            self._greeks_persist_semaphore.release()
 
     async def _persist_greeks(self, greeks_event):
         """Persist Greeks data to HistoricalGreeks model (fire-and-forget)."""
@@ -1218,7 +1179,7 @@ class GlobalStreamManager:
     # Activity tracking settings (from streaming.constants)
     INACTIVITY_TIMEOUT_SECONDS = INACTIVITY_TIMEOUT_SECONDS
     CLEANUP_TIMEOUT_SECONDS = CLEANUP_TIMEOUT_SECONDS
-    CLEANUP_GRACE_PERIOD = 300  # 5 minutes grace period before cleanup
+    CLEANUP_GRACE_PERIOD = STREAMING_CLEANUP_GRACE_PERIOD
 
     def __new__(cls):
         if cls._instance is None:
@@ -1282,30 +1243,31 @@ class GlobalStreamManager:
             # Wait for grace period
             await asyncio.sleep(cls.CLEANUP_GRACE_PERIOD)
 
+            manager_to_cleanup: UserStreamManager | None = None
+
             async with cls._lock:
-                # Check if user reconnected (ref_count > 0)
-                if user_id in cls._user_managers:
-                    manager = cls._user_managers[user_id]
-                    if manager.context.reference_count > 0:
-                        logger.info(
-                            f"User {user_id}: Cleanup cancelled, "
-                            f"user reconnected (ref_count="
-                            f"{manager.context.reference_count})"
-                        )
-                        return
+                manager = cls._user_managers.get(user_id)
+                if not manager:
+                    cls._cleanup_tasks.pop(user_id, None)
+                    return
 
-                    # Proceed with cleanup
-                    logger.info(f"User {user_id}: Performing cleanup after " f"grace period")
+                if manager.context.reference_count > 0:
+                    logger.info(
+                        f"User {user_id}: Cleanup cancelled, user reconnected (ref_count="
+                        f"{manager.context.reference_count})"
+                    )
+                    cls._cleanup_tasks.pop(user_id, None)
+                    return
 
-                    # Stop streaming
-                    await manager.stop_streaming()
+                manager_to_cleanup = manager
 
-                    # Remove from registry
+            logger.info(f"User {user_id}: Performing cleanup after grace period")
+            await manager_to_cleanup.stop_streaming()
+
+            async with cls._lock:
+                if cls._user_managers.get(user_id) is manager_to_cleanup:
                     del cls._user_managers[user_id]
-
-                # Remove cleanup task
-                if user_id in cls._cleanup_tasks:
-                    del cls._cleanup_tasks[user_id]
+                cls._cleanup_tasks.pop(user_id, None)
 
         except asyncio.CancelledError:
             logger.info(f"User {user_id}: Cleanup cancelled")

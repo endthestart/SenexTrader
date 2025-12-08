@@ -14,7 +14,6 @@ class TradingDashboard {
      * Initialize dashboard with risk budget loading
      */
     init() {
-        console.log('Trading Dashboard initialized');
         this.loadRiskBudget();
         this.startPeriodicRefresh();
         this.bindEvents();
@@ -118,8 +117,6 @@ class TradingDashboard {
             strategyPowerEl.textContent = `${window.formatCurrency(data.strategy_power)}`;
             strategyPowerEl.className = 'text-info mb-1';
         }
-
-        console.log('Risk budget updated:', data);
     }
 
     /**
@@ -142,12 +139,6 @@ class TradingDashboard {
         window.updateElement('buyingPower', 'Error', 'text-danger mb-1');
         console.error('Risk budget load error:', error);
     }
-
-
-
-
-
-
 
     /**
      * Start periodic refresh of risk data

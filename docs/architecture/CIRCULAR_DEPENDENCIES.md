@@ -94,7 +94,7 @@ Circular dependencies occur when two or more modules import each other, creating
 **services → trading**:
 - `services/senex_trident_strategy.py` imports `trading.models.StrategyConfiguration, TradingSuggestion`
 - `services/position_sync.py` imports `trading.models.Position`
-- `services/order_history_service.py` imports `trading.models.CachedOrder, CachedOrderChain, Position`
+- `services/order_history_service.py` imports `trading.models.TastyTradeOrderHistory, CachedOrderChain, Position`
 - `services/order_cancellation_service.py` imports `trading.models.Trade`
 - `services/option_chain_service.py` imports `trading.models.Position`
 - `services/strategies/base.py` imports `trading.models.Position`
@@ -524,10 +524,10 @@ def test_no_circular_imports():
 **File**: `/path/to/senextrader/static/css/trading.css`
 
 **Findings**:
-1. ✅ **File exists** with 344 lines of comprehensive trading interface styles
-2. ❌ **No references found** in any template file
-3. ❌ **Not linked** in `templates/trading/trading.html`
-4. ❌ **Not linked** in `templates/base/base.html`
+1. **File exists** with 344 lines of comprehensive trading interface styles
+2. **No references found** in any template file
+3. **Not linked** in `templates/trading/trading.html`
+4. **Not linked** in `templates/base/base.html`
 
 **File Contents Analysis**:
 - Connection status indicators
@@ -607,7 +607,7 @@ def streamer(self) -> StreamerProtocol | None:
 
 **Findings**:
 
-1. ❌ **Property never used** - No calls to `StrategySelector.streamer` in codebase:
+1. **Property never used** - No calls to `StrategySelector.streamer` in codebase:
    ```bash
    $ grep -r "StrategySelector.streamer" .
    # No results
@@ -616,18 +616,18 @@ def streamer(self) -> StreamerProtocol | None:
    # Only found in streaming_utils.py (different class)
    ```
 
-2. ❌ **Incomplete implementation** - Always returns `None`:
+2. **Incomplete implementation** - Always returns `None`:
    - Comment says "Placeholder - actual usage would be async"
    - Import happens but result discarded
    - Cannot actually use GlobalStreamManager even if imported
 
-3. ✅ **Has alternative solution** - `_streamer` is injected via constructor:
+3. **Has alternative solution** - `_streamer` is injected via constructor:
    ```python
    def __init__(self, user: AbstractBaseUser, streamer: StreamerProtocol | None = None):
        self._streamer = streamer  # Injected dependency
    ```
 
-4. ✅ **Runtime imports used elsewhere** - Strategy selector imports `GlobalStreamManager` inside methods (lines 209, 330):
+4. **Runtime imports used elsewhere** - Strategy selector imports `GlobalStreamManager` inside methods (lines 209, 330):
    ```python
    # In _generate_auto() and _generate_forced()
    from streaming.services.stream_manager import GlobalStreamManager
@@ -688,8 +688,8 @@ class StrategySelector:
 ### Recommendations Priority
 
 **HIGH PRIORITY**:
-1. ✅ Delete `static/css/trading.css` (unused file)
-2. ✅ Remove `StrategySelector.streamer` property (dead code)
+1. Delete `static/css/trading.css` (unused file)
+2. Remove `StrategySelector.streamer` property (dead code)
 3. Add circular dependency checks to CI/CD pipeline
 
 **MEDIUM PRIORITY**:

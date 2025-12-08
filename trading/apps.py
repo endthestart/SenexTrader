@@ -46,7 +46,7 @@ class TradingConfig(AppConfig):
             from trading.tasks import ensure_historical_data
 
             ensure_historical_data.delay()
-            logger.info("✓ Historical data backfill task queued for async execution")
+            logger.info("[OK] Historical data backfill task queued for async execution")
 
         except Exception as e:
             logger.debug(f"Could not queue historical data task: {e}")

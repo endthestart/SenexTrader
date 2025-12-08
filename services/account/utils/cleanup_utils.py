@@ -18,7 +18,7 @@ logger = get_logger(__name__)
 TModel = TypeVar("TModel", bound=Model)
 
 
-def cleanup_old_records(
+def cleanup_old_records[TModel: Model](
     model: type[TModel],
     days: int,
     statuses: list[str],

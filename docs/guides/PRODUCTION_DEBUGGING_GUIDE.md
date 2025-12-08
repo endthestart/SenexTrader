@@ -964,28 +964,28 @@ systemctl --user -M senex@ restart celery-worker.service
 
 ### 1. Always Use Journalctl for Logs
 
-✅ **Do**: `journalctl CONTAINER_NAME=web`
-❌ **Don't**: `podman logs web` (often empty)
+**Do**: `journalctl CONTAINER_NAME=web`
+**Don't**: `podman logs web` (often empty)
 
 ### 2. Prefer Systemd for Service Management
 
-✅ **Do**: `systemctl --user -M senex@ restart web.service`
-❌ **Don't**: `podman restart web` (skips dependency handling)
+**Do**: `systemctl --user -M senex@ restart web.service`
+**Don't**: `podman restart web` (skips dependency handling)
 
 ### 3. Use Heredocs for Django Shell
 
-✅ **Do**: `podman exec -i web python manage.py shell` with heredoc
-❌ **Don't**: `podman exec web python -c "..."` (quoting hell)
+**Do**: `podman exec -i web python manage.py shell` with heredoc
+**Don't**: `podman exec web python -c "..."` (quoting hell)
 
 ### 4. Check Logs by Container Name, Not Service
 
-✅ **Do**: `journalctl CONTAINER_NAME=celery_worker`
-❌ **Don't**: `journalctl -u celery-worker.service` (may not work)
+**Do**: `journalctl CONTAINER_NAME=celery_worker`
+**Don't**: `journalctl -u celery-worker.service` (may not work)
 
 ### 5. Deploy Properly, Hot-Patch Only in Emergencies
 
-✅ **Do**: Build image, run Ansible deployment
-❌ **Don't**: Copy files directly into containers (not persistent)
+**Do**: Build image, run Ansible deployment
+**Don't**: Copy files directly into containers (not persistent)
 
 ---
 

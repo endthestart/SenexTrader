@@ -30,12 +30,6 @@ if TYPE_CHECKING:
 
 logger = get_logger(__name__)
 
-
-# ============================================================================
-# STRATEGY NAMING AND ORDERING
-# ============================================================================
-
-# TastyTrade-compliant strategy display names (matches JavaScript STRATEGY_NAMES)
 STRATEGY_DISPLAY_NAMES = {
     "short_put_vertical": "Short Put Vertical",
     "short_call_vertical": "Short Call Vertical",
@@ -106,11 +100,6 @@ def get_ordered_strategies(strategy_ids: list[str]) -> list[tuple[str, str]]:
     ]
 
     return ordered + remaining
-
-
-# ============================================================================
-# DASHBOARD VIEWS
-# ============================================================================
 
 
 @login_required
@@ -479,7 +468,7 @@ def orders_view(request: HttpRequest) -> HttpResponse:
     """
     Display all active application-managed orders.
     Shows orders that are pending, submitted, or working.
-    Includes both opening/closing orders from Trade table and profit target orders from CachedOrder.
+    Includes both opening/closing orders from Trade table and profit target orders from TastyTradeOrderHistory.
     Enriches each order with parsed leg details and DTE calculations.
     """
     # Check if user has a configured primary trading account
@@ -491,7 +480,7 @@ def orders_view(request: HttpRequest) -> HttpResponse:
     from datetime import date
 
     from services.sdk.instruments import parse_occ_symbol
-    from trading.models import CachedOrder, Position, Trade
+    from trading.models import Position, TastyTradeOrderHistory, Trade
 
     # Get opening/closing orders from Trade table
     trade_orders = (
@@ -517,7 +506,7 @@ def orders_view(request: HttpRequest) -> HttpResponse:
 
     for position in open_positions:
         if position.profit_target_details:
-            for spread_type, details in position.profit_target_details.items():
+            for _spread_type, details in position.profit_target_details.items():
                 order_id = details.get("order_id")
                 status = details.get("status")
 
@@ -527,19 +516,19 @@ def orders_view(request: HttpRequest) -> HttpResponse:
                     profit_target_order_ids.append(order_id)
                     position_by_profit_target[order_id] = position
 
-    # Get profit target orders from CachedOrder table
+    # Get profit target orders from TastyTradeOrderHistory table
     profit_target_orders = []
     if profit_target_order_ids:
         profit_target_orders = list(
-            CachedOrder.objects.filter(
+            TastyTradeOrderHistory.objects.filter(
                 broker_order_id__in=profit_target_order_ids,
                 status__in=["Received", "Routed", "In Flight", "Live"],
             ).select_related("trading_account")
         )
 
-    # Create adapter objects for CachedOrder to match Trade interface
-    class CachedOrderAdapter:
-        """Adapter to make CachedOrder compatible with Trade-expecting template"""
+    # Create adapter objects for TastyTradeOrderHistory to match Trade interface
+    class TastyTradeOrderHistoryAdapter:
+        """Adapter to make TastyTradeOrderHistory compatible with Trade-expecting template"""
 
         def __init__(self, cached_order, position):
             self._cached_order = cached_order
@@ -594,7 +583,7 @@ def orders_view(request: HttpRequest) -> HttpResponse:
         def get_trade_type_display(self):
             return "Profit Target"
 
-    # Combine Trade orders and adapted CachedOrder profit targets
+    # Combine Trade orders and adapted TastyTradeOrderHistory profit targets
     all_orders = list(trade_orders)
 
     # Mark regular trades as non-profit-targets
@@ -605,7 +594,7 @@ def orders_view(request: HttpRequest) -> HttpResponse:
     for cached_order in profit_target_orders:
         position = position_by_profit_target.get(cached_order.broker_order_id)
         if position:
-            adapter = CachedOrderAdapter(cached_order, position)
+            adapter = TastyTradeOrderHistoryAdapter(cached_order, position)
             all_orders.append(adapter)
 
     # Enrich each order with parsed leg information
@@ -688,11 +677,6 @@ def watchlist_view(request: HttpRequest) -> HttpResponse:
     }
 
     return render(request, "trading/watchlist.html", context)
-
-
-# ============================================================================
-# STRATEGY VIEWS
-# ============================================================================
 
 
 @login_required

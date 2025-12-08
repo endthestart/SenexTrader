@@ -45,13 +45,13 @@ def check_prerequisites():
 
     # Check for users
     user_count = User.objects.filter(is_active=True).count()
-    print(f"✓ Active users: {user_count}")
+    print(f"PASS: Active users: {user_count}")
     if user_count == 0:
         issues.append("No active users found - create a user first")
 
     # Check for trading accounts
     account_count = TradingAccount.objects.filter(is_active=True).count()
-    print(f"✓ Active trading accounts: {account_count}")
+    print(f"PASS: Active trading accounts: {account_count}")
 
     # Check for Redis connection
     try:
@@ -62,22 +62,22 @@ def check_prerequisites():
         redis_url = getattr(settings, "REDIS_URL", "redis://127.0.0.1:6379/1")
         r = redis.from_url(redis_url)
         r.ping()
-        print(f"✓ Redis connection: OK ({redis_url})")
+        print(f"PASS: Redis connection: OK ({redis_url})")
     except Exception as e:
         issues.append(f"Redis connection failed: {e}")
-        print(f"✗ Redis connection: FAILED ({e})")
+        print(f"FAIL: Redis connection: FAILED ({e})")
 
     # Check email backend
     from django.conf import settings
 
     email_backend = getattr(settings, "EMAIL_BACKEND", "")
-    print(f"✓ Email backend: {email_backend}")
+    print(f"PASS: Email backend: {email_backend}")
 
     # Check TastyTrade settings
     tt_client_id = getattr(settings, "TASTYTRADE_CLIENT_ID", None)
     tt_dry_run = getattr(settings, "TASTYTRADE_DRY_RUN", True)
-    print(f"✓ TastyTrade client ID: {'Set' if tt_client_id else 'NOT SET'}")
-    print(f"✓ TastyTrade dry-run mode: {tt_dry_run}")
+    print(f"PASS: TastyTrade client ID: {'Set' if tt_client_id else 'NOT SET'}")
+    print(f"PASS: TastyTrade dry-run mode: {tt_dry_run}")
 
     if issues:
         print("\n⚠ ISSUES FOUND:")
@@ -85,7 +85,7 @@ def check_prerequisites():
             print(f"  - {issue}")
         return False
 
-    print("\n✓ All prerequisites met!")
+    print("\nPASS: All prerequisites met!")
     return True
 
 
@@ -99,7 +99,7 @@ def test_automated_daily_trade_cycle():
 
     print("Checking eligible accounts...")
     eligible_accounts = TradingAccount.objects.filter(
-        is_active=True, is_automated_trading_enabled=True, is_token_valid=True
+        is_active=True, trading_preferences__is_automated_trading_enabled=True, is_token_valid=True
     ).select_related("user")
 
     print(f"Found {eligible_accounts.count()} eligible accounts:")
@@ -122,10 +122,10 @@ def test_automated_daily_trade_cycle():
     try:
         # Run the async version directly
         result = asyncio.run(_async_automated_daily_trade_cycle())
-        print("\n✓ Task completed successfully!")
+        print("\nPASS: Task completed successfully!")
         print(f"  Result: {result}")
     except Exception as e:
-        print(f"\n✗ Task failed: {e}")
+        print(f"\nFAIL: Task failed: {e}")
         import traceback
 
         traceback.print_exc()
@@ -173,10 +173,10 @@ def test_daily_suggestions():
 
     try:
         result = asyncio.run(_async_generate_and_email_daily_suggestions())
-        print("\n✓ Task completed successfully!")
+        print("\nPASS: Task completed successfully!")
         print(f"  Result: {result}")
     except Exception as e:
-        print(f"\n✗ Task failed: {e}")
+        print(f"\nFAIL: Task failed: {e}")
         import traceback
 
         traceback.print_exc()
@@ -224,7 +224,7 @@ def test_daily_summary():
         has_activity = new_positions.exists() or profit_targets.exists() or cancelled.exists()
         if has_activity:
             users_with_activity += 1
-            print(f"  ✓ {user.email} has activity")
+            print(f"  PASS: {user.email} has activity")
         else:
             print(f"  - {user.email} has no activity (would be skipped)")
 
@@ -240,10 +240,10 @@ def test_daily_summary():
 
     try:
         result = generate_trading_summary()
-        print("\n✓ Task completed successfully!")
+        print("\nPASS: Task completed successfully!")
         print(f"  Result: {result}")
     except Exception as e:
-        print(f"\n✗ Task failed: {e}")
+        print(f"\nFAIL: Task failed: {e}")
         import traceback
 
         traceback.print_exc()

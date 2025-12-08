@@ -71,7 +71,7 @@ Example:
 ```
 MARKET INDICATORS
 ────────────────────────────────────────────────────────────────────────────
-⚠️  WARNING: No current price data available
+ WARNING: No current price data available
 
 Price:              $0.00
 RSI:                49.8
@@ -94,13 +94,13 @@ Shows ALL 3 strategies with scores, regardless of viability:
 ```
 STRATEGY RANKINGS
 ────────────────────────────────────────────────────────────────────────────
-1. Bear Call Spread     100.0  ✓ VIABLE
+1. Bear Call Spread     100.0  [OK] VIABLE
    Bearish MACD - favorable | Strong downtrend confirmed | IV high
 
-2. Senex Trident         71.0  ✓ VIABLE
+2. Senex Trident         71.0  [OK] VIABLE
    IV rank favorable | Strong trend unsuitable for Trident | IV high
 
-3. Bull Put Spread       35.0  ✓ VIABLE
+3. Bull Put Spread       35.0  [OK] VIABLE
    Bearish market - bull put not suitable | Acceptable trend | IV high
 ```
 
@@ -110,7 +110,7 @@ For viable strategies (score >= 30), attempts generation with detailed results:
 
 **Success:**
 ```
-✓ Senex Trident (Score: 78.0)
+[OK] Senex Trident (Score: 78.0)
   Expiration:    2025-11-21 (34 DTE)
   Put Spread 1:  Short $530 / Long $525 (×2)
   Put Spread 2:  Short $525 / Long $520 (×2)
@@ -122,10 +122,10 @@ For viable strategies (score >= 30), attempts generation with detailed results:
 
 **Failure with Details:**
 ```
-✗ Bear Call Spread - No current price available
+[FAIL] Bear Call Spread - No current price available
   Market data shows $0.00
 
-✗ Bull Put Spread - No valid strikes found in any DTE range
+[FAIL] Bull Put Spread - No valid strikes found in any DTE range
   Attempted DTE ranges:
     - 30-45 (standard)
     - 21-60 (wider)
@@ -224,12 +224,12 @@ When a suggestion is generated, you'll see:
 - DTE information
 
 This confirms:
-- ✅ Market data is available
-- ✅ Strategy scoring logic works
-- ✅ Option chains are accessible
-- ✅ Strike selection is valid
-- ✅ OCC bundle creation succeeds
-- ✅ Stream manager integration works
+- Market data is available
+- Strategy scoring logic works
+- Option chains are accessible
+- Strike selection is valid
+- OCC bundle creation succeeds
+- Stream manager integration works
 
 ### Failed Generation
 

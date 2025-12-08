@@ -48,10 +48,10 @@ def load_developer_config(project_dir: Path | None = None) -> dict:
     config_path = project_dir / ".senextrader.json"
 
     if not config_path.exists():
-        print("❌ ERROR: Configuration file not found!")
+        print("ERROR: Configuration file not found!")
         print(f"   Expected location: {config_path}")
         print()
-        print("📝 Setup instructions:")
+        print("Setup instructions:")
         print(f"   1. Copy the example config:")
         print(f"      cp {project_dir}/.senextrader.json.example {config_path}")
         print(f"   2. Edit {config_path} with your settings")
@@ -62,10 +62,10 @@ def load_developer_config(project_dir: Path | None = None) -> dict:
     try:
         with open(config_path) as f:
             config = json.load(f)
-            print(f"📝 Loaded developer config from: {config_path}")
+            print(f"Loaded developer config from: {config_path}")
             return config
     except json.JSONDecodeError as e:
-        print(f"❌ ERROR: Could not parse {config_path}: {e}")
+        print(f"ERROR: Could not parse {config_path}: {e}")
         sys.exit(1)
 
 
@@ -138,13 +138,13 @@ class PodmanBuilder:
             subprocess.run(["podman", "--version"], check=True, capture_output=True)
             return True
         except (subprocess.CalledProcessError, FileNotFoundError):
-            print("❌ Podman is not available or not running")
+            print("Podman is not available or not running")
             print("   Install Podman: https://podman.io/getting-started/installation")
             return False
 
     def podman_login(self) -> bool:
         """Authenticate with the container registry."""
-        print(f"🔐 Logging in to registry {self.registry}...")
+        print(f"Logging in to registry {self.registry}...")
         try:
             # Attempt login
             login_result = subprocess.run(
@@ -152,28 +152,28 @@ class PodmanBuilder:
             )
 
             if login_result.returncode == 0:
-                print(f"✅ Successfully logged in to {self.registry}")
+                print(f"Successfully logged in to {self.registry}")
                 return True
-            print(f"❌ Failed to login to {self.registry}")
+            print(f"Failed to login to {self.registry}")
             print("Please ensure you have valid credentials and try again.")
             return False
 
         except subprocess.TimeoutExpired:
-            print(f"❌ Login timeout for registry {self.registry}")
+            print(f"Login timeout for registry {self.registry}")
             return False
         except Exception as e:
-            print(f"❌ Login failed: {e}")
+            print(f"Login failed: {e}")
             return False
 
     def check_registry_connectivity(self) -> bool:
         """Check if the container registry is accessible and authenticate if needed."""
-        print(f"🔍 Checking connectivity to registry {self.registry}...")
+        print(f"Checking connectivity to registry {self.registry}...")
 
         # For Gitea registry, we need to login first
         if not self.podman_login():
             return False
 
-        print(f"✅ Registry {self.registry} is accessible")
+        print(f"Registry {self.registry} is accessible")
         return True
 
     def build_image(self, tag: str, platform: str | None = None, no_cache: bool = False) -> bool:
@@ -202,7 +202,7 @@ class PodmanBuilder:
         build_args.append(".")
 
         try:
-            print(f"📝 Build command: {' '.join(build_args)}")
+            print(f"Build command: {' '.join(build_args)}")
 
             # Run build with real-time output
             process = subprocess.Popen(
@@ -222,13 +222,13 @@ class PodmanBuilder:
             process.wait()
 
             if process.returncode == 0:
-                print(f"✅ Successfully built {self.full_image_name}:{tag}")
+                print(f"Successfully built {self.full_image_name}:{tag}")
                 return True
-            print(f"❌ Build failed with exit code {process.returncode}")
+            print(f"Build failed with exit code {process.returncode}")
             return False
 
         except Exception as e:
-            print(f"❌ Build failed: {e}")
+            print(f"Build failed: {e}")
             return False
 
     def push_image(self, tag: str) -> bool:
@@ -260,13 +260,13 @@ class PodmanBuilder:
                 process.wait()
 
                 if process.returncode == 0:
-                    print(f"✅ Successfully pushed {image}")
+                    print(f"Successfully pushed {image}")
                 else:
-                    print(f"❌ Failed to push {image}")
+                    print(f"Failed to push {image}")
                     return False
 
             except Exception as e:
-                print(f"❌ Push failed: {e}")
+                print(f"Push failed: {e}")
                 return False
 
         return True
@@ -318,7 +318,7 @@ class PodmanBuilder:
         # Get image info
         image_info = self.get_image_info(final_tag)
         if image_info:
-            print("📊 Image Info:")
+            print("Image Info:")
             print(f"   ID: {image_info.get('id', 'unknown')}")
             print(f"   Architecture: {image_info.get('architecture', 'unknown')}")
             print(f"   OS: {image_info.get('os', 'unknown')}")
@@ -330,12 +330,12 @@ class PodmanBuilder:
         if not no_push:
             if not self.push_image(final_tag):
                 return False
-            print(f"🎉 Successfully built and pushed {self.full_image_name}:{final_tag}")
-            print("\n📝 Next steps:")
+            print(f"Successfully built and pushed {self.full_image_name}:{final_tag}")
+            print("\nNext steps:")
             print("   Deploy using instructions in senextrader_docs/deployment")
         else:
-            print(f"🎉 Successfully built {self.full_image_name}:{final_tag} (not pushed)")
-            print("\n💡 To push manually:")
+            print(f"Successfully built {self.full_image_name}:{final_tag} (not pushed)")
+            print("\nTo push manually:")
             print(f"   podman push {self.full_image_name}:{final_tag}")
 
         return True
@@ -418,13 +418,13 @@ Config File:
 
     # Validate required config values
     if not args.registry:
-        print("❌ ERROR: 'registry' must be set in .senextrader.json")
+        print("ERROR: 'registry' must be set in .senextrader.json")
         sys.exit(1)
     if not args.owner:
-        print("❌ ERROR: 'owner' must be set in .senextrader.json")
+        print("ERROR: 'owner' must be set in .senextrader.json")
         sys.exit(1)
     if not args.image_name:
-        print("❌ ERROR: 'image_name' must be set in .senextrader.json")
+        print("ERROR: 'image_name' must be set in .senextrader.json")
         sys.exit(1)
 
     # Create builder instance
@@ -435,7 +435,7 @@ Config File:
         project_dir=args.project_dir,
     )
 
-    print("🚀 Senex Trader - Podman Build Script")
+    print("Senex Trader - Podman Build Script")
     print("=" * 50)
     print(f"Registry: {builder.registry}")
     print(f"Owner: {builder.owner}")
@@ -459,10 +459,10 @@ Config File:
     )
 
     if success:
-        print("\n🎉 Build completed successfully!")
+        print("\nBuild completed successfully!")
         sys.exit(0)
     else:
-        print("\n❌ Build failed!")
+        print("\nBuild failed!")
         sys.exit(1)
 
 

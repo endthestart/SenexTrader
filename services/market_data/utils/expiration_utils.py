@@ -26,26 +26,27 @@ async def find_expiration_with_exact_strikes(
     strikes: dict[str, Decimal],
     min_dte: int = 30,
     max_dte: int = 45,
+    strict_matching: bool = False,
 ) -> tuple[date, dict] | None:
     """
     Find longest DTE expiration that has all required strikes available.
 
-    Strike matching algorithm (flexible):
-    1. First try: Exact strike match (preferred)
-    2. Fallback: Nearest available strike (no distance limit)
-    3. Log when using nearest vs exact for debugging
+    Strike matching algorithm:
+    - strict_matching=False (default): Use exact match if available, otherwise use nearest
+    - strict_matching=True: Only accept exact matches, skip expiration if any strike missing
 
     This function implements a cascade validation pattern:
     1. Get all expirations in the DTE range
     2. Sort by DTE (longest first)
     3. For each expiration, fetch the chain and find best matching strikes
-    4. Return first expiration with all required strikes (exact or nearest)
+    4. In strict mode: Continue to next expiration if exact strikes not found
+    5. In flexible mode: Return first expiration with all required strikes (exact or nearest)
 
     Reuses existing infrastructure:
     - OptionChainService for chain fetching + caching
     - expiration_finder date filtering logic
     - StreamingOptionsDataService for chain access
-    - find_nearest_available_strike for flexible matching
+    - find_nearest_available_strike for flexible matching (when strict_matching=False)
 
     Args:
         user: Django user for API access
@@ -53,6 +54,7 @@ async def find_expiration_with_exact_strikes(
         strikes: Dict with required strikes (e.g., {short_put: 444, long_put: 441})
         min_dte: Minimum acceptable DTE (default 30)
         max_dte: Maximum acceptable DTE (default 45)
+        strict_matching: If True, only accept exact strikes (no nearest fallback)
 
     Returns:
         (expiration_date, matched_strikes_dict, option_chain_dict) or None if no valid chain found
@@ -106,7 +108,7 @@ async def find_expiration_with_exact_strikes(
     from services.strategies.utils.strike_utils import find_nearest_available_strike
 
     for dte, expiration in valid_expirations:
-        logger.info(f"Checking expiration {expiration} (DTE: {dte}) for valid strikes")
+        logger.debug(f"Checking expiration {expiration} (DTE: {dte}) for valid strikes")
 
         # Fetch option chain for this expiration
         chain = await options_service._get_option_chain(symbol, expiration)
@@ -124,6 +126,7 @@ async def find_expiration_with_exact_strikes(
         # Try to match all required strikes (exact or nearest)
         matched_strikes = {}
         all_matched = True
+        all_exact = True
         adjustments_made = []
 
         for leg, target_strike in strikes.items():
@@ -136,7 +139,16 @@ async def find_expiration_with_exact_strikes(
                 matched_strikes[leg] = target_strike
                 continue
 
-            # Fallback: Find nearest available strike
+            # In strict mode, skip this expiration if exact match not found
+            if strict_matching:
+                logger.debug(
+                    f"Strict mode: Expiration {expiration} missing exact strike "
+                    f"{leg}={target_strike}, skipping"
+                )
+                all_matched = False
+                break
+
+            # Fallback: Find nearest available strike (only in non-strict mode)
             nearest = find_nearest_available_strike(target_strike, available)
             if nearest is None:
                 logger.warning(
@@ -146,6 +158,7 @@ async def find_expiration_with_exact_strikes(
                 break
 
             matched_strikes[leg] = nearest
+            all_exact = False
             deviation = abs(float(nearest - target_strike))
             adjustments_made.append(
                 f"{leg}: {target_strike} → {nearest} (deviation: ${deviation:.2f})"
@@ -201,11 +214,20 @@ async def find_expiration_with_exact_strikes(
         # Log adjustments if any were made
         if adjustments_made:
             logger.info(
-                f"⚙️ Expiration {expiration} (DTE: {dte}) - Using nearest strikes:\n"
+                f"Expiration {expiration} (DTE: {dte}) - Using nearest strikes:\n"
                 + "\n".join(f"  {adj}" for adj in adjustments_made)
             )
         else:
-            logger.info(f"✅ Expiration {expiration} (DTE: {dte}) - All exact strikes matched")
+            logger.info(f"Expiration {expiration} (DTE: {dte}) - All exact strikes matched")
+
+        # In strict mode, only return if ALL strikes were exact matches
+        # This allows the loop to continue checking other expirations for better matches
+        if strict_matching and not all_exact:
+            logger.info(
+                f"Strict mode: Expiration {expiration} used nearest strikes, "
+                f"continuing search for exact matches"
+            )
+            continue
 
         return (expiration, matched_strikes, chain)
 
@@ -328,7 +350,7 @@ async def find_expiration_with_optimal_strikes(
     optimizer = StrikeOptimizer()
 
     for dte, expiration in valid_expirations:
-        logger.info(f"Checking expiration {expiration} (DTE: {dte}) for optimal strikes")
+        logger.debug(f"Checking expiration {expiration} (DTE: {dte})")
 
         # Fetch option chain for this expiration
         chain = await options_service._get_option_chain(symbol, expiration)
@@ -367,7 +389,7 @@ async def find_expiration_with_optimal_strikes(
         if selected_strikes:
             mode_info = " (relaxed mode)" if relaxed_quality else ""
             logger.info(
-                f"✅ Found optimal strikes for {symbol} at {expiration} "
+                f"Found optimal strikes for {symbol} at {expiration} "
                 f"(DTE: {dte}){mode_info}: {selected_strikes}"
             )
             return (expiration, selected_strikes, chain)
@@ -375,7 +397,7 @@ async def find_expiration_with_optimal_strikes(
         # Optimizer returned None - strikes failed quality gate
         threshold = "15%" if relaxed_quality else "5%"
         logger.info(
-            f"❌ Expiration {expiration} (DTE: {dte}) failed quality gate "
+            f"Expiration {expiration} (DTE: {dte}) failed quality gate "
             f"(no strikes within {threshold} deviation threshold)"
         )
 

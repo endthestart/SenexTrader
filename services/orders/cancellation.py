@@ -233,7 +233,7 @@ class OrderCancellationService:
             }
 
     async def _maybe_archive_pending_position(self, trade: Trade, final_status: str) -> None:
-        """If the position never filled, mark it closed/archived once cancellation completes."""
+        """If the position never filled, mark it expired/archived once cancellation completes."""
 
         if final_status not in {"cancelled", "rejected", "expired"}:
             return
@@ -252,7 +252,7 @@ class OrderCancellationService:
             }
         )
 
-        position.lifecycle_state = "closed"
+        position.lifecycle_state = "expired"
         position.metadata = metadata
         await position.asave(update_fields=["lifecycle_state", "metadata", "updated_at"])
 

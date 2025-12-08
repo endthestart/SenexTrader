@@ -14,7 +14,7 @@ urlpatterns = [
     path("accounts/", include("accounts.urls")),
     path("api/accounts/", include("accounts.api_urls")),  # Accounts API endpoints
     path("trading/", include("trading.urls")),
-    path("streaming/", include("streaming.urls")),
+    # Note: WebSocket routing for streaming is in asgi.py, not HTTP URLs
     path("dashboard/", dashboard_view, name="dashboard"),  # Direct dashboard route
     path("", TemplateView.as_view(template_name="home.html"), name="home"),
     # Health check endpoints for container orchestration

@@ -17,10 +17,10 @@ from django.utils.dateparse import parse_datetime
 
 from accounts.models import AccountSnapshot, OptionsAllocation, TradingAccount, User
 from trading.models import (
-    CachedOrder,
     CachedOrderChain,
     Position,
     StrategyConfiguration,
+    TastyTradeOrderHistory,
     Trade,
     TradingSuggestion,
 )
@@ -102,7 +102,7 @@ class Command(BaseCommand):
             self.stdout.write(self.style.SUCCESS("Existing user deleted"))
 
         if dry_run:
-            self.stdout.write(self.style.WARNING("\n🔍 DRY RUN MODE - No changes will be made\n"))
+            self.stdout.write(self.style.WARNING("\nDRY RUN MODE - No changes will be made\n"))
             self._validate_import(data)
             return
 
@@ -125,7 +125,7 @@ class Command(BaseCommand):
         self.stdout.write(f"  Cached Orders: {len(data['cached_orders'])}")
         self.stdout.write(f"  Cached Order Chains: {len(data['cached_chains'])}")
 
-        self.stdout.write(self.style.SUCCESS("\n✅ Validation passed"))
+        self.stdout.write(self.style.SUCCESS("\nValidation passed"))
 
     def _import_data(self, data):
         """Import all data with transaction safety."""
@@ -149,14 +149,14 @@ class Command(BaseCommand):
 
             # Print summary
             self.stdout.write("\n" + "=" * 80)
-            self.stdout.write(self.style.SUCCESS("✅ IMPORT COMPLETED SUCCESSFULLY"))
+            self.stdout.write(self.style.SUCCESS("IMPORT COMPLETED SUCCESSFULLY"))
             self.stdout.write("=" * 80)
             self.stdout.write("\nImported:")
             for key, count in self.stats.items():
                 self.stdout.write(f"  {key}: {count}")
 
         except Exception as e:
-            self.stdout.write(self.style.ERROR(f"\n❌ Import failed: {e!s}"))
+            self.stdout.write(self.style.ERROR(f"\nImport failed: {e!s}"))
             raise
 
     def _parse_datetime(self, value):
@@ -199,7 +199,7 @@ class Command(BaseCommand):
         user.save()
 
         self.stats["user"] = 1
-        self.stdout.write(f"  ✅ User created: {user.email} (pk={user.pk})")
+        self.stdout.write(f"  User created: {user.email} (pk={user.pk})")
         return user
 
     def _import_trading_accounts(self, accounts_data, user):
@@ -237,13 +237,13 @@ class Command(BaseCommand):
             self.pk_mappings["trading_account"][old_pk] = account
             self.stats["trading_accounts"] = self.stats.get("trading_accounts", 0) + 1
             self.stdout.write(
-                f"  ✅ {account.account_number} (old_pk={old_pk} → new_pk={account.pk})"
+                f"  {account.account_number} (old_pk={old_pk} -> new_pk={account.pk})"
             )
 
     def _import_options_allocation(self, allocation_data, user):
         """Import OptionsAllocation model."""
         if not allocation_data:
-            self.stdout.write("\n⚠️  No options allocation to import")
+            self.stdout.write("\nNo options allocation to import")
             return
 
         self.stdout.write("\nImporting Options Allocation...")
@@ -260,7 +260,7 @@ class Command(BaseCommand):
         allocation.save()
 
         self.stats["options_allocation"] = 1
-        self.stdout.write("  ✅ Options allocation created")
+        self.stdout.write("  Options allocation created")
 
     def _import_account_snapshots(self, snapshots_data, user):
         """Import AccountSnapshot models."""
@@ -280,7 +280,7 @@ class Command(BaseCommand):
 
         AccountSnapshot.objects.bulk_create(snapshots)
         self.stats["account_snapshots"] = len(snapshots)
-        self.stdout.write(f"  ✅ Created {len(snapshots)} snapshots")
+        self.stdout.write(f"  Created {len(snapshots)} snapshots")
 
     def _import_strategy_configs(self, configs_data, user):
         """Import StrategyConfiguration models."""
@@ -304,7 +304,7 @@ class Command(BaseCommand):
 
             self.pk_mappings["strategy_config"][old_pk] = config
             self.stats["strategy_configs"] = self.stats.get("strategy_configs", 0) + 1
-            self.stdout.write(f"  ✅ {config.strategy_id} (old_pk={old_pk} → new_pk={config.pk})")
+            self.stdout.write(f"  {config.strategy_id} (old_pk={old_pk} -> new_pk={config.pk})")
 
     def _import_positions(self, positions_data, user):
         """Import Position models."""
@@ -334,7 +334,7 @@ class Command(BaseCommand):
                 initial_risk=self._parse_decimal(pos_data.get("initial_risk")),
                 spread_width=self._parse_decimal(pos_data.get("spread_width")),
                 number_of_spreads=pos_data.get("number_of_spreads"),
-                broker_order_ids=pos_data.get("broker_order_ids", []),
+                opening_order_id=pos_data.get("opening_order_id"),
                 opening_price_effect=pos_data.get("opening_price_effect"),
                 profit_targets_created=pos_data.get("profit_targets_created", False),
                 profit_target_details=pos_data.get("profit_target_details", {}),
@@ -348,7 +348,7 @@ class Command(BaseCommand):
 
             self.pk_mappings["position"][old_pk] = position
             self.stats["positions"] = self.stats.get("positions", 0) + 1
-            self.stdout.write(f"  ✅ {position.symbol} (old_pk={old_pk} → new_pk={position.pk})")
+            self.stdout.write(f"  {position.symbol} (old_pk={old_pk} -> new_pk={position.pk})")
 
     def _import_suggestions(self, suggestions_data, user):
         """Import TradingSuggestion models."""
@@ -420,7 +420,7 @@ class Command(BaseCommand):
 
             self.stats["suggestions"] = self.stats.get("suggestions", 0) + 1
 
-        self.stdout.write(f"  ✅ Created {self.stats.get('suggestions', 0)} suggestions")
+        self.stdout.write(f"  Created {self.stats.get('suggestions', 0)} suggestions")
 
     def _import_trades(self, trades_data, user):
         """Import Trade models."""
@@ -445,7 +445,7 @@ class Command(BaseCommand):
             if not position:
                 self.stdout.write(
                     self.style.WARNING(
-                        f"  ⚠️  Skipping trade {trade_data.get('broker_order_id')}: "
+                        f"  Skipping trade {trade_data.get('broker_order_id')}: "
                         f"position not found"
                     )
                 )
@@ -486,10 +486,10 @@ class Command(BaseCommand):
 
             self.stats["trades"] = self.stats.get("trades", 0) + 1
 
-        self.stdout.write(f"  ✅ Created {self.stats.get('trades', 0)} trades")
+        self.stdout.write(f"  Created {self.stats.get('trades', 0)} trades")
 
     def _import_cached_orders(self, orders_data, user):
-        """Import CachedOrder models."""
+        """Import TastyTradeOrderHistory models."""
         self.stdout.write("\nImporting Cached Orders...")
 
         for order_data in orders_data:
@@ -497,7 +497,7 @@ class Command(BaseCommand):
                 user=user, account_number=order_data["_trading_account_number"]
             )
 
-            order = CachedOrder(
+            order = TastyTradeOrderHistory(
                 user=user,
                 trading_account=trading_account,
                 broker_order_id=order_data.get("broker_order_id"),
@@ -521,7 +521,7 @@ class Command(BaseCommand):
 
             self.stats["cached_orders"] = self.stats.get("cached_orders", 0) + 1
 
-        self.stdout.write(f"  ✅ Created {self.stats.get('cached_orders', 0)} cached orders")
+        self.stdout.write(f"  Created {self.stats.get('cached_orders', 0)} cached orders")
 
     def _import_cached_chains(self, chains_data, user):
         """Import CachedOrderChain models."""
@@ -550,4 +550,4 @@ class Command(BaseCommand):
 
             self.stats["cached_chains"] = self.stats.get("cached_chains", 0) + 1
 
-        self.stdout.write(f"  ✅ Created {self.stats.get('cached_chains', 0)} cached chains")
+        self.stdout.write(f"  Created {self.stats.get('cached_chains', 0)} cached chains")

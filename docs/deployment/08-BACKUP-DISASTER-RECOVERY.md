@@ -137,9 +137,9 @@ fi
 echo "[$(date)] Verifying backup integrity..."
 cd "$BACKUP_DIR"
 if sha256sum -c checksums.sha256 > /dev/null 2>&1; then
-    echo "[$(date)] ✓ Backup integrity verified"
+    echo "[$(date)] [OK] Backup integrity verified"
 else
-    echo "[$(date)] ✗ ERROR: Backup integrity check failed!"
+    echo "[$(date)] [FAIL] ERROR: Backup integrity check failed!"
     exit 1
 fi
 

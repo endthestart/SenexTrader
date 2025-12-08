@@ -9,6 +9,7 @@ from typing import Any
 
 from accounts.models import TradingAccount
 from services.core.logging import get_logger
+from streaming.constants import STREAMING_AUTH_MAX_RETRIES
 
 logger = get_logger(__name__)
 
@@ -52,7 +53,9 @@ class StreamingAuthService:
             return None
 
     async def authenticate_with_retry(
-        self, trading_account: TradingAccount, max_retries: int = 2
+        self,
+        trading_account: TradingAccount,
+        max_retries: int = STREAMING_AUTH_MAX_RETRIES,
     ) -> Any | None:
         """
         Authenticate with retry logic for improved reliability.

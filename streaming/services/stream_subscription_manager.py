@@ -21,6 +21,7 @@ from datetime import UTC, datetime
 
 from tastytrade import DXLinkStreamer
 from tastytrade.dxfeed import Greeks, Quote, Summary, Trade
+from websockets.exceptions import ConnectionClosedOK
 
 from services.core.logging import get_logger
 from streaming.constants import (
@@ -33,14 +34,13 @@ from streaming.constants import (
     SUMMARY_REFRESH_INTERVAL,
     UNDERLYING_QUOTE_REFRESH_INTERVAL,
 )
+from streaming.services.stream_helpers import is_option_symbol
 
 logger = get_logger(__name__)
 
 
 class StreamSubscriptionManager:
     """Manages streaming subscriptions for symbols with lifecycle control."""
-
-    MAX_SUBSCRIPTIONS = MAX_SUBSCRIPTIONS  # Prevent runaway growth
 
     def __init__(self, user_id: int):
         self.user_id = user_id
@@ -86,11 +86,11 @@ class StreamSubscriptionManager:
         current_count = len(self.subscribed_symbols)
         future_count = current_count + new_symbols_count
 
-        if future_count <= self.MAX_SUBSCRIPTIONS:
+        if future_count <= MAX_SUBSCRIPTIONS:
             return
 
         # Need to make room - remove oldest subscriptions
-        to_remove = future_count - self.MAX_SUBSCRIPTIONS
+        to_remove = future_count - MAX_SUBSCRIPTIONS
         oldest = sorted(self.subscription_timestamps.items(), key=lambda x: x[1])[:to_remove]
 
         for symbol, _ in oldest:
@@ -100,7 +100,7 @@ class StreamSubscriptionManager:
         logger.warning(
             f"User {self.user_id}: Subscription limit reached. "
             f"Removed {to_remove} oldest subscriptions. "
-            f"Current: {len(self.subscribed_symbols)}/{self.MAX_SUBSCRIPTIONS}"
+            f"Current: {len(self.subscribed_symbols)}/{MAX_SUBSCRIPTIONS}"
         )
 
     async def subscribe_to_new_symbols(
@@ -114,23 +114,24 @@ class StreamSubscriptionManager:
 
         Args:
             streamer: DXLinkStreamer instance (or None if not active)
-            symbols: List of symbols to subscribe to
+            symbols: List of symbols to subscribe to (prefer OCC format; streamer
+                symbols are tolerated and auto-detected via stream_helpers.is_option_symbol)
             is_streaming: Whether streaming is currently active
         """
-        logger.info(f"User {self.user_id}: 🔔 SUBSCRIBE REQUEST - symbols: {symbols}")
+        logger.info(f"User {self.user_id}: Subscribe request - symbols: {symbols}")
         logger.info(
-            f"User {self.user_id}: 🔔 Current streaming status: {is_streaming}, "
+            f"User {self.user_id}: Current streaming status: {is_streaming}, "
             f"streamer exists: {streamer is not None}, streamer type: {type(streamer).__name__ if streamer else 'None'}"
         )
 
         if not is_streaming or not streamer:
             logger.warning(
-                f"User {self.user_id}: ❌ Cannot subscribe, streamer not active "
+                f"User {self.user_id}: Cannot subscribe, streamer not active "
                 f"(streaming: {is_streaming}, streamer: {streamer is not None})"
             )
             return
 
-        logger.info(f"User {self.user_id}: ✅ Proceeding with subscription (checks passed)")
+        logger.info(f"User {self.user_id}: Proceeding with subscription (checks passed)")
 
         # Step 1: Cleanup old subscriptions
         self.cleanup_old_subscriptions()
@@ -143,11 +144,9 @@ class StreamSubscriptionManager:
             streamer_symbols_map[streamer_symbol] = symbol
 
         # Step 3: Get new symbols (using streamer format for comparison)
-        new_streamer_symbols = [
-            s for s in streamer_symbols_map if s not in self.subscribed_symbols
-        ]
+        new_streamer_symbols = [s for s in streamer_symbols_map if s not in self.subscribed_symbols]
         if not new_streamer_symbols:
-            logger.info(f"User {self.user_id}: ✅ All symbols already subscribed")
+            logger.info(f"User {self.user_id}: All symbols already subscribed")
             return
 
         self.enforce_subscription_limits(len(new_streamer_symbols))
@@ -165,13 +164,13 @@ class StreamSubscriptionManager:
             self.subscription_timestamps[streamer_symbol] = current_time
             self.pending_symbol_events[streamer_symbol] = asyncio.Event()
             logger.debug(
-                f"User {self.user_id}: 📍 Created pending event for {streamer_symbol} (OCC: {occ_symbol})"
+                f"User {self.user_id}: Created pending event for {streamer_symbol} (OCC: {occ_symbol})"
             )
 
-        logger.info(f"User {self.user_id}: 🔔 Subscribing to NEW symbols: {new_occ_symbols}")
+        logger.info(f"User {self.user_id}: Subscribing to NEW symbols: {new_occ_symbols}")
         logger.info(
-            f"User {self.user_id}: 🔔 Total subscriptions: "
-            f"{len(self.subscribed_symbols)}/{self.MAX_SUBSCRIPTIONS}"
+            f"User {self.user_id}: Total subscriptions: "
+            f"{len(self.subscribed_symbols)}/{MAX_SUBSCRIPTIONS}"
         )
         await self._subscribe_symbols_to_streamer(streamer, new_occ_symbols)
 
@@ -188,9 +187,9 @@ class StreamSubscriptionManager:
         if not symbols:
             return
 
-        # Separate option symbols (contain spaces) from underlying symbols
-        option_symbols = [s for s in symbols if " " in s]
-        underlying_symbols = [s for s in symbols if " " not in s]
+        # Separate option symbols (OCC with spaces or streamer symbols starting with '.')
+        option_symbols = [s for s in symbols if is_option_symbol(s)]
+        underlying_symbols = [s for s in symbols if not is_option_symbol(s)]
 
         # Subscribe to options with Greeks
         if option_symbols:
@@ -213,11 +212,10 @@ class StreamSubscriptionManager:
             option_symbols: List of option symbols (OCC format with spaces)
         """
         logger.info(
-            f"User {self.user_id}: 🎯 OPTION SYMBOLS DETECTED - "
-            f"Converting OCC to streamer format"
+            f"User {self.user_id}: Option symbols detected - "
+            f"converting OCC to streamer format"
         )
 
-        # Convert OCC symbols to streamer symbols for DXFeed
         from tastytrade.instruments import Option
 
         streamer_symbols = []
@@ -226,53 +224,54 @@ class StreamSubscriptionManager:
                 streamer_symbol = Option.occ_to_streamer_symbol(occ_symbol)
                 streamer_symbols.append(streamer_symbol)
                 self.occ_to_streamer[occ_symbol] = streamer_symbol
-                logger.info(f"User {self.user_id}: ✅ Converted {occ_symbol} -> {streamer_symbol}")
+                logger.info(f"User {self.user_id}: Converted {occ_symbol} -> {streamer_symbol}")
             except Exception as e:
-                logger.error(f"User {self.user_id}: ❌ Failed to convert symbol {occ_symbol}: {e}")
+                logger.error(f"User {self.user_id}: Failed to convert symbol {occ_symbol}: {e}")
                 # Fall back to original symbol if conversion fails
                 streamer_symbols.append(occ_symbol)
                 self.occ_to_streamer[occ_symbol] = occ_symbol
                 logger.warning(
-                    f"User {self.user_id}: ⚠️ Using original symbol as fallback: {occ_symbol}"
+                    f"User {self.user_id}: Using original symbol as fallback: {occ_symbol}"
                 )
 
         logger.info(
-            f"User {self.user_id}: 🎯 About to subscribe to DXFeed with "
+            f"User {self.user_id}: About to subscribe to DXFeed with "
             f"streamer symbols: {streamer_symbols}"
         )
 
         # Subscribe with streamer symbols
         try:
             logger.info(
-                f"User {self.user_id}: 🎯 DEBUG - Calling streamer.subscribe(Quote, {streamer_symbols}, refresh_interval={QUOTE_REFRESH_INTERVAL})"
+                f"User {self.user_id}: Calling streamer.subscribe(Quote, {streamer_symbols}, refresh_interval={QUOTE_REFRESH_INTERVAL})"
             )
             await streamer.subscribe(
                 Quote, streamer_symbols, refresh_interval=QUOTE_REFRESH_INTERVAL
             )
             logger.info(
-                f"User {self.user_id}: ✅ Subscribed to Quote events for "
+                f"User {self.user_id}: Subscribed to Quote events for "
                 f"{len(streamer_symbols)} symbols"
             )
 
-            # Add small delay to prevent channel race condition
             await asyncio.sleep(SUBSCRIPTION_DELAY)
 
             await streamer.subscribe(
                 Greeks, streamer_symbols, refresh_interval=GREEKS_REFRESH_INTERVAL
             )
             logger.info(
-                f"User {self.user_id}: ✅ Subscribed to Greeks events for "
+                f"User {self.user_id}: Subscribed to Greeks events for "
                 f"{len(streamer_symbols)} symbols"
             )
+        except ConnectionClosedOK:
+            logger.info(f"User {self.user_id}: Streamer closed normally during subscription")
+            raise
         except Exception as e:
             logger.error(
-                f"User {self.user_id}: ❌ Error subscribing to option Greeks: {e}",
+                f"User {self.user_id}: Error subscribing to option Greeks: {e}",
                 exc_info=True,
             )
-            # Don't re-raise - continue with underlying symbols
 
         logger.info(
-            f"User {self.user_id}: 🎉 SUBSCRIPTION COMPLETE - "
+            f"User {self.user_id}: Subscription complete - "
             f"Quote and Greeks for {len(streamer_symbols)} option symbols"
         )
 
@@ -287,22 +286,22 @@ class StreamSubscriptionManager:
             underlying_symbols: List of underlying symbols (e.g. SPY, QQQ)
         """
         try:
-            logger.info(
-                f"User {self.user_id}: 🎯 DEBUG - Calling streamer.subscribe(Quote, {underlying_symbols}, refresh_interval={UNDERLYING_QUOTE_REFRESH_INTERVAL})"
+            logger.debug(
+                f"User {self.user_id}: Subscribing to Quote for {underlying_symbols}"
             )
             await streamer.subscribe(
                 Quote, underlying_symbols, refresh_interval=UNDERLYING_QUOTE_REFRESH_INTERVAL
             )
-            await asyncio.sleep(CHANNEL_RACE_DELAY)  # Prevent channel race condition
+            await asyncio.sleep(CHANNEL_RACE_DELAY)
 
-            logger.info(
-                f"User {self.user_id}: 🎯 DEBUG - Calling streamer.subscribe(Trade, {underlying_symbols})"
+            logger.debug(
+                f"User {self.user_id}: Subscribing to Trade for {underlying_symbols}"
             )
             await streamer.subscribe(Trade, underlying_symbols)
-            await asyncio.sleep(CHANNEL_RACE_DELAY)  # Prevent channel race condition
+            await asyncio.sleep(CHANNEL_RACE_DELAY)
 
-            logger.info(
-                f"User {self.user_id}: 🎯 DEBUG - Calling streamer.subscribe(Summary, {underlying_symbols}, refresh_interval={SUMMARY_REFRESH_INTERVAL})"
+            logger.debug(
+                f"User {self.user_id}: Subscribing to Summary for {underlying_symbols}"
             )
             await streamer.subscribe(
                 Summary, underlying_symbols, refresh_interval=SUMMARY_REFRESH_INTERVAL
@@ -311,20 +310,21 @@ class StreamSubscriptionManager:
                 f"User {self.user_id}: Subscribed to all events for "
                 f"{len(underlying_symbols)} underlying symbols."
             )
+        except ConnectionClosedOK:
+            logger.info(f"User {self.user_id}: Streamer closed normally during subscription")
+            raise
         except Exception as e:
-            # Handle connection closed errors gracefully
             error_str = str(e).lower()
             if "connectionclosed" in error_str or "websocket" in error_str:
                 logger.warning(
-                    f"User {self.user_id}: ⚠️ WebSocket connection closed during subscription: {e}. "
-                    f"This is normal if the connection was closed by the client or server."
+                    f"User {self.user_id}: WebSocket connection closed during subscription: {e}. "
+                    f"This is normal if connection was closed by client or server."
                 )
             else:
                 logger.error(
-                    f"User {self.user_id}: ❌ Error subscribing to underlying symbols: {e}",
+                    f"User {self.user_id}: Error subscribing to underlying symbols: {e}",
                     exc_info=True,
                 )
-            # Don't re-raise - connection state will be handled by stream manager
 
     def to_streamer_symbol(self, symbol: str) -> str:
         """
@@ -398,7 +398,7 @@ class StreamSubscriptionManager:
         """
         if symbol in self.pending_symbol_events:
             self.pending_symbol_events[symbol].set()
-            logger.info(f"User {self.user_id}: ✅ First data received for {symbol}")
+            logger.info(f"User {self.user_id}: First data received for {symbol}")
             self.pending_symbol_events.pop(symbol)
 
     def remove_pending_event(self, symbol: str) -> None:

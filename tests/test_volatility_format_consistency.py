@@ -82,7 +82,7 @@ class TestVolatilityDatabaseStorage:
         today = timezone.now().date()
 
         # Create record with decimal format
-        metrics = await MarketMetricsHistory.objects.acreate(
+        await MarketMetricsHistory.objects.acreate(
             symbol="SPY",
             date=today,
             iv_rank=Decimal("65.00"),
@@ -112,7 +112,7 @@ class TestVolatilityDatabaseStorage:
         today = timezone.now().date()
 
         # Create record with crash-level volatility
-        metrics = await MarketMetricsHistory.objects.acreate(
+        await MarketMetricsHistory.objects.acreate(
             symbol="VIX",
             date=today,
             iv_rank=Decimal("95.00"),
@@ -265,10 +265,12 @@ class TestVolatilityStrategyUsage:
 
         Strategies should NOT need to convert - they should use the value as-is.
         """
-        from services.strategies.credit_spread_strategy import BullPutSpreadStrategy
+        from services.strategies.credit_spread_strategy import (
+            ShortPutVerticalStrategy,
+        )
 
         user = await User.objects.acreate(username="test_user", email="test@example.com")
-        strategy = BullPutSpreadStrategy(user)
+        ShortPutVerticalStrategy(user)
 
         # Mock market report with decimal format
         mock_report = MagicMock()

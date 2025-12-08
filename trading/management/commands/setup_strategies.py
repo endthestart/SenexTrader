@@ -44,7 +44,7 @@ class Command(BaseCommand):
         )
 
     def handle(self, *args, **options):
-        user_id = options.get("user_id")
+        options.get("user_id")
         symbol = options.get("symbol", "QQQ").upper()
         target_dte = options.get("target_dte", 45)
         force = options.get("force", False)
@@ -98,6 +98,20 @@ class Command(BaseCommand):
                             "min_dte": max(7, target_dte - 15),
                             "max_dte": min(90, target_dte + 15),
                         }
+                    elif strategy_id in (
+                        "short_put_vertical",
+                        "short_call_vertical",
+                        "long_put_vertical",
+                        "long_call_vertical",
+                    ):
+                        # Spread strategies with configurable profit targets
+                        params = {
+                            "underlying_symbol": symbol,
+                            "target_dte": target_dte,
+                            "min_dte": max(7, target_dte - 15),
+                            "max_dte": min(90, target_dte + 15),
+                            "profit_target_pct": 50,  # User configurable: 40, 50, or 60
+                        }
                     else:
                         # Generic parameters for all other strategies
                         params = {
@@ -120,7 +134,7 @@ class Command(BaseCommand):
 
                     if created:
                         self.stdout.write(
-                            self.style.SUCCESS(f"  ✓ Created {strategy_id} for {user.email}")
+                            self.style.SUCCESS(f"  [OK] Created {strategy_id} for {user.email}")
                         )
                         created_count += 1
                     else:
@@ -129,7 +143,7 @@ class Command(BaseCommand):
 
                 except Exception as e:
                     self.stdout.write(
-                        self.style.ERROR(f"  ✗ Error {strategy_id} for {user.email}: {e}")
+                        self.style.ERROR(f"  [FAIL] Error {strategy_id} for {user.email}: {e}")
                     )
 
         # Summary
@@ -145,7 +159,7 @@ class Command(BaseCommand):
         if created_count > 0 or updated_count > 0:
             self.stdout.write(
                 self.style.SUCCESS(
-                    "\n✅ Strategy setup complete! All strategies can now generate suggestions."
+                    "\nStrategy setup complete! All strategies can now generate suggestions."
                 )
             )
         else:

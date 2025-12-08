@@ -112,7 +112,7 @@ class TradeReconciliationService:
                             position = trade.position
                             if position.lifecycle_state == "pending_entry":
                                 position.lifecycle_state = "open_full"
-                                await position.asave()
+                                await position.asave(update_fields=["lifecycle_state"])
                                 report["positions_updated"] += 1
                                 logger.info(
                                     f"User {self.user.id}: Updated position {position.id} "
@@ -120,10 +120,15 @@ class TradeReconciliationService:
                                 )
 
                 except Trade.DoesNotExist:
-                    # Orphaned order - exists at broker but not in our DB
-                    logger.warning(
-                        f"User {self.user.id}: Found orphaned order {order.id} "
-                        f"(status={order_status}, symbol={order.underlying_symbol})"
+                    # Order exists at broker but no Trade record in our DB
+                    # This is expected for:
+                    # - External positions (created via broker UI, not our app)
+                    # - Profit target fills (child orders tracked in position.profit_target_details)
+                    # - Manual closing orders
+                    # Log at debug level since this is informational, not an error
+                    logger.debug(
+                        f"User {self.user.id}: Filled order {order.id} has no Trade record "
+                        f"(symbol={order.underlying_symbol}) - likely external or profit target"
                     )
                     report["orphaned_orders"].append(
                         {
@@ -210,9 +215,9 @@ class TradeReconciliationService:
         Detect and fix positions stuck in pending_entry despite filled orders.
 
         State Machine Self-Correction:
-        - Uses CachedOrder as source of truth (TastyTrade data already synced locally)
+        - Uses TastyTradeOrderHistory as source of truth (TastyTrade data already synced locally)
         - Detects positions in pending_entry with filled opening trades
-        - Updates Trade.filled_at from CachedOrder
+        - Updates Trade.filled_at from TastyTradeOrderHistory
         - Transitions Position to open_full
         - Creates profit targets if missing
 
@@ -226,7 +231,7 @@ class TradeReconciliationService:
         from asgiref.sync import sync_to_async
 
         from services.execution.order_service import OrderExecutionService
-        from trading.models import CachedOrder, Position, Trade
+        from trading.models import Position, TastyTradeOrderHistory, Trade
 
         report = {
             "positions_fixed": 0,
@@ -278,12 +283,12 @@ class TradeReconciliationService:
                         )
                         continue
 
-                    # Check CachedOrder for fill status (source of truth)
+                    # Check TastyTradeOrderHistory for fill status (source of truth)
                     try:
-                        cached_order = await CachedOrder.objects.aget(
+                        cached_order = await TastyTradeOrderHistory.objects.aget(
                             broker_order_id=opening_trade.broker_order_id
                         )
-                    except CachedOrder.DoesNotExist:
+                    except TastyTradeOrderHistory.DoesNotExist:
                         logger.debug(
                             f"Position {position.id}: No cached order found for {opening_trade.broker_order_id}"
                         )
@@ -292,12 +297,12 @@ class TradeReconciliationService:
                     # If order is filled on TastyTrade, fix the stuck state
                     if cached_order.status.lower() == "filled":
                         logger.info(
-                            f"🔧 STUCK POSITION DETECTED: Position {position.id} "
+                            f"STUCK POSITION DETECTED: Position {position.id} "
                             f"in pending_entry but order {cached_order.broker_order_id} "
                             f"is filled on TastyTrade (filled_at={cached_order.filled_at})"
                         )
 
-                        # Update Trade with fill data from CachedOrder
+                        # Update Trade with fill data from TastyTradeOrderHistory
                         if opening_trade.status != "filled" or not opening_trade.filled_at:
                             opening_trade.status = "filled"
                             opening_trade.filled_at = cached_order.filled_at
@@ -308,7 +313,7 @@ class TradeReconciliationService:
                             )
                             logger.info(
                                 f"Position {position.id}: Updated Trade {opening_trade.id} "
-                                f"with fill data from CachedOrder"
+                                f"with fill data from TastyTradeOrderHistory"
                             )
 
                         # Transition position to open_full
@@ -391,10 +396,18 @@ class TradeReconciliationService:
 
     async def fix_incomplete_profit_targets(self) -> dict:
         """
-        Detect and fix positions with incomplete profit targets.
+        Detect and fix positions with incomplete or missing profit targets.
 
-        Checks positions in open_full state where profit_targets_created=True
-        but the actual number of profit targets is less than expected for the strategy.
+        NOW VALIDATES AGAINST TASTYTRADE:
+        - Checks if profit target orders actually exist at broker
+        - Recreates orders that were deleted/cancelled
+        - Verifies position still has open legs at broker
+
+        For each open position:
+        1. Check if profit_target_details has order IDs
+        2. Verify those orders still exist at TastyTrade
+        3. Verify the position still has open legs
+        4. Recreate missing profit targets
 
         For Senex Trident: expects 3 profit targets (40%, 50%, 60%)
         For other strategies: verifies against strategy specification
@@ -403,21 +416,31 @@ class TradeReconciliationService:
             dict with fix report: {
                 "positions_checked": 0,
                 "incomplete_targets_fixed": 0,
+                "missing_orders_recreated": 0,
                 "errors": []
             }
         """
         from asgiref.sync import sync_to_async
+        from tastytrade import Account
 
+        from services.core.data_access import get_oauth_session
         from services.execution.order_service import OrderExecutionService
         from trading.models import Position, Trade
 
         report = {
             "positions_checked": 0,
             "incomplete_targets_fixed": 0,
+            "missing_orders_recreated": 0,
             "errors": [],
         }
 
         try:
+            # Get OAuth session for TastyTrade API
+            session = await get_oauth_session(self.user)
+            if not session:
+                report["errors"].append("Unable to obtain TastyTrade session")
+                return report
+
             # Get primary account
             account = await sync_to_async(
                 lambda: self.user.trading_accounts.filter(is_primary=True).first()
@@ -426,37 +449,64 @@ class TradeReconciliationService:
                 report["errors"].append("No primary trading account found")
                 return report
 
-            # Find positions in open_full with profit_targets_created=True
+            # Get TastyTrade account for API calls
+            tt_account = await Account.a_get(session, account.account_number)
+
+            # Find ALL open positions (full or partial) that are app-managed
+            # Don't filter by profit_targets_created - we want to check all
             open_positions = await sync_to_async(list)(
                 Position.objects.filter(
                     user=self.user,
                     trading_account=account,
-                    lifecycle_state="open_full",
+                    lifecycle_state__in=["open_full", "open_partial"],
                     is_app_managed=True,
-                    profit_targets_created=True,
                 )
                 .exclude(strategy_type=None)  # Skip stock holdings
                 .prefetch_related("trades")
             )
 
             if not open_positions:
-                logger.debug(f"User {self.user.id}: No open positions with profit targets to check")
+                logger.debug(f"User {self.user.id}: No open positions to check")
                 return report
 
             logger.info(
                 f"User {self.user.id}: Checking {len(open_positions)} open positions "
-                f"for incomplete profit targets..."
+                f"for profit target validity at TastyTrade..."
             )
 
             for position in open_positions:
                 report["positions_checked"] += 1
+
+                # Guard 4: Reload position to catch race conditions
+                # Position may have been closed during earlier phases of sync
+                fresh_position = await Position.objects.filter(
+                    id=position.id
+                ).afirst()
+                if fresh_position is None:
+                    logger.info(
+                        f"Position {position.id} deleted during sync, skipping"
+                    )
+                    continue
+                if fresh_position.lifecycle_state not in [
+                    "open_full", "open_partial"
+                ]:
+                    logger.info(
+                        f"Position {position.id} closed during sync "
+                        f"(state={fresh_position.lifecycle_state}), "
+                        f"skipping profit target check"
+                    )
+                    continue
+
+                logger.info(
+                    f"Position {position.id}: Starting check (strategy={position.strategy_type})"
+                )
 
                 try:
                     # Determine expected number of profit targets based on strategy
                     expected_target_count = self._get_expected_target_count(position.strategy_type)
 
                     if expected_target_count is None:
-                        logger.debug(
+                        logger.info(
                             f"Position {position.id}: Unknown strategy {position.strategy_type}, "
                             f"skipping profit target verification"
                         )
@@ -465,25 +515,117 @@ class TradeReconciliationService:
                     # Get expected spread types based on strategy
                     expected_spread_types = self._get_expected_spread_types(position.strategy_type)
                     if not expected_spread_types:
-                        logger.debug(
+                        logger.info(
                             f"Position {position.id}: Unknown spread types for {position.strategy_type}, "
                             f"skipping profit target verification"
                         )
                         continue
 
-                    # Determine which spread types are missing
-                    existing_spread_types = (
+                    # CRITICAL: Filter to only spreads that are actually still open
+                    # Check position metadata to see which legs still exist
+                    open_spread_types = await sync_to_async(
+                        self._get_open_spread_types_from_position
+                    )(position, expected_spread_types)
+
+                    if not open_spread_types:
+                        logger.info(
+                            f"Position {position.id}: No open spreads detected (position may be fully closed), "
+                            f"skipping profit target creation"
+                        )
+                        continue
+
+                    # Update expected spread types to only include open ones
+                    if len(open_spread_types) < len(expected_spread_types):
+                        logger.info(
+                            f"Position {position.id}: Only {len(open_spread_types)}/{len(expected_spread_types)} "
+                            f"spreads are still open: {open_spread_types} "
+                            f"(closed: {set(expected_spread_types) - set(open_spread_types)})"
+                        )
+                    expected_spread_types = open_spread_types
+
+                    logger.info(
+                        f"Position {position.id}: Checking profit targets "
+                        f"(expected {len(expected_spread_types)} spreads: {expected_spread_types})"
+                    )
+
+                    # STEP 1: Check which profit targets exist in metadata
+                    (
                         set(position.profit_target_details.keys())
                         if position.profit_target_details
                         else set()
                     )
+
+                    # STEP 2: Verify each existing profit target order actually exists at TastyTrade
+                    valid_spread_types = set()
+                    invalid_order_ids = []
+
+                    if position.profit_target_details:
+                        for spread_type, details in position.profit_target_details.items():
+                            order_id = details.get("order_id")
+                            if not order_id:
+                                # If profit_targets_created is True but order_id is null,
+                                # the orders likely exist at the broker but we lost the reference
+                                # (e.g., due to a race condition). Do NOT try to recreate - that
+                                # will cause duplicate orders. Flag for manual review instead.
+                                logger.error(
+                                    f"Position {position.id}: Profit target {spread_type} has no order_id "
+                                    f"but profit_targets_created=True. Orders may exist at broker. "
+                                    f"MANUAL INVESTIGATION REQUIRED - not recreating to avoid duplicates."
+                                )
+                                # Mark as valid to prevent recreation
+                                valid_spread_types.add(spread_type)
+                                invalid_order_ids.append((spread_type, None, "missing_order_id"))
+                                continue
+
+                            # Check if order exists at TastyTrade
+                            try:
+                                order = tt_account.get_order(session, order_id)
+                                if order:
+                                    # Order exists - check if it's still live (not filled/cancelled)
+                                    if order.status in ["Live", "Received", "Queued"]:
+                                        valid_spread_types.add(spread_type)
+                                        logger.info(
+                                            f"Position {position.id}: Profit target {spread_type} "
+                                            f"order {order_id} is VALID ({order.status})"
+                                        )
+                                    else:
+                                        # Order was filled/cancelled - should recreate
+                                        logger.warning(
+                                            f"Position {position.id}: Profit target {spread_type} "
+                                            f"order {order_id} is {order.status} - needs recreation"
+                                        )
+                                        invalid_order_ids.append(
+                                            (spread_type, order_id, order.status)
+                                        )
+                                else:
+                                    logger.warning(
+                                        f"Position {position.id}: Profit target {spread_type} "
+                                        f"order {order_id} not found at broker"
+                                    )
+                                    invalid_order_ids.append((spread_type, order_id, "not_found"))
+                            except Exception as e:
+                                logger.error(
+                                    f"Position {position.id}: Error checking order {order_id}: {e}"
+                                )
+                                invalid_order_ids.append((spread_type, order_id, f"error: {e}"))
+
+                    # STEP 3: Determine which spread types need to be (re)created
                     missing_spread_types = [
-                        st for st in expected_spread_types if st not in existing_spread_types
+                        st for st in expected_spread_types if st not in valid_spread_types
                     ]
 
                     if missing_spread_types:
+                        if invalid_order_ids:
+                            logger.warning(
+                                f"INVALID PROFIT TARGET ORDERS: Position {position.id} ({position.strategy_type}) "
+                                f"has {len(invalid_order_ids)} invalid orders: {invalid_order_ids}"
+                            )
+                            report["missing_orders_recreated"] += len(
+                                [x for x in invalid_order_ids if x[0] in missing_spread_types]
+                            )
+
                         logger.warning(
-                            f"🔍 INCOMPLETE PROFIT TARGETS: Position {position.id} ({position.strategy_type}) "
+                            f"MISSING PROFIT TARGETS: Position {position.id} ({position.strategy_type}) "
                             f"missing {len(missing_spread_types)}/{len(expected_spread_types)} profit targets: "
                             f"{missing_spread_types}"
                         )
@@ -504,9 +646,9 @@ class TradeReconciliationService:
                             )
                             continue
 
-                        # Create only the missing profit targets
+                        # Create the missing profit targets
                         logger.info(
-                            f"Position {position.id}: Creating {len(missing_spread_types)} missing profit targets: "
+                            f"Position {position.id}: Creating {len(missing_spread_types)} profit targets: "
                             f"{missing_spread_types}"
                         )
 
@@ -515,7 +657,7 @@ class TradeReconciliationService:
                             result = await sync_to_async(order_service.create_profit_targets_sync)(
                                 position,
                                 opening_trade.broker_order_id,
-                                preserve_existing=True,
+                                preserve_existing=False,  # Replace all since we validated
                                 filter_spread_types=missing_spread_types,
                             )
 
@@ -523,7 +665,7 @@ class TradeReconciliationService:
                                 order_ids = result.get("order_ids", [])
                                 if len(order_ids) == len(missing_spread_types):
                                     logger.info(
-                                        f"Position {position.id}: ✅ Successfully created {len(missing_spread_types)} "
+                                        f"Position {position.id}: Successfully created {len(missing_spread_types)} "
                                         f"missing profit targets: {order_ids}"
                                     )
                                     report["incomplete_targets_fixed"] += 1
@@ -650,3 +792,101 @@ class TradeReconciliationService:
 
         # Unknown strategy
         return None
+
+    def _get_open_spread_types_from_position(
+        self, position, expected_spread_types: list[str]
+    ) -> list[str]:
+        """
+        Determine which spreads from a position are actually still open.
+
+        Validates against position.metadata['legs'] to ensure we only create
+        profit targets for spreads that actually have open legs.
+
+        Args:
+            position: Position object with metadata
+            expected_spread_types: List of spread types defined by the strategy
+
+        Returns:
+            List of spread_type identifiers that are still open
+        """
+        metadata = position.metadata or {}
+        legs = metadata.get("legs", [])
+
+        if not legs:
+            logger.warning(
+                f"Position {position.id}: No legs found in metadata, cannot validate spreads"
+            )
+            return []
+
+        # Get leg symbols currently in position
+        current_leg_symbols = {leg.get("symbol") for leg in legs if leg.get("symbol")}
+
+        if not current_leg_symbols:
+            logger.warning(f"Position {position.id}: No valid leg symbols found in metadata")
+            return []
+
+        logger.debug(f"Position {position.id}: Current legs: {sorted(current_leg_symbols)}")
+
+        open_spread_types = []
+
+        # For Senex Trident, check which spreads are still open
+        if position.strategy_type == "senex_trident":
+            # Get the spread composition from metadata if available
+            spread_legs = metadata.get("spread_legs", {})
+
+            if spread_legs:
+                # Use spread_legs mapping if available
+                for spread_type in expected_spread_types:
+                    spread_leg_symbols = spread_legs.get(spread_type, [])
+                    if all(symbol in current_leg_symbols for symbol in spread_leg_symbols):
+                        open_spread_types.append(spread_type)
+                        logger.debug(
+                            f"Position {position.id}: Spread {spread_type} is OPEN "
+                            f"(legs: {spread_leg_symbols})"
+                        )
+                    else:
+                        missing = [s for s in spread_leg_symbols if s not in current_leg_symbols]
+                        logger.info(
+                            f"Position {position.id}: Spread {spread_type} is CLOSED "
+                            f"(missing legs: {missing})"
+                        )
+            else:
+                # Fallback: Analyze by option type if spread_legs not available
+                # Count puts and calls
+                puts = [s for s in current_leg_symbols if "P" in s[-9:]]  # Put indicator
+                calls = [s for s in current_leg_symbols if "C" in s[-9:]]  # Call indicator
+
+                logger.debug(
+                    f"Position {position.id}: Detected {len(puts)} puts, {len(calls)} calls"
+                )
+
+                # Senex Trident: 2 put spreads (4 put legs) + 1 call spread (2 call legs)
+                # If we have 2+ calls, call spread is open
+                if len(calls) >= 2 and "call_spread" in expected_spread_types:
+                    open_spread_types.append("call_spread")
+
+                # If we have 4 puts, both put spreads are open
+                # If we have 2 puts, only one put spread is open
+                if len(puts) >= 4:
+                    if "put_spread_1" in expected_spread_types:
+                        open_spread_types.append("put_spread_1")
+                    if "put_spread_2" in expected_spread_types:
+                        open_spread_types.append("put_spread_2")
+                elif len(puts) >= 2:
+                    # Only one put spread open - prefer put_spread_1
+                    if "put_spread_1" in expected_spread_types:
+                        open_spread_types.append("put_spread_1")
+
+                if open_spread_types:
+                    logger.info(
+                        f"Position {position.id}: Detected open spreads (fallback method): "
+                        f"{open_spread_types}"
+                    )
+
+        else:
+            # For other strategies, assume all expected spreads are open
+            # if the position itself is marked as open
+            logger.debug(f"Position {position.id}: Non-Trident strategy, assuming all spreads open")
+            open_spread_types = expected_spread_types
+
+        return open_spread_types

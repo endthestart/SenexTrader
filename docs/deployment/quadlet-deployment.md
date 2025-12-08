@@ -283,13 +283,13 @@ If you have existing containers running via podman-compose:
 
 | Feature | podman-compose | Quadlet + systemd |
 |---------|----------------|-------------------|
-| Auto-restart | ❌ Unreliable | ✅ Rock-solid |
-| Service management | ❌ Manual | ✅ systemd |
-| Logging | ⚠️ podman logs | ✅ journalctl |
-| Auto-updates | ❌ No | ✅ Built-in |
-| Dependencies | ⚠️ Limited | ✅ Full systemd |
-| Production-ready | ❌ No | ✅ Yes |
-| Rootless support | ✅ Yes | ✅ Yes |
+| Auto-restart | Unreliable | Rock-solid |
+| Service management | Manual | systemd |
+| Logging | podman logs | journalctl |
+| Auto-updates | No | Built-in |
+| Dependencies | Limited | Full systemd |
+| Production-ready | No | Yes |
+| Rootless support | Yes | Yes |
 
 ## References
 

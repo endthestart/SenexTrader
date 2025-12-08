@@ -156,7 +156,7 @@ class TestValidateSenexTridentStructure:
         suggestion = Mock()
         strategy_config = Mock()
         strategy_config.strategy_id = "senex_trident"
-        suggestion.strategy_configuration = strategy_config
+        suggestion.strategy_id = strategy_config.strategy_id
         suggestion.put_spread_quantity = 2
         suggestion.call_spread_quantity = 1
         suggestion.total_credit = Decimal("3.50")
@@ -170,7 +170,7 @@ class TestValidateSenexTridentStructure:
         suggestion = Mock()
         strategy_config = Mock()
         strategy_config.strategy_id = "senex_trident"
-        suggestion.strategy_configuration = strategy_config
+        suggestion.strategy_id = strategy_config.strategy_id
         suggestion.put_spread_quantity = 2
         suggestion.call_spread_quantity = 0
         suggestion.total_credit = Decimal("2.50")
@@ -184,7 +184,7 @@ class TestValidateSenexTridentStructure:
         suggestion = Mock()
         strategy_config = Mock()
         strategy_config.strategy_id = "bull_put_spread"
-        suggestion.strategy_configuration = strategy_config
+        suggestion.strategy_id = strategy_config.strategy_id
         suggestion.put_spread_quantity = 1  # Would be invalid for Senex
         suggestion.call_spread_quantity = 0
 
@@ -196,7 +196,7 @@ class TestValidateSenexTridentStructure:
         suggestion = Mock()
         strategy_config = Mock()
         strategy_config.strategy_id = "senex_trident"
-        suggestion.strategy_configuration = strategy_config
+        suggestion.strategy_id = strategy_config.strategy_id
         suggestion.put_spread_quantity = 0
         suggestion.call_spread_quantity = 1
         suggestion.total_credit = Decimal("3.50")
@@ -212,7 +212,7 @@ class TestValidateSenexTridentStructure:
         suggestion = Mock()
         strategy_config = Mock()
         strategy_config.strategy_id = "senex_trident"
-        suggestion.strategy_configuration = strategy_config
+        suggestion.strategy_id = strategy_config.strategy_id
         suggestion.put_spread_quantity = 1  # THE BUG
         suggestion.call_spread_quantity = 1
         suggestion.total_credit = Decimal("3.50")
@@ -228,7 +228,7 @@ class TestValidateSenexTridentStructure:
         suggestion = Mock()
         strategy_config = Mock()
         strategy_config.strategy_id = "senex_trident"
-        suggestion.strategy_configuration = strategy_config
+        suggestion.strategy_id = strategy_config.strategy_id
         suggestion.put_spread_quantity = 3
         suggestion.call_spread_quantity = 1
         suggestion.total_credit = Decimal("3.50")
@@ -244,7 +244,7 @@ class TestValidateSenexTridentStructure:
         suggestion = Mock()
         strategy_config = Mock()
         strategy_config.strategy_id = "senex_trident"
-        suggestion.strategy_configuration = strategy_config
+        suggestion.strategy_id = strategy_config.strategy_id
         suggestion.put_spread_quantity = 2
         suggestion.call_spread_quantity = 0
         suggestion.total_credit = Decimal("2.50")
@@ -258,7 +258,7 @@ class TestValidateSenexTridentStructure:
         suggestion = Mock()
         strategy_config = Mock()
         strategy_config.strategy_id = "senex_trident"
-        suggestion.strategy_configuration = strategy_config
+        suggestion.strategy_id = strategy_config.strategy_id
         suggestion.put_spread_quantity = 2
         suggestion.call_spread_quantity = 2
         suggestion.total_credit = Decimal("3.50")
@@ -274,7 +274,7 @@ class TestValidateSenexTridentStructure:
         suggestion = Mock()
         strategy_config = Mock()
         strategy_config.strategy_id = "senex_trident"
-        suggestion.strategy_configuration = strategy_config
+        suggestion.strategy_id = strategy_config.strategy_id
         suggestion.put_spread_quantity = 2
         suggestion.call_spread_quantity = 1
         suggestion.total_credit = Decimal("0")
@@ -289,7 +289,7 @@ class TestValidateSenexTridentStructure:
         suggestion = Mock()
         strategy_config = Mock()
         strategy_config.strategy_id = "senex_trident"
-        suggestion.strategy_configuration = strategy_config
+        suggestion.strategy_id = strategy_config.strategy_id
         suggestion.put_spread_quantity = 2
         suggestion.call_spread_quantity = 1
         suggestion.total_credit = Decimal("-1.50")
@@ -304,7 +304,7 @@ class TestValidateSenexTridentStructure:
         suggestion = Mock()
         strategy_config = Mock()
         strategy_config.strategy_id = "senex_trident"
-        suggestion.strategy_configuration = strategy_config
+        suggestion.strategy_id = strategy_config.strategy_id
         suggestion.put_spread_quantity = 2
         suggestion.call_spread_quantity = 1
         suggestion.total_credit = Decimal("3.50")
@@ -319,7 +319,7 @@ class TestValidateSenexTridentStructure:
         suggestion = Mock()
         strategy_config = Mock()
         strategy_config.strategy_id = "senex_trident"
-        suggestion.strategy_configuration = strategy_config
+        suggestion.strategy_id = strategy_config.strategy_id
         suggestion.put_spread_quantity = 2
         suggestion.call_spread_quantity = 1
         suggestion.total_credit = Decimal("3.50")

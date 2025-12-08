@@ -35,12 +35,12 @@ class Command(AsyncCommand):
                 metrics = await service.get_market_metrics(symbol)
                 if metrics and metrics.get("iv_rank") is not None:
                     self.stdout.write(
-                        self.style.SUCCESS(f"✓ {symbol}: IV Rank {metrics['iv_rank']:.2f}")
+                        self.style.SUCCESS(f"[OK] {symbol}: IV Rank {metrics['iv_rank']:.2f}")
                     )
                 else:
                     self.stdout.write(
-                        self.style.ERROR(f"✗ {symbol}: Failed to fetch metrics or IV Rank is null.")
+                        self.style.ERROR(f"[FAIL] {symbol}: Failed to fetch metrics or IV Rank is null.")
                     )
                 await asyncio.sleep(delay)  # Rate limiting
             except Exception as e:
-                self.stdout.write(self.style.ERROR(f"✗ {symbol}: {e}"))
+                self.stdout.write(self.style.ERROR(f"[FAIL] {symbol}: {e}"))

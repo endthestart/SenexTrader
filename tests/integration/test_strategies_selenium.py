@@ -33,6 +33,11 @@ import sys
 import time
 from pathlib import Path
 
+import pytest
+
+# Skip this module if selenium is not installed
+pytest.importorskip("selenium", reason="Selenium not installed")
+
 from selenium import webdriver
 from selenium.common.exceptions import TimeoutException
 from selenium.webdriver.chrome.options import Options
@@ -80,9 +85,9 @@ def verify_dry_run_badge(driver):
 
         if not badge_elements:
             screenshot = take_screenshot(driver, "dry_run_badge", "missing")
-            print("\n✗ CRITICAL: DRY-RUN MODE badge NOT FOUND")
+            print("\n[FAIL] CRITICAL: DRY-RUN MODE badge NOT FOUND")
             print(f"Screenshot: {screenshot}")
-            print("\n⚠️  ABORTING TESTS - Cannot verify dry-run mode is active!")
+            print("\nABORTING TESTS - Cannot verify dry-run mode is active!")
             print("Ensure TASTYTRADE_DRY_RUN=True in your .env file")
             return False
 
@@ -90,17 +95,17 @@ def verify_dry_run_badge(driver):
         badge = badge_elements[0]
         if not badge.is_displayed():
             screenshot = take_screenshot(driver, "dry_run_badge", "hidden")
-            print("\n✗ CRITICAL: DRY-RUN MODE badge exists but is hidden")
+            print("\n[FAIL] CRITICAL: DRY-RUN MODE badge exists but is hidden")
             print(f"Screenshot: {screenshot}")
             return False
 
-        print("✓")
+        print("[OK]")
         print("   Badge confirmed - dry-run mode active, safe to test\n")
         return True
 
     except Exception as e:
         screenshot = take_screenshot(driver, "dry_run_badge", "error")
-        print(f"\n✗ CRITICAL: Error checking DRY-RUN badge: {e}")
+        print(f"\n[FAIL] CRITICAL: Error checking DRY-RUN badge: {e}")
         print(f"Screenshot: {screenshot}")
         return False
 
@@ -144,20 +149,20 @@ def verify_system_status(driver):
 
         if missing_statuses:
             screenshot = take_screenshot(driver, "system_status", "verification_failed")
-            print("\n✗ CRITICAL: System Status verification failed")
+            print("\n[FAIL] CRITICAL: System Status verification failed")
             print(f"Screenshot: {screenshot}")
             for status in missing_statuses:
                 print(f"   - {status}")
-            print("\n⚠️  ABORTING TESTS - System services not ready")
+            print("\nABORTING TESTS - System services not ready")
             return False
 
-        print("✓")
+        print("[OK]")
         print("   All services connected and active\n")
         return True
 
     except Exception as e:
         screenshot = take_screenshot(driver, "system_status", "error")
-        print(f"\n✗ CRITICAL: Error checking System Status: {e}")
+        print(f"\n[FAIL] CRITICAL: Error checking System Status: {e}")
         print(f"Screenshot: {screenshot}")
         return False
 
@@ -196,12 +201,12 @@ def main():
         login(driver, password)
 
         if not verify_dry_run_badge(driver):
-            print("\n❌ FATAL: Cannot proceed without dry-run mode verification")
+            print("\nFATAL: Cannot proceed without dry-run mode verification")
             driver.quit()
             sys.exit(1)
 
         if not verify_system_status(driver):
-            print("\n❌ FATAL: System status check failed")
+            print("\nFATAL: System status check failed")
             driver.quit()
             sys.exit(1)
 
@@ -221,7 +226,7 @@ def main():
         trident_result = test_senex_trident(driver)
 
         # Combine results
-        all_results = main_results + [trident_result]
+        all_results = [*main_results, trident_result]
 
         # Print summary
         print_summary(all_results)
@@ -244,7 +249,7 @@ def login(driver, password):
         WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.NAME, "username")))
     except TimeoutException:
         screenshot = take_screenshot(driver, "login", "page_not_loaded")
-        print("\n✗ Login page did not load")
+        print("\n[FAIL] Login page did not load")
         print(f"Screenshot: {screenshot}")
         print(f"\nIs the dev server running at {SERVER_URL}?")
         sys.exit(1)
@@ -276,17 +281,17 @@ def login(driver, password):
             if error_elements:
                 error_text = error_elements[0].text
                 screenshot = take_screenshot(driver, "login", "failed")
-                print(f"\n✗ Login failed: {error_text}")
+                print(f"\n[FAIL] Login failed: {error_text}")
                 print(f"Screenshot: {screenshot}")
                 sys.exit(1)
 
-        print("✓")
+        print("[OK]")
 
     except TimeoutException:
         screenshot = take_screenshot(driver, "login", "timeout")
         page_url = driver.current_url
         page_title = driver.title
-        print("\n✗ Login timeout after 15s")
+        print("\n[FAIL] Login timeout after 15s")
         print(f"Current URL: {page_url}")
         print(f"Page title: {page_title}")
         print(f"Screenshot: {screenshot}")
@@ -302,6 +307,15 @@ def login(driver, password):
         sys.exit(1)
 
 
+@pytest.fixture
+def driver():
+    """Create Chrome WebDriver for Selenium tests."""
+    _driver = create_chrome_driver()
+    yield _driver
+    _driver.quit()
+
+
+@pytest.mark.skip(reason="Selenium test requires running server and browser")
 def test_trading_page_strategies(driver):
     """Test all strategies on the main /trading/ page."""
     print(f"\n{'=' * 80}")
@@ -316,7 +330,7 @@ def test_trading_page_strategies(driver):
         WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.ID, "selectionMode")))
     except TimeoutException:
         screenshot = take_screenshot(driver, "trading_page", "load_timeout")
-        print("✗ Trading page failed to load")
+        print("[FAIL] Trading page failed to load")
         print(f"Screenshot: {screenshot}")
         return []
 
@@ -325,9 +339,9 @@ def test_trading_page_strategies(driver):
     try:
         mode_select = Select(driver.find_element(By.ID, "selectionMode"))
         mode_select.select_by_value("forced")
-        print("✓\n")
+        print("[OK]\n")
     except Exception as e:
-        print(f"✗ Failed: {e}")
+        print(f"[FAIL] Failed: {e}")
         return []
 
     # Wait for strategy dropdown to be enabled
@@ -343,9 +357,9 @@ def test_trading_page_strategies(driver):
     try:
         strategy_select = Select(driver.find_element(By.ID, "strategySelect"))
         strategies = [(opt.get_attribute("value"), opt.text) for opt in strategy_select.options]
-        print(f"✓ Found {len(strategies)} strategies\n")
+        print(f"[OK] Found {len(strategies)} strategies\n")
     except Exception as e:
-        print(f"✗ Failed: {e}")
+        print(f"[FAIL] Failed: {e}")
         return []
 
     # Test each strategy
@@ -356,9 +370,9 @@ def test_trading_page_strategies(driver):
         results.append(result)
 
         if result["passed"]:
-            print("✓ PASS")
+            print("[OK] PASS")
         else:
-            print("✗ FAIL")
+            print("[FAIL] FAIL")
             print(f"    {result['error']}")
             if result.get("screenshot"):
                 print(f"    Screenshot: {result['screenshot']}")
@@ -450,9 +464,9 @@ def test_senex_trident(driver):
         result = wait_for_generation_result(driver, "senex_trident")
 
         if result["passed"]:
-            print("✓ PASS")
+            print("[OK] PASS")
         else:
-            print("✗ FAIL")
+            print("[FAIL] FAIL")
             print(f"    {result['error']}")
             if result.get("screenshot"):
                 print(f"    Screenshot: {result['screenshot']}")
@@ -461,7 +475,7 @@ def test_senex_trident(driver):
 
     except Exception as e:
         screenshot = take_screenshot(driver, "senex_trident", "exception")
-        print("✗ FAIL")
+        print("[FAIL] FAIL")
         print(f"    {e!s}")
         print(f"    Screenshot: {screenshot}")
         return {
@@ -571,8 +585,8 @@ def print_summary(results):
     print("SUMMARY")
     print(f"{'=' * 80}")
     print(f"Total:   {len(results)}")
-    print(f"Passed:  {passed} ✓")
-    print(f"Failed:  {failed} ✗")
+    print(f"Passed:  {passed}")
+    print(f"Failed:  {failed}")
 
     if failed > 0:
         print(f"\n{'=' * 80}")

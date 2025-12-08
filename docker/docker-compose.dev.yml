@@ -9,3 +9,8 @@ services:
     volumes:
       - ./redis-data:/data
     restart: unless-stopped
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    tmpfs:
+      - /tmp

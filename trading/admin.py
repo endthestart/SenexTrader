@@ -36,7 +36,6 @@ class TradeAdmin(admin.ModelAdmin):
         "quantity",
         "executed_price",
         "lifecycle_event",
-        "realized_pnl",
         "submitted_at",
     )
     list_filter = ("trade_type", "status", "lifecycle_event", "submitted_at")

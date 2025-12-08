@@ -24,7 +24,7 @@ You cannot call this from an async context - use a thread or sync_to_async.
 
 ## Pattern 1: Management Commands (RECOMMENDED)
 
-### ✅ Correct Pattern: Pure Sync + Event Loop
+### Correct Pattern: Pure Sync + Event Loop
 
 ```python
 from django.core.management.base import BaseCommand
@@ -33,10 +33,10 @@ from trading.models import Position
 
 class Command(BaseCommand):
     def handle(self, *args, **options):
-        # ✅ Sync Django ORM - works directly
+        # Sync Django ORM - works directly
         position = Position.objects.get(id=33)
 
-        # ✅ Call async functions via event loop
+        # Call async functions via event loop
         result = self._call_async_api(position.user, order_id)
 
     def _call_async_api(self, user, order_id):
@@ -64,7 +64,7 @@ class Command(BaseCommand):
         return True
 ```
 
-### ⚠️ When Async Helpers Need Django ORM
+### When Async Helpers Need Django ORM
 
 If your async helper needs to save to the database, use `sync_to_async`:
 
@@ -94,15 +94,15 @@ class Command(BaseCommand):
 
     async def _async_create_order(self, position):
         """Async function that needs to save to DB."""
-        # ✅ Async SDK work
+        # Async SDK work
         session = await get_oauth_session(position.user)
         order = await create_order(session)
 
-        # ❌ WRONG: Direct ORM call
+        # WRONG: Direct ORM call
         # position.profit_target_details['new_order'] = order.id
         # position.save()  # ERROR!
 
-        # ✅ CORRECT: Use sync_to_async
+        # CORRECT: Use sync_to_async
         position.profit_target_details['new_order'] = order.id
         await sync_to_async(position.save)()
 
@@ -112,21 +112,21 @@ class Command(BaseCommand):
 **Why This Matters**: Even though you're using Pattern 1 (management command), once you're inside an `async def` function, ALL Django ORM calls must use `sync_to_async`.
 
 **Key Rules:**
-1. ✅ Django ORM calls stay in `handle()` or sync methods
-2. ✅ Async SDK calls go in separate `async def` methods
-3. ✅ Bridge them with `asyncio.new_event_loop()`
-4. ✅ ALWAYS `loop.close()` in `finally` block
-5. ⚠️ **CRITICAL**: If async helpers need Django ORM, use `sync_to_async`
+1. Django ORM calls stay in `handle()` or sync methods
+2. Async SDK calls go in separate `async def` methods
+3. Bridge them with `asyncio.new_event_loop()`
+4. ALWAYS `loop.close()` in `finally` block
+5. **CRITICAL**: If async helpers need Django ORM, use `sync_to_async`
 
-### ❌ What NOT to Do
+### What NOT to Do
 
 ```python
-# ❌ WRONG: Async function calling Django ORM
+# WRONG: Async function calling Django ORM
 async def fix_position():
     position = Position.objects.get(id=33)  # ERROR!
     await cancel_order(order_id)
 
-# ❌ WRONG: Mixing sync/async without proper loop
+# WRONG: Mixing sync/async without proper loop
 def handle(self):
     await cancel_order(order_id)  # ERROR!
 ```
@@ -142,10 +142,10 @@ from services.utils.async_utils import run_async
 
 class Command(BaseCommand):
     def handle(self, *args, **options):
-        # ✅ Django ORM - sync
+        # Django ORM - sync
         position = Position.objects.get(id=33)
 
-        # ✅ Use run_async for async calls
+        # Use run_async for async calls
         result = run_async(self._async_operation(position.user))
 
     async def _async_operation(self, user):
@@ -155,9 +155,9 @@ class Command(BaseCommand):
 ```
 
 **When to use `run_async`:**
-- ✅ Simple one-off async calls
-- ✅ You want cleaner code
-- ❌ Avoid for complex loops or error handling
+- Simple one-off async calls
+- You want cleaner code
+- Avoid for complex loops or error handling
 
 ---
 
@@ -197,7 +197,7 @@ class Command(BaseCommand):
         position = Position.objects.get(id=33)
 
         service = OrderExecutionService(position.user)
-        # ✅ Use the _sync version
+        # Use the _sync version
         result = service.create_profit_targets_sync(
             position,
             opening_trade.broker_order_id
@@ -223,11 +223,11 @@ from services.utils.async_utils import run_async
 def sync_positions_task():
     """Celery task - sync function."""
 
-    # ✅ Django ORM - direct access
+    # Django ORM - direct access
     users = User.objects.filter(is_active=True)
 
     for user in users:
-        # ✅ Use run_async for async operations
+        # Use run_async for async operations
         result = run_async(_async_sync_user_positions(user))
 
 async def _async_sync_user_positions(user):
@@ -237,10 +237,10 @@ async def _async_sync_user_positions(user):
 ```
 
 **Key Rules:**
-1. ✅ Task function itself is sync (`def`, not `async def`)
-2. ✅ Django ORM calls in task function
-3. ✅ Async SDK calls in separate `async def` helpers
-4. ✅ Use `run_async()` to bridge them
+1. Task function itself is sync (`def`, not `async def`)
+2. Django ORM calls in task function
+3. Async SDK calls in separate `async def` helpers
+4. Use `run_async()` to bridge them
 
 ---
 
@@ -271,11 +271,11 @@ def main():
     """Main sync function - Django ORM lives here."""
     print("Starting script...")
 
-    # ✅ Django ORM - sync
+    # Django ORM - sync
     positions = Position.objects.filter(symbol='QQQ')
 
     for position in positions:
-        # ✅ Call async via helper
+        # Call async via helper
         result = call_async_api(position.user, position.id)
         print(f"Position {position.id}: {result}")
 
@@ -301,10 +301,10 @@ if __name__ == "__main__":
 ```
 
 **Critical Points:**
-1. ✅ `main()` is sync (NOT `async def main()`)
-2. ✅ Django setup before any imports
-3. ✅ Use event loop pattern, not `asyncio.run()`
-4. ❌ NEVER `if __name__ == "__main__": asyncio.run(main())`
+1. `main()` is sync (NOT `async def main()`)
+2. Django setup before any imports
+3. Use event loop pattern, not `asyncio.run()`
+4. NEVER `if __name__ == "__main__": asyncio.run(main())`
 
 ---
 
@@ -320,10 +320,10 @@ from asgiref.sync import sync_to_async
 async def async_function():
     """Async function that needs Django ORM."""
 
-    # ❌ WRONG: Direct ORM call
+    # WRONG: Direct ORM call
     # position = Position.objects.get(id=33)
 
-    # ✅ CORRECT: Wrap in sync_to_async
+    # CORRECT: Wrap in sync_to_async
     position = await sync_to_async(Position.objects.get)(id=33)
 
     # Or for queries:
@@ -349,14 +349,14 @@ async def async_function():
 ### Mistake 1: Async Function Calling Django ORM
 
 ```python
-# ❌ WRONG
+# WRONG
 async def fix_position():
     position = Position.objects.get(id=33)  # ERROR!
 ```
 
 **Fix: Make it sync**
 ```python
-# ✅ CORRECT
+# CORRECT
 def fix_position():
     position = Position.objects.get(id=33)
     result = call_async_helper(position.user)
@@ -365,14 +365,14 @@ def fix_position():
 ### Mistake 2: Using asyncio.run() in Scripts
 
 ```python
-# ❌ WRONG
+# WRONG
 if __name__ == "__main__":
     asyncio.run(main())  # main() is async def
 ```
 
 **Fix: Make main() sync**
 ```python
-# ✅ CORRECT
+# CORRECT
 def main():  # Sync function
     position = Position.objects.get(id=33)
     result = call_async_via_loop()
@@ -384,7 +384,7 @@ if __name__ == "__main__":
 ### Mistake 3: Forgetting to Close Event Loop
 
 ```python
-# ❌ WRONG
+# WRONG
 def call_api():
     loop = asyncio.new_event_loop()
     result = loop.run_until_complete(async_call())
@@ -394,7 +394,7 @@ def call_api():
 
 **Fix: Always use try/finally**
 ```python
-# ✅ CORRECT
+# CORRECT
 def call_api():
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
@@ -408,7 +408,7 @@ def call_api():
 ### Mistake 4: Mixing Contexts in Same Function
 
 ```python
-# ❌ WRONG
+# WRONG
 async def process_position():
     position = Position.objects.get(id=33)  # Sync in async!
     await cancel_order(order_id)  # This won't even run
@@ -416,7 +416,7 @@ async def process_position():
 
 **Fix: Separate concerns OR use sync_to_async**
 ```python
-# ✅ CORRECT Option 1: Keep ORM in sync functions
+# CORRECT Option 1: Keep ORM in sync functions
 def process_position():
     position = Position.objects.get(id=33)  # Sync
     result = call_async_safely(position)  # Bridge
@@ -433,7 +433,7 @@ async def _async_work(user):
     # Pure async - no ORM
     pass
 
-# ✅ CORRECT Option 2: Use sync_to_async if async function needs ORM
+# CORRECT Option 2: Use sync_to_async if async function needs ORM
 from asgiref.sync import sync_to_async
 
 async def process_position():
@@ -479,7 +479,7 @@ Are you writing...
 
 ## Real Examples from Codebase
 
-### ✅ Working: fix_call_spread_profit_targets.py
+### Working: fix_call_spread_profit_targets.py
 
 ```python
 class Command(BaseCommand):
@@ -509,7 +509,7 @@ class Command(BaseCommand):
             loop.close()
 ```
 
-### ✅ Working: trading/tasks.py
+### Working: trading/tasks.py
 
 ```python
 @shared_task
@@ -519,7 +519,7 @@ def batch_sync_data_task(self):
     # Task 1: Sync positions
     try:
         logger.info("Syncing positions...")
-        result = run_async(_async_sync_positions())  # ✅ run_async
+        result = run_async(_async_sync_positions())  # run_async
     except Exception as e:
         logger.error(f"Failed: {e}")
 
@@ -634,14 +634,14 @@ This guide consolidates years of hard-won lessons from production async/sync iss
 
 **Problem**: After `run_async()` closed event loops, HTTP clients tried cleanup on closed loops.
 ```python
-# ❌ WRONG: Validation after loop closes
+# WRONG: Validation after loop closes
 session = run_async(get_session())
 validate_session(session)  # Boom - loop already closed!
 ```
 
 **Fix**: Trust service layers. Don't add validation at call sites.
 ```python
-# ✅ CORRECT: Service handles validation internally
+# CORRECT: Service handles validation internally
 session = await TastyTradeSessionService.get_session_for_user(...)
 # Session is already validated, ready to use
 ```
@@ -650,7 +650,7 @@ session = await TastyTradeSessionService.get_session_for_user(...)
 
 **Problem**: `account.user` triggered sync DB query in async context.
 ```python
-# ❌ WRONG
+# WRONG
 async def process():
     account = await get_account(user)
     email = account.user.email  # ERROR - sync query!
@@ -658,7 +658,7 @@ async def process():
 
 **Fix**: Use `select_related()` to prefetch.
 ```python
-# ✅ CORRECT
+# CORRECT
 async def get_account(user):
     return await TradingAccount.objects.select_related('user').afirst()
 ```
@@ -677,7 +677,7 @@ async def get_account(user):
 
 **Anti-pattern**: Adding validation wrappers around services that already validate.
 ```python
-# ❌ WRONG: Double validation
+# WRONG: Double validation
 session = await get_session(user)
 if not await validate(session):  # Service already did this!
     refresh()
@@ -688,21 +688,21 @@ if not await validate(session):  # Service already did this!
 ### Lesson 5: Run_Async vs Event Loop Pattern
 
 **When to use `run_async` helper**:
-- ✅ Simple one-off async calls
-- ✅ Celery tasks with clear error boundaries
-- ✅ Service methods providing sync wrappers
+- Simple one-off async calls
+- Celery tasks with clear error boundaries
+- Service methods providing sync wrappers
 
 **When to use `asyncio.new_event_loop()` pattern**:
-- ✅ Management commands (better control)
-- ✅ One-off scripts (explicit lifecycle)
-- ✅ Complex error handling needs
-- ✅ Multiple sequential async calls
+- Management commands (better control)
+- One-off scripts (explicit lifecycle)
+- Complex error handling needs
+- Multiple sequential async calls
 
 ### Lesson 6: Django ORM in Async Helpers (Nov 2025)
 
 **Problem**: Management command using Pattern 1 added async helper that called `position.save()`.
 ```python
-# ❌ WRONG: Even in Pattern 1, can't call ORM in async helpers
+# WRONG: Even in Pattern 1, can't call ORM in async helpers
 class Command(BaseCommand):
     def handle(self):
         loop = asyncio.new_event_loop()
@@ -718,7 +718,7 @@ class Command(BaseCommand):
 
 **Fix**: Use `sync_to_async` for ORM calls within async functions.
 ```python
-# ✅ CORRECT
+# CORRECT
 from asgiref.sync import sync_to_async
 
 async def _async_work(self, position):

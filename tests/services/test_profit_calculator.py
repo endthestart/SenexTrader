@@ -107,17 +107,19 @@ class TestProfitCalculator:
             quantity=2,
             status="filled",
         )
+        # First close trade: (2.50 - 1.30) * 100 = 120
         Trade.objects.create(
             user=user,
             position=position,
             trading_account=account,
-            broker_order_id="close_realized",
+            broker_order_id="close_first",
             trade_type="close",
             order_legs=[],
-            quantity=1,  # Quantity stored as positive in our system
+            quantity=1,
             status="filled",
-            realized_pnl=Decimal("120.00"),
+            executed_price=Decimal("1.30"),
         )
+        # Second close trade: (2.50 - 1.10) * 100 = 140
         Trade.objects.create(
             user=user,
             position=position,
@@ -125,7 +127,7 @@ class TestProfitCalculator:
             broker_order_id="close_calc",
             trade_type="close",
             order_legs=[],
-            quantity=1,  # Quantity stored as positive in our system
+            quantity=1,
             status="filled",
             executed_price=Decimal("1.10"),
         )
@@ -143,7 +145,7 @@ class TestProfitCalculator:
         )
 
         realised = calculator.calculate_position_realized(position)
-        # Realized trade contributes 120, calculated trade: (2.5 - 1.1) * 100 = 140
+        # First close: (2.50 - 1.30) * 100 = 120, Second close: (2.50 - 1.10) * 100 = 140
         assert realised == Decimal("260.00")
 
     def test_calculate_position_unrealized_defaults_to_zero(self, calculator, position):

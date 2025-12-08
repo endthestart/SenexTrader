@@ -871,7 +871,7 @@ All strategies are always shown with their scores for transparency:
 Auto Mode - Selected Strategy: Bull Put Spread (Score: 78.5)
 
  Ranked Strategies:
- 1. ✓ Bull Put Spread          78.5  HIGH    [Selected]
+ 1. [OK] Bull Put Spread          78.5  HIGH    [Selected]
     └─ Bullish MACD - favorable for bull put spread
     └─ IV rank 55% - good premium collection
     └─ Price above SMA - uptrend confirmed
@@ -1032,16 +1032,16 @@ return min(stress, 100)
 
 ## Development Roadmap
 
-### Current Status: ✅ Production
+### Current Status: Production
 
 **Completed**:
-- ✅ All technical indicators implemented and cached
-- ✅ All strategy scoring algorithms complete
-- ✅ Hard stop validation working
-- ✅ Auto and Manual modes functional
-- ✅ Real-time streaming data integration
-- ✅ Earnings and dividend detection
-- ✅ WebSocket-based suggestion generation
+- All technical indicators implemented and cached
+- All strategy scoring algorithms complete
+- Hard stop validation working
+- Auto and Manual modes functional
+- Real-time streaming data integration
+- Earnings and dividend detection
+- WebSocket-based suggestion generation
 
 **Next Priorities**:
 
@@ -1061,7 +1061,7 @@ cat ../senextrader_docs/planning/27-code-quality-improvements/task-001-fix-n1-qu
 **Start First Task** (Fix N+1 Queries - 2-3 hours):
 ```bash
 # Impact: Production-safe database queries, 80-95% query reduction
-# Priority: ⚠️ CRITICAL - Performance blocker
+# Priority: CRITICAL - Performance blocker
 ```
 
 **Run Strategy Validation Tests**:

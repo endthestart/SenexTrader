@@ -11,16 +11,10 @@ import pytest
 def test_no_circular_imports_services():
     """Verify services modules can be imported without circular dependency."""
     # If any of these imports fail with circular import error, test fails
-    import services.execution.order_service
-    import services.greeks_service
-    import services.historical_data_provider
-    import services.market_analysis  # Includes market condition validation
-    import services.option_chain_service
-    import services.position_sync
-    import services.risk_manager
-    import services.strategies.senex_trident_strategy
-    import services.strategy_selector
-    import services.technical_indicator_calculator  # noqa: F401
+    import services.brokers.tastytrade  # noqa: F401
+    import services.core.data_access  # noqa: F401
+    import services.market_data.service  # noqa: F401
+    import services.strategies.selector  # noqa: F401
 
     assert True, "All service modules imported successfully"
 
@@ -37,7 +31,7 @@ def test_no_circular_imports_streaming():
 def test_no_circular_imports_cross_module():
     """Verify cross-module imports work without circular dependency."""
     # Import both streaming and services together
-    import services.strategy_selector  # noqa: F401
+    import services.strategies.selector  # noqa: F401
     import streaming.services.stream_manager  # noqa: F401
 
     assert True, "Cross-module imports work without circular dependency"

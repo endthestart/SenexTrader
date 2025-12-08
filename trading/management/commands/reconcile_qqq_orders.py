@@ -87,21 +87,21 @@ class Command(BaseCommand):
         user_email = options["user"]
 
         self.stdout.write("\n" + "=" * 80)
-        self.stdout.write("🔄 QQQ ORDER RECONCILIATION")
+        self.stdout.write("QQQ ORDER RECONCILIATION")
         self.stdout.write("=" * 80)
 
         if dry_run:
-            self.stdout.write(self.style.WARNING("\n⚠️  DRY RUN MODE - No changes will be made\n"))
+            self.stdout.write(self.style.WARNING("\nDRY RUN MODE - No changes will be made\n"))
 
         # Get user (sync Django ORM)
         try:
             user = User.objects.get(email=user_email)
         except User.DoesNotExist:
-            self.stdout.write(self.style.ERROR(f"❌ User not found: {user_email}"))
+            self.stdout.write(self.style.ERROR(f"User not found: {user_email}"))
             return
 
         # Step 1: Get open positions from database (sync Django ORM)
-        self.stdout.write("\n💾 Step 1: Checking database positions...")
+        self.stdout.write("\nStep 1: Checking database positions...")
         positions = (
             Position.objects.filter(
                 symbol="QQQ", lifecycle_state__in=["open_full", "open_partial"], user=user
@@ -125,7 +125,7 @@ class Command(BaseCommand):
 
         # Step 2: Fetch active orders from TastyTrade (via async bridge)
         self.stdout.write(
-            f"\n📡 Step 2: Fetching active orders from TastyTrade (last {days_lookback} days)..."
+            f"\nStep 2: Fetching active orders from TastyTrade (last {days_lookback} days)..."
         )
         tt_orders = self._fetch_tastytrade_orders_sync(user, days_lookback)
 
@@ -133,7 +133,7 @@ class Command(BaseCommand):
         self.stdout.write(f"   Found {len(qqq_orders)} active QQQ orders")
 
         # Step 3: Analyze discrepancies
-        self.stdout.write("\n🔍 Step 3: Analyzing discrepancies...")
+        self.stdout.write("\nStep 3: Analyzing discrepancies...")
 
         analysis = self._analyze_orders(qqq_orders, positions)
 
@@ -149,7 +149,7 @@ class Command(BaseCommand):
                     )
                     if confirm.lower() != "yes":
                         self.stdout.write(
-                            self.style.WARNING("⏭️  Skipping orphaned order cancellation")
+                            self.style.WARNING("Skipping orphaned order cancellation")
                         )
                         cancel_orphaned = False
 
@@ -163,7 +163,7 @@ class Command(BaseCommand):
                     )
                     if confirm.lower() != "yes":
                         self.stdout.write(
-                            self.style.WARNING("⏭️  Skipping invalid order ID clearing")
+                            self.style.WARNING("Skipping invalid order ID clearing")
                         )
                         clear_invalid = False
 
@@ -179,7 +179,7 @@ class Command(BaseCommand):
                     )
                     if confirm.lower() != "yes":
                         self.stdout.write(
-                            self.style.WARNING("⏭️  Skipping cancelled order replacement")
+                            self.style.WARNING("Skipping cancelled order replacement")
                         )
                         replace_cancelled = False
 
@@ -197,7 +197,7 @@ class Command(BaseCommand):
                         f"\n❓ Create missing orders for {total_to_create} positions? (yes/no): "
                     )
                     if confirm.lower() != "yes":
-                        self.stdout.write(self.style.WARNING("⏭️  Skipping missing order creation"))
+                        self.stdout.write(self.style.WARNING("Skipping missing order creation"))
                         create_missing = False
 
                 if create_missing:
@@ -207,15 +207,15 @@ class Command(BaseCommand):
 
         # Step 5: Summary
         self.stdout.write("\n" + "=" * 80)
-        self.stdout.write("📊 SUMMARY")
+        self.stdout.write("SUMMARY")
         self.stdout.write("=" * 80)
-        self.stdout.write(f"✅ Matched positions: {len(analysis['matched_positions'])}")
-        self.stdout.write(f"❌ Level 1 - No orders: {len(analysis['missing_orders'])}")
-        self.stdout.write(f"⚠️  Level 2 - Partial orders: {len(analysis.get('partial_orders', []))}")
+        self.stdout.write(f"Matched positions: {len(analysis['matched_positions'])}")
+        self.stdout.write(f"Level 1 - No orders: {len(analysis['missing_orders'])}")
+        self.stdout.write(f"Level 2 - Partial orders: {len(analysis.get('partial_orders', []))}")
         self.stdout.write(
-            f"🔄 Level 3 - Cancelled orders: {len(analysis.get('cancelled_orders', []))}"
+            f"Level 3 - Cancelled orders: {len(analysis.get('cancelled_orders', []))}"
         )
-        self.stdout.write(f"⚠️  Level 4 - Invalid orders: {len(analysis['invalid_positions'])}")
+        self.stdout.write(f"Level 4 - Invalid orders: {len(analysis['invalid_positions'])}")
         self.stdout.write(f"🔗 Orphaned orders: {len(analysis['orphaned_orders'])}")
 
         # Next steps guidance
@@ -227,18 +227,18 @@ class Command(BaseCommand):
         )
 
         if needs_attention > 0:
-            self.stdout.write("\n💡 NEXT STEPS:")
+            self.stdout.write("\nNEXT STEPS:")
             self.stdout.write(f"   {needs_attention} positions need attention")
 
             if not dry_run:
                 if analysis["invalid_positions"] or analysis["orphaned_orders"]:
-                    self.stdout.write("   ✓ Run cleanup: --clear-invalid --cancel-orphaned")
+                    self.stdout.write("   [OK] Run cleanup: --clear-invalid --cancel-orphaned")
                 if (
                     analysis["missing_orders"]
                     or analysis.get("partial_orders")
                     or analysis.get("cancelled_orders")
                 ):
-                    self.stdout.write("   ✓ Run creation: --create-missing --replace-cancelled")
+                    self.stdout.write("   [OK] Run creation: --create-missing --replace-cancelled")
             else:
                 self.stdout.write("   Run without --dry-run to fix issues")
 
@@ -370,13 +370,13 @@ class Command(BaseCommand):
     def _print_analysis(self, analysis: dict):
         """Print multi-level analysis results."""
         self.stdout.write("\n" + "=" * 80)
-        self.stdout.write("📋 MULTI-LEVEL ANALYSIS RESULTS")
+        self.stdout.write("MULTI-LEVEL ANALYSIS RESULTS")
         self.stdout.write("=" * 80)
 
         # Matched positions
         if analysis["matched_positions"]:
             self.stdout.write(
-                f"\n✅ {len(analysis['matched_positions'])} positions with ALL orders correct:"
+                f"\n{len(analysis['matched_positions'])} positions with ALL orders correct:"
             )
             for pos in analysis["matched_positions"][:5]:
                 self.stdout.write(f"   Position #{pos.id}")
@@ -386,7 +386,7 @@ class Command(BaseCommand):
         # Level 1: Missing ALL orders
         if analysis["missing_orders"]:
             self.stdout.write(
-                f"\n❌ LEVEL 1: {len(analysis['missing_orders'])} positions with NO orders (profit_targets_created=False):"
+                f"\nLEVEL 1: {len(analysis['missing_orders'])} positions with NO orders (profit_targets_created=False):"
             )
             for pos in analysis["missing_orders"][:5]:
                 self.stdout.write(f"   Position #{pos.id} - needs ALL profit targets created")
@@ -396,7 +396,7 @@ class Command(BaseCommand):
         # Level 2: Partial orders (some spreads missing)
         if analysis.get("partial_orders"):
             self.stdout.write(
-                f"\n⚠️  LEVEL 2: {len(analysis['partial_orders'])} positions with PARTIAL orders:"
+                f"\nLEVEL 2: {len(analysis['partial_orders'])} positions with PARTIAL orders:"
             )
             for pos_info in analysis["partial_orders"]:
                 pos = pos_info["position"]
@@ -411,13 +411,13 @@ class Command(BaseCommand):
         # Level 3: Cancelled orders needing replacement
         if analysis.get("cancelled_orders"):
             self.stdout.write(
-                f"\n🔄 LEVEL 3: {len(analysis['cancelled_orders'])} positions with CANCELLED orders:"
+                f"\nLEVEL 3: {len(analysis['cancelled_orders'])} positions with CANCELLED orders:"
             )
             for pos_info in analysis["cancelled_orders"]:
                 pos = pos_info["position"]
                 self.stdout.write(f"\n   Position #{pos.id}:")
                 for key, order_id, status in pos_info["cancelled_spreads"]:
-                    self.stdout.write(f"      🔄 {key}: {order_id} ({status}) - needs replacement")
+                    self.stdout.write(f"      {key}: {order_id} ({status}) - needs replacement")
                 if pos_info["matched_orders"]:
                     self.stdout.write(
                         f"      Active: {', '.join([key for key, _ in pos_info['matched_orders']])}"
@@ -426,7 +426,7 @@ class Command(BaseCommand):
         # Level 4: Invalid orders (system desync)
         if analysis["invalid_positions"]:
             self.stdout.write(
-                f"\n⚠️  LEVEL 4: {len(analysis['invalid_positions'])} positions with INVALID orders (desync):"
+                f"\nLEVEL 4: {len(analysis['invalid_positions'])} positions with INVALID orders (desync):"
             )
             for pos_info in analysis["invalid_positions"]:
                 pos = pos_info["position"]
@@ -435,12 +435,12 @@ class Command(BaseCommand):
                 if pos_info["matched_orders"]:
                     self.stdout.write("      Valid orders:")
                     for key, order_id in pos_info["matched_orders"]:
-                        self.stdout.write(f"        ✓ {key}: {order_id}")
+                        self.stdout.write(f"        [OK] {key}: {order_id}")
 
                 if pos_info["invalid_orders"]:
                     self.stdout.write("      Invalid orders (not in TastyTrade):")
                     for key, order_id, status in pos_info["invalid_orders"]:
-                        self.stdout.write(f"        ✗ {key}: {order_id} (status: {status})")
+                        self.stdout.write(f"        [FAIL] {key}: {order_id} (status: {status})")
 
         # Orphaned orders
         if analysis["orphaned_orders"]:
@@ -461,8 +461,7 @@ class Command(BaseCommand):
         asyncio.set_event_loop(loop)
 
         try:
-            result = loop.run_until_complete(self._fetch_orders_async(user, days_lookback))
-            return result
+            return loop.run_until_complete(self._fetch_orders_async(user, days_lookback))
         finally:
             loop.close()
 
@@ -545,10 +544,10 @@ class Command(BaseCommand):
                 self._cancel_orders_async(user, [o["order_id"] for o in orphaned_orders])
             )
 
-            self.stdout.write(self.style.SUCCESS(f"   ✅ Cancelled {result['cancelled']} orders"))
+            self.stdout.write(self.style.SUCCESS(f"   Cancelled {result['cancelled']} orders"))
             if result["failed"]:
                 self.stdout.write(
-                    self.style.WARNING(f"   ⚠️  Failed to cancel {result['failed']} orders")
+                    self.style.WARNING(f"   Failed to cancel {result['failed']} orders")
                 )
         finally:
             loop.close()
@@ -571,7 +570,7 @@ class Command(BaseCommand):
                 cancelled += 1
             except Exception as e:
                 self.stdout.write(
-                    self.style.WARNING(f"      ⚠️  Failed to cancel order {order_id}: {e}")
+                    self.style.WARNING(f"      Failed to cancel order {order_id}: {e}")
                 )
                 failed += 1
 
@@ -583,7 +582,7 @@ class Command(BaseCommand):
         Sync function - direct Django ORM access.
         """
         self.stdout.write(
-            f"\n🧹 Clearing invalid order IDs from {len(invalid_positions)} positions..."
+            f"\nClearing invalid order IDs from {len(invalid_positions)} positions..."
         )
 
         for pos_info in invalid_positions:
@@ -591,7 +590,7 @@ class Command(BaseCommand):
             invalid_orders = pos_info["invalid_orders"]
 
             # Clear invalid order IDs
-            for key, order_id, status in invalid_orders:
+            for key, order_id, _status in invalid_orders:
                 if key in pos.profit_target_details:
                     # Remove the entire entry or just mark as needs_recreation
                     del pos.profit_target_details[key]
@@ -601,7 +600,7 @@ class Command(BaseCommand):
 
         self.stdout.write(
             self.style.SUCCESS(
-                f"   ✅ Cleared invalid orders from {len(invalid_positions)} positions"
+                f"   Cleared invalid orders from {len(invalid_positions)} positions"
             )
         )
 
@@ -615,7 +614,7 @@ class Command(BaseCommand):
         from trading.models import Trade
 
         total_positions = len(missing_positions) + len(partial_positions)
-        self.stdout.write(f"\n🎯 Creating profit targets for {total_positions} positions...")
+        self.stdout.write(f"\nCreating profit targets for {total_positions} positions...")
 
         success_count = 0
         error_count = 0
@@ -627,7 +626,7 @@ class Command(BaseCommand):
                 opening_trade = Trade.objects.filter(position=pos, trade_type="open").first()
                 if not opening_trade:
                     self.stdout.write(
-                        self.style.WARNING(f"   ⚠️  Position #{pos.id}: No opening trade found")
+                        self.style.WARNING(f"   Position #{pos.id}: No opening trade found")
                     )
                     error_count += 1
                     continue
@@ -640,16 +639,16 @@ class Command(BaseCommand):
                     targets = result.get("targets", [])
                     self.stdout.write(
                         self.style.SUCCESS(
-                            f"   ✅ Position #{pos.id}: Created {len(targets)} profit targets"
+                            f"   Position #{pos.id}: Created {len(targets)} profit targets"
                         )
                     )
                     success_count += 1
                 else:
                     error_msg = result.get("message", "Unknown error") if result else "No result"
-                    self.stdout.write(self.style.ERROR(f"   ❌ Position #{pos.id}: {error_msg}"))
+                    self.stdout.write(self.style.ERROR(f"   Position #{pos.id}: {error_msg}"))
                     error_count += 1
             except Exception as e:
-                self.stdout.write(self.style.ERROR(f"   ❌ Position #{pos.id}: {e!s}"))
+                self.stdout.write(self.style.ERROR(f"   Position #{pos.id}: {e!s}"))
                 error_count += 1
 
         # Level 2: Create MISSING orders for positions with partial orders
@@ -661,7 +660,7 @@ class Command(BaseCommand):
                 opening_trade = Trade.objects.filter(position=pos, trade_type="open").first()
                 if not opening_trade:
                     self.stdout.write(
-                        self.style.WARNING(f"   ⚠️  Position #{pos.id}: No opening trade found")
+                        self.style.WARNING(f"   Position #{pos.id}: No opening trade found")
                     )
                     error_count += 1
                     continue
@@ -679,19 +678,19 @@ class Command(BaseCommand):
                     targets = result.get("targets", [])
                     self.stdout.write(
                         self.style.SUCCESS(
-                            f"   ✅ Position #{pos.id}: Created {len(targets)} missing profit targets"
+                            f"   Position #{pos.id}: Created {len(targets)} missing profit targets"
                         )
                     )
                     success_count += 1
                 else:
                     error_msg = result.get("message", "Unknown error") if result else "No result"
-                    self.stdout.write(self.style.ERROR(f"   ❌ Position #{pos.id}: {error_msg}"))
+                    self.stdout.write(self.style.ERROR(f"   Position #{pos.id}: {error_msg}"))
                     error_count += 1
             except Exception as e:
-                self.stdout.write(self.style.ERROR(f"   ❌ Position #{pos.id}: {e!s}"))
+                self.stdout.write(self.style.ERROR(f"   Position #{pos.id}: {e!s}"))
                 error_count += 1
 
-        self.stdout.write(f"\n   ✅ Success: {success_count}, ❌ Errors: {error_count}")
+        self.stdout.write(f"\n   Success: {success_count}, Errors: {error_count}")
 
     def _replace_cancelled_orders_sync(self, cancelled_positions: list):
         """
@@ -702,7 +701,7 @@ class Command(BaseCommand):
         from trading.models import Trade
 
         self.stdout.write(
-            f"\n🔄 Replacing cancelled orders for {len(cancelled_positions)} positions..."
+            f"\nReplacing cancelled orders for {len(cancelled_positions)} positions..."
         )
 
         success_count = 0
@@ -716,7 +715,7 @@ class Command(BaseCommand):
                 opening_trade = Trade.objects.filter(position=pos, trade_type="open").first()
                 if not opening_trade:
                     self.stdout.write(
-                        self.style.WARNING(f"   ⚠️  Position #{pos.id}: No opening trade found")
+                        self.style.WARNING(f"   Position #{pos.id}: No opening trade found")
                     )
                     error_count += 1
                     continue
@@ -725,7 +724,7 @@ class Command(BaseCommand):
                 spread_types = [key for key, _, _ in cancelled_spreads]
 
                 # Clear the cancelled order entries first
-                for key, order_id, status in cancelled_spreads:
+                for key, _order_id, _status in cancelled_spreads:
                     if key in pos.profit_target_details:
                         del pos.profit_target_details[key]
                 pos.save()
@@ -743,16 +742,16 @@ class Command(BaseCommand):
                     targets = result.get("targets", [])
                     self.stdout.write(
                         self.style.SUCCESS(
-                            f"   ✅ Position #{pos.id}: Replaced {len(targets)} cancelled orders"
+                            f"   Position #{pos.id}: Replaced {len(targets)} cancelled orders"
                         )
                     )
                     success_count += 1
                 else:
                     error_msg = result.get("message", "Unknown error") if result else "No result"
-                    self.stdout.write(self.style.ERROR(f"   ❌ Position #{pos.id}: {error_msg}"))
+                    self.stdout.write(self.style.ERROR(f"   Position #{pos.id}: {error_msg}"))
                     error_count += 1
             except Exception as e:
-                self.stdout.write(self.style.ERROR(f"   ❌ Position #{pos.id}: {e!s}"))
+                self.stdout.write(self.style.ERROR(f"   Position #{pos.id}: {e!s}"))
                 error_count += 1
 
-        self.stdout.write(f"\n   ✅ Success: {success_count}, ❌ Errors: {error_count}")
+        self.stdout.write(f"\n   Success: {success_count}, Errors: {error_count}")

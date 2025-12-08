@@ -80,10 +80,10 @@ class Command(BaseCommand):
                     result = self._create_profit_targets_for_position_sync(position, options)
                     if result and result.get("status") == "success":
                         success_count += 1
-                        self.stdout.write(f"✅ Position {position.id}: Created profit targets")
+                        self.stdout.write(f"Position {position.id}: Created profit targets")
                     else:
                         error_msg = result.get("message", "Unknown error") if result else "Failed"
-                        self.stdout.write(f"❌ Position {position.id}: {error_msg}")
+                        self.stdout.write(f"Position {position.id}: {error_msg}")
 
                 self.stdout.write(
                     self.style.SUCCESS(
@@ -102,7 +102,7 @@ class Command(BaseCommand):
         OrderExecutionService method.
         """
         try:
-            self.stdout.write(f"\n📊 Starting profit target creation for position {position.id}")
+            self.stdout.write(f"\nStarting profit target creation for position {position.id}")
 
             # Check if profit targets already exist
             if position.profit_targets_created:
@@ -151,11 +151,11 @@ class Command(BaseCommand):
                 if options.get("test"):
                     total_orders = result.get("total_orders", 0)
                     self.stdout.write(
-                        f"\n🧪 TEST MODE: Created {total_orders} profit target orders"
+                        f"\nTEST MODE: Created {total_orders} profit target orders"
                     )
                 else:
                     self.stdout.write(
-                        f"\n✅ Created {result.get('total_orders', 0)} profit target orders:"
+                        f"\nCreated {result.get('total_orders', 0)} profit target orders:"
                     )
 
                 for target in result.get("targets", []):
@@ -168,7 +168,7 @@ class Command(BaseCommand):
 
                 return result
             error_msg = result.get("message", "Unknown error") if result else "No result returned"
-            self.stdout.write(f"❌ Failed to create profit targets: {error_msg}")
+            self.stdout.write(f"Failed to create profit targets: {error_msg}")
             return result or {"status": "error", "message": "Failed to create profit targets"}
 
         except Exception as e:

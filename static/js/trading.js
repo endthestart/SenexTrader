@@ -30,7 +30,7 @@ class TradingInterface {
             this.handlerId = window.addMessageHandler((data) => this.handleTradingMessage(data), 'trading');
         }
 
-        console.log('Trading Interface initialized', config);
+        window.logStreamInfo('Trading Interface initialized', config);
     }
 
     /**
@@ -52,7 +52,8 @@ class TradingInterface {
         const buttons = document.querySelectorAll('.strategy-btn');
 
         if (statusPanel) {
-            statusPanel.innerHTML = `<div class="text-center text-info"><i class="bi bi-hourglass-split"></i> Generating ${strategy.replace(/_/g, ' ').toUpperCase()}...</div>`;
+            const safeStrategy = escapeHtml(strategy.replace(/_/g, ' ').toUpperCase());
+            statusPanel.innerHTML = `<div class="text-center text-info"><i class="bi bi-hourglass-split"></i> Generating ${safeStrategy}...</div>`;
         }
 
         buttons.forEach(btn => btn.disabled = true);
@@ -123,7 +124,7 @@ class TradingInterface {
      */
     async loadRiskBudget(forceRefresh = false) {
         try {
-            console.log('Loading risk budget...');
+            window.logStreamInfo('Loading risk budget...');
 
             const response = await fetch('/trading/api/risk-budget/', {
                 method: 'GET',
@@ -183,7 +184,7 @@ class TradingInterface {
         // Update risk status alert
         this.updateRiskStatusAlert(data);
 
-        console.log('Risk budget updated:', data);
+        window.logStreamInfo('Risk budget updated:', data);
     }
 
     /**
@@ -278,12 +279,6 @@ class TradingInterface {
         return 'bg-danger';
     }
 
-
-
-
-
-
-
     /**
      * Use global WebSocket connection (no separate WebSocket needed)
      */
@@ -303,7 +298,7 @@ class TradingInterface {
         switch (data.type) {
             case 'suggestion_update':
                 this.displaySuggestion(data.suggestion);
-                this.showAlert('success', '✅ Pricing data received, suggestion ready!');
+                this.showAlert('success', 'Pricing data received, suggestion ready!');
                 break;
             case 'error':
                 this.handleSuggestionError(data);
@@ -394,11 +389,11 @@ class TradingInterface {
             const strike = TradingUtils.formatValue(leg.strike);
             const type = leg.option_type === 'call' ? 'C' : 'P';
             const action = leg.action === 'sell' ? 'STO' : 'BTO';
-            
+
             const rowBg = index % 2 === 0 ? 'rgba(255, 255, 255, 0.05)' : 'transparent';
             const actionColor = leg.action === 'sell' ? '#ff6b6b' : '#51cf66';
             const qtyColor = leg.action === 'sell' ? '#ff8787' : '#69db7c';
-            
+
             return `
                 <div class="mb-1 font-monospace small" style="background: ${rowBg}; padding: 4px 8px; border-radius: 3px;">
                     <span style="display: inline-block; width: 30px; text-align: right; color: ${qtyColor}; font-weight: 600;">${sign}${qty}</span>
@@ -410,7 +405,7 @@ class TradingInterface {
                 </div>
             `;
         };
-        
+
         return `<div class="row"><div class="col-12">${suggestion.legs.map((leg, i) => formatLeg(leg, i)).join('')}</div></div>`;
     }
 
@@ -434,18 +429,18 @@ class TradingInterface {
 
         const getOrderDescription = (suggestion) => {
             const baseName = TradingUtils.getStrategyName(suggestion.strategy_id);
-            
+
             if (suggestion.strategy_id === 'senex_trident') {
                 return `${suggestion.put_spread_quantity || 0} Put Spreads + ${suggestion.call_spread_quantity || 0} Call Spread`;
             } else if (suggestion.strategy_id === 'short_iron_condor' || suggestion.strategy_id === 'short_iron_butterfly') {
                 return `${suggestion.put_spread_quantity || 1} Put Spread + ${suggestion.call_spread_quantity || 1} Call Spread`;
             }
-            
+
             const totalQty = (suggestion.put_spread_quantity || 0) + (suggestion.call_spread_quantity || 0);
             if (totalQty > 1) {
                 return `${totalQty} ${baseName}${totalQty > 1 ? 's' : ''}`;
             }
-            
+
             return baseName;
         };
 
@@ -458,7 +453,7 @@ class TradingInterface {
                 <div class="col-md-6">
                     <div class="card bg-secondary border-secondary mb-3">
                         <div class="card-header">
-                            <h6 class="mb-0">📝 Order Entry</h6>
+                            <h6 class="mb-0">Order Entry</h6>
                         </div>
                         <div class="card-body">
                             <table class="table table-dark table-sm mb-2">
@@ -516,7 +511,7 @@ class TradingInterface {
                 <div class="col-md-6">
                     <div class="card bg-secondary border-secondary mb-3">
                         <div class="card-header">
-                            <h6 class="mb-0">📊 Trade Details</h6>
+                            <h6 class="mb-0">Trade Details</h6>
                         </div>
                         <div class="card-body">
                             <table class="table table-dark table-sm mb-0">
@@ -535,7 +530,7 @@ class TradingInterface {
                     </div>
                     <div class="card bg-secondary border-secondary mb-3">
                         <div class="card-header">
-                            <h6 class="mb-0">🎯 Option Legs</h6>
+                            <h6 class="mb-0">Option Legs</h6>
                         </div>
                         <div class="card-body">
                             ${this.renderLegs(suggestion)}
@@ -600,7 +595,7 @@ class TradingInterface {
         if (executeBtn) executeBtn.style.display = '';
         if (rejectBtn) rejectBtn.style.display = '';
 
-        this.showAlert('success', '✅ Trading suggestion generated successfully!');
+        this.showAlert('success', 'Trading suggestion generated successfully!');
     }
 
     /**
@@ -642,7 +637,7 @@ class TradingInterface {
      * Handle account state updates from WebSocket
      */
     handleAccountStateUpdate(data) {
-        console.log('Account state updated:', data);
+        window.logStreamInfo('Account state updated:', data);
 
         // Refresh risk budget with the new account data
         this.loadRiskBudget(true);
@@ -657,7 +652,7 @@ class TradingInterface {
      * Handle stream status updates
      */
     handleStreamStatus(data) {
-        console.log('Stream status update:', data);
+        window.logStreamInfo('Stream status update:', data);
 
         const { status, scope, id } = data.data || {};
 
@@ -753,7 +748,7 @@ class TradingInterface {
         if (riskValidation.warning) {
             confirmMessage = `
                 <div class="alert alert-warning mb-3">
-                    <strong>⚠️ Risk Warning:</strong><br>
+                    <strong>Risk Warning:</strong><br>
                     ${riskValidation.warning}
                 </div>
                 ${confirmMessage}
@@ -785,7 +780,7 @@ class TradingInterface {
                         // Success - show result modal with trade details
                         this.hideProgress();
                         window.showResultModal('success',
-                            '✅ Trade Executed Successfully',
+                            'Trade Executed Successfully',
                             `<p>Your order has been submitted to the broker.</p>
                              <p class="mb-1"><strong>Trade ID:</strong> ${response.trade_id || 'Pending'}</p>
                              <p class="mb-0"><strong>Position ID:</strong> ${response.position_id}</p>
@@ -902,7 +897,7 @@ class TradingInterface {
                 }]
             },
             oauth_failed: {
-                title: '🔐 Authentication Failed',
+                title: 'Authentication Failed',
                 message: `<p class="mb-3">${errorMessage}</p>
                          <p class="text-warning mb-0"><small><i class="bi bi-exclamation-triangle me-1"></i>
                          Your broker connection may have expired. Reconnect to continue trading.</small></p>`,
@@ -913,7 +908,7 @@ class TradingInterface {
                 }]
             },
             order_build_failed: {
-                title: '⚙️ Order Construction Failed',
+                title: 'Order Construction Failed',
                 message: `<p class="mb-3">${errorMessage}</p>
                          <p class="text-danger mb-0"><small><i class="bi bi-bug me-1"></i>
                          This is a system error. Please report this issue.</small></p>`,
@@ -935,7 +930,7 @@ class TradingInterface {
                 }]
             },
             order_placement_failed: {
-                title: '📡 Order Placement Failed',
+                title: 'Order Placement Failed',
                 message: `<p class="mb-3">${errorMessage}</p>
                          <p class="text-info mb-0"><small><i class="bi bi-arrow-clockwise me-1"></i>
                          This is usually temporary. Try again in a moment.</small></p>`,
@@ -949,7 +944,7 @@ class TradingInterface {
 
         // Return specific config or generic fallback
         return configs[errorType] || {
-            title: '❌ Execution Error',
+            title: 'Execution Error',
             message: `<p class="mb-3">${errorMessage}</p>
                      <p class="text-muted mb-0"><small>Please try again or contact support if the problem persists.</small></p>`,
             actions: [{
@@ -1052,8 +1047,8 @@ class TradingInterface {
     showAlert(type, message) {
         const alertDiv = document.getElementById('statusAlert');
         if (alertDiv) {
-            alertDiv.className = `alert alert-${type} fade show`;
-            alertDiv.innerHTML = message;
+            alertDiv.className = `alert alert-${escapeHtml(type)} fade show`;
+            alertDiv.textContent = message;
             alertDiv.classList.remove('d-none');
 
             // Auto-hide after 5 seconds for non-error messages
@@ -1212,7 +1207,7 @@ class TradingInterface {
 
             if (data.success && data.strategy) {
                 this.hideLoadingState();
-                console.log('Auto suggestion response:', {
+                window.logStreamInfo('Auto suggestion response:', {
                     strategy: data.strategy,
                     has_suggestion: !!data.suggestion,
                     suggestion_data: data.suggestion,
@@ -1231,7 +1226,7 @@ class TradingInterface {
 
                 // Show the suggestion using existing method
                 if (data.suggestion) {
-                    console.log('Displaying suggestion with data:', data.suggestion);
+                    window.logStreamInfo('Displaying suggestion with data:', data.suggestion);
                     this.displaySuggestion(data.suggestion);
                 } else {
                     console.warn('No suggestion data in response - analysis shows why');
@@ -1239,7 +1234,7 @@ class TradingInterface {
                     // Hide suggestion container and action buttons when there's no suggestion to execute
                     const suggestionContainer = document.getElementById('suggestionContainer');
                     if (suggestionContainer) suggestionContainer.classList.add('d-none');
-                    
+
                     const executeBtn = document.getElementById('executeBtn');
                     const rejectBtn = document.getElementById('rejectBtn');
                     if (executeBtn) executeBtn.style.display = 'none';
@@ -1280,7 +1275,7 @@ class TradingInterface {
 
             if (data.success) {
                 this.hideLoadingState();
-                console.log('Forced suggestion response:', {
+                window.logStreamInfo('Forced suggestion response:', {
                     strategy: strategy,
                     has_suggestion: !!data.suggestion,
                     suggestion_data: data.suggestion,
@@ -1298,7 +1293,7 @@ class TradingInterface {
 
                 // Show the suggestion
                 if (data.suggestion) {
-                    console.log('Displaying forced suggestion with data:', data.suggestion);
+                    window.logStreamInfo('Displaying forced suggestion with data:', data.suggestion);
                     this.displaySuggestion(data.suggestion);
                 } else {
                     console.warn('No suggestion data in forced response - analysis shows why');
@@ -1306,7 +1301,7 @@ class TradingInterface {
                     // Hide suggestion container and action buttons when there's no suggestion to execute
                     const suggestionContainer = document.getElementById('suggestionContainer');
                     if (suggestionContainer) suggestionContainer.classList.add('d-none');
-                    
+
                     const executeBtn = document.getElementById('executeBtn');
                     const rejectBtn = document.getElementById('rejectBtn');
                     if (executeBtn) executeBtn.style.display = 'none';
@@ -1410,7 +1405,7 @@ class TradingInterface {
                                     </div>
                                 </td>
                                 <td><span class="badge ${this.getConfidenceBadgeClass(confidence)}">${confidence}</span></td>
-                                <td>${isSelected ? '✓ Selected' : ''}</td>
+                                <td>${isSelected ? '[OK] Selected' : ''}</td>
                             </tr>
                         `;
                     }).join('')}
@@ -1746,9 +1741,9 @@ class TradingInterface {
     getScenarioIcon(type, confidence) {
         // For forced mode, use confidence to determine icon instead of always warning
         if (type === 'forced') {
-            if (confidence === 'HIGH') return 'bi-check-circle-fill';           // ✓ Check for high confidence
+            if (confidence === 'HIGH') return 'bi-check-circle-fill';           // Check for high confidence
             if (confidence === 'MEDIUM') return 'bi-info-circle-fill';          // ℹ Info for medium confidence
-            return 'bi-exclamation-triangle-fill';  // ⚠️ Triangle only for LOW/VERY LOW confidence
+            return 'bi-exclamation-triangle-fill';  // Triangle only for LOW/VERY LOW confidence
         }
 
         // Original logic for other types
@@ -1847,12 +1842,14 @@ window.showTradeDetails = async function(tradeId) {
     try {
         // This would fetch detailed trade info
         // For now, show placeholder
+        const safeTradeId = escapeHtml(String(tradeId));
         body.innerHTML = `
-            <p><strong>Trade ID:</strong> ${tradeId}</p>
+            <p><strong>Trade ID:</strong> ${safeTradeId}</p>
             <p><em>Detailed trade information will be implemented in future updates.</em></p>
         `;
     } catch (error) {
-        body.innerHTML = `<div class="alert alert-danger">Error loading trade details: ${error.message}</div>`;
+        const safeError = escapeHtml(error.message);
+        body.innerHTML = `<div class="alert alert-danger">Error loading trade details: ${safeError}</div>`;
     }
 };
 

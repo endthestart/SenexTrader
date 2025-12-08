@@ -208,7 +208,6 @@ def automated_trading_toggle(request):  # noqa: PLR0911
         # Update the setting
         primary.is_automated_trading_enabled = is_enabled
         primary.automated_entry_offset_cents = offset_cents
-        primary.save(update_fields=["is_automated_trading_enabled", "automated_entry_offset_cents"])
 
         logger.info(
             f"Automated trading {'enabled' if is_enabled else 'disabled'} "
@@ -258,8 +257,8 @@ def email_preference(request):
             )
 
         # Update user preference
+        # The property setter on User handles saving to UserPreferences
         request.user.email_preference = preference
-        request.user.save(update_fields=["email_preference"])
 
         logger.info(f"Email preference updated to '{preference}' for user {request.user.email}")
 
@@ -298,8 +297,8 @@ def daily_suggestion_toggle(request):
             )
 
         # Update the setting
+        # The property setter on User handles saving to UserPreferences
         request.user.email_daily_trade_suggestion = is_enabled
-        request.user.save(update_fields=["email_daily_trade_suggestion"])
 
         logger.info(
             f"Daily trade suggestion email {'enabled' if is_enabled else 'disabled'} "
@@ -338,7 +337,6 @@ def privacy_mode_toggle(request):
             )
 
         primary.privacy_mode = is_enabled
-        primary.save(update_fields=["privacy_mode"])
 
         logger.info(
             f"Privacy mode {'enabled' if is_enabled else 'disabled'} for user {request.user.email}"
@@ -357,4 +355,102 @@ def privacy_mode_toggle(request):
     except Exception as e:
         return ErrorResponseBuilder.from_exception(
             e, context=f"privacy_mode_toggle user={request.user.id}"
+        )
+
+
+@login_required
+@require_http_methods(["POST"])
+def profit_target_settings(request):
+    """Save profit target automation settings for spread strategies."""
+    try:
+        from accounts.models import TradingAccountPreferences
+        from trading.models import StrategyConfiguration
+
+        data = json.loads(request.body)
+
+        # Get primary trading account
+        primary = TradingAccount.objects.filter(user=request.user, is_primary=True).first()
+
+        if not primary:
+            return JsonResponse(
+                {"success": False, "error": "No primary trading account configured"}, status=404
+            )
+
+        if not primary.is_active:
+            return JsonResponse(
+                {"success": False, "error": "Trading account is not active"}, status=400
+            )
+
+        # Update TradingAccountPreferences
+        prefs, _created = TradingAccountPreferences.objects.get_or_create(
+            account=primary,
+            defaults={
+                "is_automated_trading_enabled": False,
+                "automated_entry_offset_cents": 0,
+                "auto_profit_targets_enabled": True,
+            },
+        )
+
+        is_enabled = data.get("enabled", True)
+        prefs.auto_profit_targets_enabled = is_enabled
+        prefs.save(update_fields=["auto_profit_targets_enabled"])
+
+        # Update StrategyConfiguration for credit spreads
+        credit_pct = data.get("credit_spread_pct", 50)
+        if credit_pct not in [40, 50, 60]:
+            return JsonResponse(
+                {"success": False, "error": "credit_spread_pct must be 40, 50, or 60"},
+                status=400,
+            )
+
+        for strategy_id in ["short_put_vertical", "short_call_vertical"]:
+            config, _created = StrategyConfiguration.objects.get_or_create(
+                user=request.user,
+                strategy_id=strategy_id,
+                defaults={"is_active": True, "parameters": {}},
+            )
+            params = config.parameters or {}
+            params["profit_target_pct"] = credit_pct
+            config.parameters = params
+            config.save(update_fields=["parameters"])
+
+        # Update StrategyConfiguration for debit spreads
+        debit_pct = data.get("debit_spread_pct", 50)
+        if debit_pct not in [40, 50, 60]:
+            return JsonResponse(
+                {"success": False, "error": "debit_spread_pct must be 40, 50, or 60"},
+                status=400,
+            )
+
+        for strategy_id in ["long_call_vertical", "long_put_vertical"]:
+            config, _created = StrategyConfiguration.objects.get_or_create(
+                user=request.user,
+                strategy_id=strategy_id,
+                defaults={"is_active": True, "parameters": {}},
+            )
+            params = config.parameters or {}
+            params["profit_target_pct"] = debit_pct
+            config.parameters = params
+            config.save(update_fields=["parameters"])
+
+        logger.info(
+            f"Profit target settings updated for user {request.user.email}: "
+            f"enabled={is_enabled}, credit={credit_pct}%, debit={debit_pct}%"
+        )
+
+        return JsonResponse(
+            {
+                "success": True,
+                "enabled": is_enabled,
+                "credit_spread_pct": credit_pct,
+                "debit_spread_pct": debit_pct,
+                "message": "Profit target settings saved successfully",
+            }
+        )
+
+    except json.JSONDecodeError:
+        return ErrorResponseBuilder.json_decode_error()
+    except Exception as e:
+        return ErrorResponseBuilder.from_exception(
+            e, context=f"profit_target_settings user={request.user.id}"
         )

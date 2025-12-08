@@ -86,7 +86,7 @@ class Command(BaseCommand):
                 else:
                     results[symbol] = 0
             except Exception as e:
-                self.stdout.write(self.style.ERROR(f"✗ {symbol}: {e}"))
+                self.stdout.write(self.style.ERROR(f"[FAIL] {symbol}: {e}"))
                 results[symbol] = 0
                 if not options["resume"]:
                     raise  # Fail fast if not in resume mode
@@ -95,9 +95,9 @@ class Command(BaseCommand):
         total_records = sum(results.values())
         for symbol, count in results.items():
             if count > 0:
-                self.stdout.write(self.style.SUCCESS(f"✓ {symbol}: {count} records stored"))
+                self.stdout.write(self.style.SUCCESS(f"[OK] {symbol}: {count} records stored"))
             else:
-                self.stdout.write(self.style.ERROR(f"✗ {symbol}: Failed to load data"))
+                self.stdout.write(self.style.ERROR(f"[FAIL] {symbol}: Failed to load data"))
 
         self.stdout.write(
             self.style.SUCCESS(f"\nTotal: {total_records} historical records pre-loaded")
@@ -118,7 +118,7 @@ class Command(BaseCommand):
         for symbol in options["symbols"]:  # show all symbols from original list
             count = HistoricalPrice.objects.filter(symbol=symbol).count()
             if count >= min_acceptable:
-                status = self.style.SUCCESS(f"✓ {symbol}: {count} days (sufficient)")
+                status = self.style.SUCCESS(f"[OK] {symbol}: {count} days (sufficient)")
             else:
                 status = self.style.WARNING(
                     f"⚠ {symbol}: {count} days (need {min_acceptable}+ for analysis)"

@@ -30,7 +30,7 @@ class Command(BaseCommand):
 
         tt_positions = tt_account.get_positions(session, underlying_symbols=["QQQ"])
 
-        self.stdout.write("\n📊 TASTYTRADE POSITIONS (Source of Truth)")
+        self.stdout.write("\nTASTYTRADE POSITIONS (Source of Truth)")
         self.stdout.write("-" * 100)
 
         # Group by expiration
@@ -72,7 +72,7 @@ class Command(BaseCommand):
         self.stdout.write(f"\nTOTAL OPTION LEGS IN TASTYTRADE: {total_legs}")
 
         # Get database positions
-        self.stdout.write("\n\n📊 DATABASE POSITIONS")
+        self.stdout.write("\n\nDATABASE POSITIONS")
         self.stdout.write("-" * 100)
 
         db_positions = Position.objects.filter(
@@ -100,7 +100,7 @@ class Command(BaseCommand):
         self.stdout.write(f"OPEN SPREADS IN DATABASE: {total_db_open_spreads}")
 
         # Summary
-        self.stdout.write("\n\n📊 SUMMARY")
+        self.stdout.write("\n\nSUMMARY")
         self.stdout.write("=" * 100)
         self.stdout.write(f"TastyTrade option legs: {total_legs}")
         self.stdout.write(f"Database total spreads: {total_db_spreads}")

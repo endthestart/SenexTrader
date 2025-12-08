@@ -120,9 +120,7 @@ class DebitSpreadStrategy(BaseDebitSpreadStrategy):
             reasons.append("Bearish direction - strong signal for bear put spread")
         elif report.macd_signal == "bearish_exhausted":
             score_adjustment -= 20
-            reasons.append(
-                "Bearish exhausted - selling at bottom NOT suitable for debit spread"
-            )
+            reasons.append("Bearish exhausted - selling at bottom NOT suitable for debit spread")
         elif report.macd_signal == "neutral":
             score_adjustment += 5
             reasons.append("Neutral market - marginal for bear put spread")
@@ -265,9 +263,7 @@ class DebitSpreadStrategy(BaseDebitSpreadStrategy):
             "otm_pct": 0.03,
             "spread_width": spread_width,
             "current_price": current_price,
-            "support_level": (
-                Decimal(str(report.support_level)) if report.support_level else None
-            ),
+            "support_level": (Decimal(str(report.support_level)) if report.support_level else None),
             "resistance_level": None,
         }
 
@@ -510,14 +506,26 @@ class DebitSpreadStrategy(BaseDebitSpreadStrategy):
         """Close at 21 DTE to preserve remaining time value."""
         return 21
 
-    async def a_get_profit_target_specifications(self, position: Position, *args) -> list:
+    async def a_get_profit_target_specifications(
+        self, position: Position, *args, target_pct: int | None = None
+    ) -> list:
         """
         Return profit target spec for debit spread.
 
-        Debit Spread Target: Close at 50% of max profit
+        Debit Spread Target: Close at target_pct% of max profit (default 50%)
         Max profit = (width - debit) × 100
-        Target = debit + (max_profit × 0.50)
+        Target = debit + (max_profit × target_pct/100)
+
+        Args:
+            position: Position object with metadata['opening_price']
+            target_pct: Optional profit target percentage (40, 50, or 60). Defaults to 50.
+
+        Returns:
+            List of profit target specifications
         """
+        # Use provided target_pct or default to 50
+        actual_target_pct = target_pct if target_pct is not None else 50
+
         metadata = position.metadata or {}
         debit_paid = abs(Decimal(str(metadata.get("opening_price", 0))))
 
@@ -528,7 +536,9 @@ class DebitSpreadStrategy(BaseDebitSpreadStrategy):
         spread_width = Decimal("5.00")
         max_profit = spread_width - debit_paid
 
-        profit_target_price = debit_paid + (max_profit * Decimal("0.50"))
+        # Calculate target price based on profit percentage
+        profit_multiplier = Decimal(str(actual_target_pct / 100))
+        profit_target_price = debit_paid + (max_profit * profit_multiplier)
 
         spread_type = (
             "long_call_vertical"
@@ -539,7 +549,7 @@ class DebitSpreadStrategy(BaseDebitSpreadStrategy):
         return [
             {
                 "spread_type": spread_type,
-                "profit_percentage": 50,
+                "profit_percentage": actual_target_pct,
                 "target_price": profit_target_price,
                 "original_debit": debit_paid,
             }

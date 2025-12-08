@@ -31,7 +31,7 @@ class Command(AsyncCommand):
         dry_run = options["dry_run"]
 
         if dry_run:
-            self.stdout.write(self.style.WARNING("🔍 DRY RUN MODE - No trades will be executed"))
+            self.stdout.write(self.style.WARNING("DRY RUN MODE - No trades will be executed"))
 
         if options["all"]:
             users = await self._get_all_eligible_users()
@@ -53,7 +53,7 @@ class Command(AsyncCommand):
 
                 account = await self._get_eligible_account(user)
                 if not account:
-                    self.stdout.write(self.style.WARNING("❌ User not eligible"))
+                    self.stdout.write(self.style.WARNING("User not eligible"))
                     results["skipped"] += 1
                     continue
 
@@ -66,12 +66,12 @@ class Command(AsyncCommand):
                     .exclude(status__in=["cancelled", "rejected", "expired"])
                     .aexists()
                 ):
-                    self.stdout.write(self.style.WARNING("⏭️  Already has trade today"))
+                    self.stdout.write(self.style.WARNING("Already has trade today"))
                     results["skipped"] += 1
                     continue
 
                 if dry_run:
-                    self.stdout.write(self.style.SUCCESS("✅ Would process automated trade"))
+                    self.stdout.write(self.style.SUCCESS("Would process automated trade"))
                     continue
 
                 result = await service.a_process_account(account)
@@ -93,9 +93,9 @@ class Command(AsyncCommand):
         self.stdout.write("\n" + "=" * 60)
         self.stdout.write(self.style.SUCCESS("SUMMARY"))
         self.stdout.write("=" * 60)
-        self.stdout.write(f"✅ Succeeded: {results['succeeded']}")
-        self.stdout.write(f"⏭️  Skipped: {results['skipped']}")
-        self.stdout.write(f"❌ Failed: {results['failed']}")
+        self.stdout.write(f"Succeeded: {results['succeeded']}")
+        self.stdout.write(f"Skipped: {results['skipped']}")
+        self.stdout.write(f"Failed: {results['failed']}")
 
     async def _get_single_user(self, options):
         return await aget_user_from_options(
@@ -105,8 +105,8 @@ class Command(AsyncCommand):
     async def _get_all_eligible_users(self):
         accounts = TradingAccount.objects.filter(
             is_active=True,
-            is_automated_trading_enabled=True,
-        ).select_related("user")
+            trading_preferences__is_automated_trading_enabled=True,
+        ).select_related("user", "trading_preferences")
         return [account.user async for account in accounts]
 
     async def _get_eligible_account(self, user):
@@ -115,22 +115,22 @@ class Command(AsyncCommand):
                 user=user,
                 is_primary=True,
                 is_active=True,
-                is_automated_trading_enabled=True,
+                trading_preferences__is_automated_trading_enabled=True,
             )
-            .select_related("user")
+            .select_related("user", "trading_preferences")
             .afirst()
         )
 
     def _display_result(self, result):
         status = result.get("status")
         if status == "success":
-            self.stdout.write(self.style.SUCCESS("✅ Success!"))
+            self.stdout.write(self.style.SUCCESS("Success!"))
             self.stdout.write(f"   Symbol: {result.get('symbol')}")
             self.stdout.write(f"   Suggestion ID: {result.get('suggestion_id')}")
             self.stdout.write(f"   Position ID: {result.get('position_id')}")
         elif status == "skipped":
             reason = result.get("reason", "unknown")
-            self.stdout.write(self.style.WARNING(f"⏭️  Skipped: {reason}"))
+            self.stdout.write(self.style.WARNING(f"Skipped: {reason}"))
         else:
             reason = result.get("reason", "unknown")
-            self.stdout.write(self.style.ERROR(f"❌ Failed: {reason}"))
+            self.stdout.write(self.style.ERROR(f"Failed: {reason}"))

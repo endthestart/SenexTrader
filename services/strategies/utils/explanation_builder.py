@@ -132,9 +132,8 @@ class ExplanationBuilder:
                 )
 
         # Add strategy-specific context
-        if "trident" in strategy_name.lower():
-            if report.is_range_bound:
-                reasons.append("Price consolidating in range - ideal for multi-leg strategy")
+        if "trident" in strategy_name.lower() and report.is_range_bound:
+            reasons.append("Price consolidating in range - ideal for multi-leg strategy")
 
         # Deduplicate and return top 5 most important
         return list(dict.fromkeys(reasons))[:5]

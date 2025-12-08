@@ -97,6 +97,7 @@
 </div>
 
 <!-- Daily Trade Suggestion Card -->
+<!-- Daily Trade Suggestion Card -->
 <div class="card bg-dark border-secondary mb-4">
   <div class="card-body">
     <h5 class="mb-3">Daily Trade Suggestion</h5>
@@ -115,6 +116,76 @@
     </div>
 
     <button class="btn btn-primary mt-3" id="save-daily-suggestion">Save Daily Suggestion Preference</button>
+  </div>
+</div>
+
+<!-- Spread Profit Target Settings Card -->
+<div class="card bg-dark border-secondary mb-4">
+  <div class="card-body">
+    <h5 class="mb-3">Spread Profit Targets</h5>
+    <p class="text-muted small">
+      Configure automatic profit target orders for individual spread strategies.
+      Senex Trident uses its own algorithm and is not affected by these settings.
+    </p>
+
+    <!-- Master Toggle -->
+    <div class="form-check form-switch mb-4">
+      <input class="form-check-input" type="checkbox" id="auto-profit-targets-toggle"
+             {% if tastytrade_account.trading_preferences.auto_profit_targets_enabled %}checked{% endif %}
+             {% if not tastytrade_account or not tastytrade_account.is_active %}disabled{% endif %}>
+      <label class="form-check-label" for="auto-profit-targets-toggle">
+        Enable Automated Profit Targets for Spreads
+      </label>
+    </div>
+
+    <!-- Credit Spreads Setting -->
+    <div class="mb-4" id="credit-spread-section">
+      <label class="form-label">Credit Spread Profit Target</label>
+      <p class="text-muted small mb-2">Bull Put Spreads (Short Put Vertical), Bear Call Spreads (Short Call Vertical)</p>
+      <div class="btn-group" role="group" aria-label="Credit spread profit target percentage">
+        <input type="radio" class="btn-check" name="credit-spread-pct" id="credit-40" value="40"
+               {% if credit_spread_profit_target_pct == 40 %}checked{% endif %}>
+        <label class="btn btn-outline-primary" for="credit-40">40%</label>
+
+        <input type="radio" class="btn-check" name="credit-spread-pct" id="credit-50" value="50"
+               {% if credit_spread_profit_target_pct == 50 or not credit_spread_profit_target_pct %}checked{% endif %}>
+        <label class="btn btn-outline-primary" for="credit-50">50%</label>
+
+        <input type="radio" class="btn-check" name="credit-spread-pct" id="credit-60" value="60"
+               {% if credit_spread_profit_target_pct == 60 %}checked{% endif %}>
+        <label class="btn btn-outline-primary" for="credit-60">60%</label>
+      </div>
+    </div>
+
+    <!-- Debit Spreads Setting -->
+    <div class="mb-4" id="debit-spread-section">
+      <label class="form-label">Debit Spread Profit Target</label>
+      <p class="text-muted small mb-2">Bull Call Spreads (Long Call Vertical), Bear Put Spreads (Long Put Vertical)</p>
+      <div class="btn-group" role="group" aria-label="Debit spread profit target percentage">
+        <input type="radio" class="btn-check" name="debit-spread-pct" id="debit-40" value="40"
+               {% if debit_spread_profit_target_pct == 40 %}checked{% endif %}>
+        <label class="btn btn-outline-primary" for="debit-40">40%</label>
+
+        <input type="radio" class="btn-check" name="debit-spread-pct" id="debit-50" value="50"
+               {% if debit_spread_profit_target_pct == 50 or not debit_spread_profit_target_pct %}checked{% endif %}>
+        <label class="btn btn-outline-primary" for="debit-50">50%</label>
+
+        <input type="radio" class="btn-check" name="debit-spread-pct" id="debit-60" value="60"
+               {% if debit_spread_profit_target_pct == 60 %}checked{% endif %}>
+        <label class="btn btn-outline-primary" for="debit-60">60%</label>
+      </div>
+    </div>
+
+    {% if not tastytrade_account or not tastytrade_account.is_active %}
+      <div class="alert alert-warning mt-3 mb-3" role="alert">
+        <small>Connect your TastyTrade account in Brokerage settings to configure profit targets.</small>
+      </div>
+    {% endif %}
+
+    <button class="btn btn-primary" id="save-profit-target-settings"
+            {% if not tastytrade_account or not tastytrade_account.is_active %}disabled{% endif %}>
+      Save Profit Target Settings
+    </button>
   </div>
 </div>
 
@@ -320,6 +391,82 @@ document.getElementById('save-daily-suggestion')?.addEventListener('click', asyn
     } catch (error) {
         console.error('Failed to save daily suggestion preference:', error);
         window.showResultModal('error', 'Save Failed', 'Failed to save daily suggestion preference. Please try again.');
+        button.textContent = originalText;
+    } finally {
+        button.disabled = false;
+    }
+});
+
+// Handle profit target settings
+const autoProfitTargetsToggle = document.getElementById('auto-profit-targets-toggle');
+const creditSpreadSection = document.getElementById('credit-spread-section');
+const debitSpreadSection = document.getElementById('debit-spread-section');
+
+function updateProfitTargetSectionsState() {
+    const isEnabled = autoProfitTargetsToggle?.checked ?? true;
+    if (creditSpreadSection) {
+        creditSpreadSection.style.opacity = isEnabled ? '1' : '0.5';
+        creditSpreadSection.querySelectorAll('input').forEach(input => {
+            input.disabled = !isEnabled;
+        });
+    }
+    if (debitSpreadSection) {
+        debitSpreadSection.style.opacity = isEnabled ? '1' : '0.5';
+        debitSpreadSection.querySelectorAll('input').forEach(input => {
+            input.disabled = !isEnabled;
+        });
+    }
+}
+
+// Update sections when toggle changes
+autoProfitTargetsToggle?.addEventListener('change', updateProfitTargetSectionsState);
+
+// Initial state
+updateProfitTargetSectionsState();
+
+// Handle profit target settings save
+document.getElementById('save-profit-target-settings')?.addEventListener('click', async function() {
+    const isEnabled = autoProfitTargetsToggle?.checked ?? true;
+    const creditPct = document.querySelector('input[name="credit-spread-pct"]:checked')?.value || '50';
+    const debitPct = document.querySelector('input[name="debit-spread-pct"]:checked')?.value || '50';
+
+    const button = this;
+    const originalText = button.textContent;
+    button.disabled = true;
+    button.textContent = 'Saving...';
+
+    try {
+        const response = await fetch('/accounts/api/profit-target-settings/', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCsrfToken()
+            },
+            body: JSON.stringify({
+                enabled: isEnabled,
+                credit_spread_pct: parseInt(creditPct, 10),
+                debit_spread_pct: parseInt(debitPct, 10)
+            })
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+            button.textContent = 'Saved!';
+            button.classList.remove('btn-primary');
+            button.classList.add('btn-success');
+
+            setTimeout(() => {
+                button.textContent = originalText;
+                button.classList.remove('btn-success');
+                button.classList.add('btn-primary');
+            }, 2000);
+        } else {
+            throw new Error(data.error || 'Failed to save');
+        }
+    } catch (error) {
+        console.error('Failed to save profit target settings:', error);
+        window.showResultModal('error', 'Save Failed', 'Failed to save profit target settings. Please try again.');
         button.textContent = originalText;
     } finally {
         button.disabled = false;

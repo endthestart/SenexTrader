@@ -122,11 +122,6 @@ def profile_update(request: HttpRequest) -> HttpResponse:
     return redirect("accounts:settings_account")
 
 
-# =============================================================================
-# Health Check Endpoints (for Container Orchestration)
-# =============================================================================
-
-
 def health_check(request: HttpRequest) -> HttpResponse:
     """
     Comprehensive health check endpoint for container health checks.
@@ -164,11 +159,6 @@ def health_check_simple(request: HttpRequest) -> HttpResponse:
     from django.http import JsonResponse
 
     return JsonResponse({"status": "ok"}, status=200)
-
-
-# =============================================================================
-# OAuth Views
-# =============================================================================
 
 
 @login_required
@@ -296,13 +286,10 @@ async def tastytrade_oauth_callback(request):
             },
         )
 
-    # Now we can safely create/update the account with all required data
     acct = existing or TradingAccount(user=user, connection_type="TASTYTRADE")
     raw_access = token_data.get("access_token", "")
     acct.access_token = raw_access
     acct.refresh_token = raw_refresh
-    acct.token_type = token_data.get("token_type", "Bearer")
-    acct.scope = token_data.get("scope", "")
     expires_in = token_data.get("expires_in")
     if expires_in:
         acct.token_expires_at = timezone.now() + timedelta(seconds=int(expires_in))
@@ -310,9 +297,6 @@ async def tastytrade_oauth_callback(request):
     acct.is_token_valid = True
     acct.last_authenticated = timezone.now()
 
-    # Set account_number and metadata
-    # Always set the first account as primary automatically
-    # User can change it later in settings if they have multiple accounts
     acct.account_number = accounts[0].get("account_number") or accounts[0].get("id") or ""
     primary_exists = await TradingAccount.objects.filter(user=user, is_primary=True).aexists()
     if not primary_exists:
@@ -320,7 +304,6 @@ async def tastytrade_oauth_callback(request):
 
     acct.metadata = {"accounts": accounts}
 
-    # Save once with all data - atomic operation
     await acct.asave()
 
     # Try to create session (non-critical - will be created on first use if this fails)
@@ -330,11 +313,11 @@ async def tastytrade_oauth_callback(request):
         )
         if session_result.get("success"):
             logger.info(
-                f"✅ Session created and cached for user {user_id} after OAuth reconnection"
+                f"Session created and cached for user {user_id} after OAuth reconnection"
             )
         else:
             logger.warning(
-                f"⚠️ Failed to create session after OAuth: {session_result.get('error')} "
+                f"Failed to create session after OAuth: {session_result.get('error')} "
                 f"(session will be created on first use)"
             )
 
@@ -365,7 +348,7 @@ async def tastytrade_disconnect(request):
 
     # Note: clear_user_session removed - sessions are now created per-task, not cached
     await GlobalStreamManager.remove_user_manager(user_id)
-    logger.info(f"🧹 Removed stream manager for user {user_id}")
+    logger.info(f"Removed stream manager for user {user_id}")
 
     acct = await TradingAccount.objects.filter(
         user__id=user_id, connection_type="TASTYTRADE"
@@ -379,11 +362,6 @@ async def tastytrade_disconnect(request):
         await acct.asave()
 
     return redirect("accounts:settings")
-
-
-# =============================================================================
-# Settings Views
-# =============================================================================
 
 
 class SettingsBaseView(LoginRequiredMixin, TemplateView):
@@ -454,10 +432,31 @@ class StrategySettingsView(SettingsBaseView):
     section_name = "strategy"
 
     def get_context_data(self, **kwargs):
+        from trading.models import StrategyConfiguration
+
         context = super().get_context_data(**kwargs)
 
         context["tastytrade_account"] = TradingAccount.objects.filter(
             user=self.request.user, connection_type="TASTYTRADE"
         ).first()
+
+        # Get profit target settings for spread strategies
+        credit_config = StrategyConfiguration.objects.filter(
+            user=self.request.user, strategy_id="short_put_vertical"
+        ).first()
+        debit_config = StrategyConfiguration.objects.filter(
+            user=self.request.user, strategy_id="long_call_vertical"
+        ).first()
+
+        context["credit_spread_profit_target_pct"] = (
+            credit_config.parameters.get("profit_target_pct", 50)
+            if credit_config and credit_config.parameters
+            else 50
+        )
+        context["debit_spread_profit_target_pct"] = (
+            debit_config.parameters.get("profit_target_pct", 50)
+            if debit_config and debit_config.parameters
+            else 50
+        )
 
         return context

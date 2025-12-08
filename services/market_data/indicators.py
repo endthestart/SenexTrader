@@ -530,9 +530,7 @@ class TechnicalIndicatorCalculator:
         std_dev = float(np.std(returns, ddof=1))  # Sample std dev
 
         # Annualize (252 trading days per year)
-        annualized_vol = std_dev * math.sqrt(252) * 100
-
-        return annualized_vol
+        return std_dev * math.sqrt(252) * 100
 
     async def _get_market_data(self, user, symbol: str, days_back: int) -> list | None:
         """Get market data from MarketDataService"""

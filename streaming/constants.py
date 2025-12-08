@@ -40,3 +40,22 @@ SUMMARY_CACHE_TTL = 3600  # 1 hour - daily summary data
 # Activity Tracking (GlobalStreamManager)
 INACTIVITY_TIMEOUT_SECONDS = 1800  # 30 minutes - mark inactive
 CLEANUP_TIMEOUT_SECONDS = 3600  # 1 hour - remove inactive managers
+
+# Automation Polling
+AUTOMATION_READY_POLL_INTERVAL = 1  # Poll delay while waiting for data readiness
+
+# Cache Defaults (seconds)
+CACHE_DEFAULT_TTL = 30  # Fallback TTL for cache entries without explicit type
+TRADE_CACHE_TTL = 30  # Real-time trade data TTL
+THEO_CACHE_TTL = 60  # Theoretical pricing data TTL
+STREAM_LEASE_TTL = 600  # Stream lease duration (10 minutes)
+HEARTBEAT_CACHE_TTL = 30  # Heartbeat freshness
+ACCOUNT_STATE_CACHE_TTL = 120  # Cached account/balance data TTL
+
+# Retry Settings
+CACHE_MAX_RETRIES = 2  # Enhanced cache retry attempts
+CACHE_BASE_RETRY_DELAY = 0.1  # Initial delay for exponential backoff
+STREAMING_AUTH_MAX_RETRIES = 2  # Streaming auth retry attempts
+
+# Cleanup Grace Periods
+STREAMING_CLEANUP_GRACE_PERIOD = 300  # 5 minutes - wait before tearing down streamers

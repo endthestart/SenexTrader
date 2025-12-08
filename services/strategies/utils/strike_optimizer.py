@@ -183,8 +183,8 @@ class StrikeOptimizer:
 
         # Log successful validation
         logger.info(
-            f"✅ Valid {spread_type} spread: "
-            f"short ${closest_short} → long ${long_strike} "
+            f"Valid {spread_type} spread: "
+            f"short ${closest_short} -> long ${long_strike} "
             f"(width: {abs(long_strike - closest_short)})"
         )
 
@@ -301,6 +301,227 @@ class StrikeOptimizer:
             return None
 
         # Find strike with minimum absolute distance to target
-        closest = min(available_strikes, key=lambda strike: abs(strike - target))
+        return min(available_strikes, key=lambda strike: abs(strike - target))
 
-        return closest
+    async def find_strike_by_delta(
+        self,
+        user,
+        symbol: str,
+        expiration,
+        option_type: Literal["put", "call"],
+        target_delta: float,
+        available_strikes: list[Decimal],
+        options_service=None,
+    ) -> tuple[Decimal | None, float | None]:
+        """
+        Find the strike with delta closest to target using live Greeks.
+
+        This is the preferred method for strike selection as it adapts to:
+        - Current implied volatility
+        - Time to expiration
+        - Market conditions
+
+        Args:
+            user: Django user for API access
+            symbol: Underlying symbol (e.g., 'QQQ')
+            expiration: Option expiration date
+            option_type: "put" or "call"
+            target_delta: Target delta (e.g., 0.20 for 20 delta put)
+            available_strikes: List of available strikes from option chain
+            options_service: Optional StreamingOptionsDataService instance
+
+        Returns:
+            (strike, actual_delta) tuple, or (None, None) if no Greeks available
+
+        Example:
+            >>> optimizer = StrikeOptimizer()
+            >>> strike, delta = await optimizer.find_strike_by_delta(
+            ...     user, "QQQ", date(2024, 12, 20), "put", 0.20,
+            ...     [Decimal('600'), Decimal('605'), Decimal('610'), ...]
+            ... )
+            >>> print(f"Found strike ${strike} with delta {delta}")
+            Found strike $608 with delta -0.198
+        """
+        if not available_strikes:
+            logger.warning("No available strikes provided for delta search")
+            return (None, None)
+
+        # Import here to avoid circular imports
+        from services.sdk.instruments import build_occ_symbol
+        from services.streaming.options_service import StreamingOptionsDataService
+
+        if options_service is None:
+            options_service = StreamingOptionsDataService(user)
+
+        # Pre-filter strikes to a reasonable range around ATM
+        # For puts, we want strikes below current price
+        # For calls, we want strikes above current price
+        # This reduces the number of Greeks lookups needed
+
+        # For puts, target delta is negative (e.g., -0.20)
+        # For calls, target delta is positive (e.g., 0.20)
+        target_delta_signed = -abs(target_delta) if option_type == "put" else abs(target_delta)
+
+        best_strike = None
+        best_delta = None
+        best_delta_diff = float("inf")
+        strikes_with_greeks = 0
+
+        # Sort strikes for logical processing
+        sorted_strikes = sorted(available_strikes)
+
+        # For efficiency, only check strikes in a reasonable range
+        # Delta 0.10-0.30 typically falls within 3-12% OTM
+        # We'll check all strikes but log how many have Greeks
+
+        for strike in sorted_strikes:
+            # Build OCC symbol for this strike
+            occ_symbol = build_occ_symbol(
+                symbol,
+                expiration,
+                strike,
+                "P" if option_type == "put" else "C",
+            )
+
+            # Read Greeks from cache
+            greeks = options_service.read_greeks(occ_symbol)
+
+            if greeks and greeks.delta is not None:
+                strikes_with_greeks += 1
+                actual_delta = float(greeks.delta)
+
+                # Calculate how close this delta is to target
+                delta_diff = abs(actual_delta - target_delta_signed)
+
+                if delta_diff < best_delta_diff:
+                    best_delta_diff = delta_diff
+                    best_strike = strike
+                    best_delta = actual_delta
+
+                    # Early exit if we found an exact match (within 0.01)
+                    if delta_diff < 0.01:
+                        logger.info(
+                            f"Found exact delta match: strike ${strike} "
+                            f"delta={actual_delta:.3f} (target={target_delta_signed:.3f})"
+                        )
+                        break
+
+        if best_strike:
+            logger.info(
+                f"Delta search for {symbol} {option_type}: "
+                f"found strike ${best_strike} with delta={best_delta:.3f} "
+                f"(target={target_delta_signed:.3f}, diff={best_delta_diff:.3f}, "
+                f"checked {strikes_with_greeks}/{len(available_strikes)} strikes with Greeks)"
+            )
+            return (best_strike, best_delta)
+
+        logger.warning(
+            f"No Greeks available for {symbol} {option_type} strikes "
+            f"(checked {len(available_strikes)} strikes, none had Greeks in cache)"
+        )
+        return (None, None)
+
+    async def find_optimal_spread_strikes_by_delta(
+        self,
+        user,
+        symbol: str,
+        expiration,
+        current_price: Decimal,
+        spread_width: int,
+        spread_type: Literal["bull_put", "bear_call"],
+        target_delta: float = 0.20,
+        options_service=None,
+        available_strikes: list[Decimal] | None = None,
+    ) -> dict[str, Decimal] | None:
+        """
+        Find optimal spread strikes using delta targeting.
+
+        This combines delta-based short strike selection with spread width
+        for the long strike.
+
+        Args:
+            user: Django user for API access
+            symbol: Underlying symbol
+            expiration: Option expiration date
+            current_price: Current underlying price
+            spread_width: Width of spread in points
+            spread_type: "bull_put" or "bear_call"
+            target_delta: Target delta for short strike (default 0.20)
+            options_service: Optional StreamingOptionsDataService instance
+            available_strikes: Pre-fetched available strikes (optional)
+
+        Returns:
+            Dict with strike keys or None if no suitable strikes found
+
+        Example:
+            >>> strikes = await optimizer.find_optimal_spread_strikes_by_delta(
+            ...     user, "QQQ", exp_date, Decimal("622"), 5, "bull_put", 0.20
+            ... )
+            >>> print(strikes)
+            {'short_put': Decimal('608'), 'long_put': Decimal('603')}
+        """
+        from services.streaming.options_service import StreamingOptionsDataService
+
+        if options_service is None:
+            options_service = StreamingOptionsDataService(user)
+
+        # Determine option type based on spread
+        option_type: Literal["put", "call"] = (
+            "put" if spread_type == "bull_put" else "call"
+        )
+
+        # If no strikes provided, we need to fetch them
+        if available_strikes is None:
+            logger.warning("No available_strikes provided - caller should provide them")
+            return None
+
+        # Find short strike by delta
+        short_strike, actual_delta = await self.find_strike_by_delta(
+            user=user,
+            symbol=symbol,
+            expiration=expiration,
+            option_type=option_type,
+            target_delta=target_delta,
+            available_strikes=available_strikes,
+            options_service=options_service,
+        )
+
+        if not short_strike:
+            logger.warning(
+                f"Could not find {option_type} strike with delta ~{target_delta} for {symbol}"
+            )
+            return None
+
+        # Calculate long strike based on spread width
+        if spread_type == "bull_put":
+            long_strike = short_strike - Decimal(str(spread_width))
+        else:  # bear_call
+            long_strike = short_strike + Decimal(str(spread_width))
+
+        # Validate long strike exists in available strikes
+        # Allow some tolerance for finding nearest available
+        closest_long = self._find_closest_strike(long_strike, available_strikes)
+        if not closest_long:
+            logger.warning(f"No available long strike near ${long_strike}")
+            return None
+
+        # Check if closest long is within acceptable range (10% of spread width)
+        if abs(float(closest_long - long_strike)) > spread_width * 0.5:
+            logger.warning(
+                f"Closest long strike ${closest_long} too far from ideal ${long_strike}"
+            )
+            return None
+
+        # Build result
+        if spread_type == "bull_put":
+            result = {"short_put": short_strike, "long_put": closest_long}
+        else:
+            result = {"short_call": short_strike, "long_call": closest_long}
+
+        logger.info(
+            f"Delta-based {spread_type} for {symbol}: "
+            f"short=${short_strike} (delta={actual_delta:.3f}), "
+            f"long=${closest_long}, width=${abs(short_strike - closest_long)}"
+        )
+
+        return result

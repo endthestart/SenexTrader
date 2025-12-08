@@ -10,7 +10,7 @@
 
 ## Overview
 
-This document provides a quick reference for the Strategy Explanation Component - a unified UI component that transforms backend strategy selection text into scannable, visually-rich displays with icon-driven sections and clear status indicators.
+Quick reference for the Strategy Explanation Component - a UI component that transforms backend strategy selection text into scannable displays with icon-driven sections and status indicators.
 
 **Component Features:**
 - Adaptive display (success/warning/danger states)
@@ -21,7 +21,7 @@ This document provides a quick reference for the Strategy Explanation Component 
 
 ---
 
-## 🚀 Quick Start
+## Quick Start
 
 ### 1. Include in Template
 ```django
@@ -63,11 +63,11 @@ fetch('/api/strategy/suggestion/', { /* ... */ })
 
 ---
 
-## 📊 Expected Backend Format
+## Expected Backend Format
 
 ```
-✓ Selected: Bull Put Spread
-✓ Confidence: HIGH (score: 72.3)
+[OK] Selected: Bull Put Spread
+[OK] Confidence: HIGH (score: 72.3)
 
 Strategy Scores:
   → bull_put_spread: 72.3 - Reason text here
@@ -84,7 +84,7 @@ Market Conditions:
 
 ---
 
-## 🔧 Parser API
+## Parser API
 
 ### Methods
 
@@ -117,7 +117,7 @@ return 'success'
 
 ---
 
-## 🎯 CSS Classes Reference
+## CSS Classes Reference
 
 ### Layout Classes
 ```css
@@ -186,7 +186,7 @@ return 'success'
 
 ---
 
-## 🐛 Common Issues & Fixes
+## Common Issues & Fixes
 
 | Issue | Cause | Fix |
 |-------|-------|-----|
@@ -198,7 +198,7 @@ return 'success'
 
 ---
 
-## ✅ Implementation Checklist
+## Implementation Checklist
 
 ### Frontend
 - [ ] Add CSS to `static/css/style.css`
@@ -292,7 +292,7 @@ async function getStrategySuggestion() {
 
 ---
 
-## 🎯 Performance Targets
+## Performance Targets
 
 - **Load Time**: < 200ms additional
 - **Render Time**: < 500ms after API response
@@ -303,11 +303,11 @@ async function getStrategySuggestion() {
 
 ## 🚦 Browser Support
 
-- ✅ Chrome/Edge 90+
-- ✅ Firefox 88+
-- ✅ Safari 14+
-- ✅ iOS Safari 14+
-- ✅ Chrome Android 90+
+- Chrome/Edge 90+
+- Firefox 88+
+- Safari 14+
+- iOS Safari 14+
+- Chrome Android 90+
 
 ---
 

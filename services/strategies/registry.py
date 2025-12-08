@@ -10,7 +10,6 @@ Epic 22 Architecture Pattern:
 - Supports auto-registration via decorator
 """
 
-
 from django.contrib.auth.models import AbstractBaseUser
 
 from services.core.logging import get_logger

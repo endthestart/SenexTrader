@@ -4,7 +4,7 @@
 
 ---
 
-## 🚀 Quick Start
+## Quick Start
 
 ### 1. Initial Setup (One Time)
 
@@ -151,12 +151,12 @@ senextrader/                         # Monorepo root
 
 ---
 
-## 🔧 Configuration Files
+## Configuration Files
 
 ### `.senextrader.json` (Build Configuration)
 
 **Location:** Project root
-**Gitignored:** ✅ Yes (use `.senextrader.json.example` as template)
+**Gitignored:** Yes (use `.senextrader.json.example` as template)
 
 ```json
 {
@@ -207,14 +207,14 @@ ansible-vault create config/ansible/vault/production-vault.yml
 **Custom overrides:** `config/ansible/templates/quadlet/*.j2` (gitignored, deployment-specific)
 
 The deployment playbook automatically uses templates from `config/` if they exist, otherwise falls back to defaults in `deployment/`. This means:
-- ✅ Default templates work out-of-the-box (no copying required)
-- ✅ You can customize by copying templates to `config/ansible/templates/quadlet/` and modifying them
-- ✅ All templates use variables (`{{ app_directory }}`, `{{ quadlet_dir }}`) - no hardcoded paths
-- ✅ No sensitive data in templates - all secrets come from vault files
+- Default templates work out-of-the-box (no copying required)
+- You can customize by copying templates to `config/ansible/templates/quadlet/` and modifying them
+- All templates use variables (`{{ app_directory }}`, `{{ quadlet_dir }}`) - no hardcoded paths
+- No sensitive data in templates - all secrets come from vault files
 
 ---
 
-## 📦 Build Process
+## Build Process
 
 ### Using Makefile (Recommended)
 
@@ -248,13 +248,13 @@ make deploy-production
 ```
 
 **What this does:**
-1. ✅ Validates configuration
-2. ✅ Pulls latest container image
-3. ✅ Configures environment variables (from vault)
-4. ✅ Updates Quadlet service definitions
-5. ✅ Restarts services
-6. ✅ Runs database migrations
-7. ✅ Collects static files
+1. Validates configuration
+2. Pulls latest container image
+3. Configures environment variables (from vault)
+4. Updates Quadlet service definitions
+5. Restarts services
+6. Runs database migrations
+7. Collects static files
 
 ### Staging Deployment
 
@@ -279,7 +279,7 @@ ssh root@your-server.example.com "su - senex -c 'systemctl --user restart web.se
 
 ---
 
-## 🔐 Secrets Management
+## Secrets Management
 
 ### Setup Vault Password
 
@@ -353,7 +353,7 @@ redis_password: "your-redis-password"
 
 ---
 
-## 🎯 Common Tasks
+## Common Tasks
 
 ### View Current Configuration
 
@@ -399,7 +399,7 @@ ssh root@your-server.example.com "su - senex -c 'podman logs --tail 100 celery-w
 
 ---
 
-## 🐛 Troubleshooting
+## Troubleshooting
 
 ### Configuration Not Found
 
@@ -456,7 +456,7 @@ chmod 600 ~/.ansible_vault_pass
 
 ---
 
-## ⚙️ Makefile Commands
+## Makefile Commands
 
 ```bash
 make help              # Show all commands
@@ -469,28 +469,28 @@ make deploy-production # Deploy to production
 
 ---
 
-## 🔒 Security Notes
+## Security Notes
 
 **Gitignored Files (Never Commit):**
-- ✅ `config/` directory - All your private deployment configs
-- ✅ `.senextrader.json` - Your container registry
-- ✅ `config/ansible/inventory/hosts.yml` - Your server IPs
-- ✅ `config/ansible/vault/*-vault.yml` - Encrypted secrets
-- ✅ `.vault_pass*` - Vault password files
+- `config/` directory - All your private deployment configs
+- `.senextrader.json` - Your container registry
+- `config/ansible/inventory/hosts.yml` - Your server IPs
+- `config/ansible/vault/*-vault.yml` - Encrypted secrets
+- `.vault_pass*` - Vault password files
 
 **Safe to Commit:**
-- ✅ All `.example` files
-- ✅ All code files
-- ✅ Ansible playbooks and roles
-- ✅ Dockerfile
-- ✅ Default templates in `deployment/ansible/templates/` (generic, use variables)
+- All `.example` files
+- All code files
+- Ansible playbooks and roles
+- Dockerfile
+- Default templates in `deployment/ansible/templates/` (generic, use variables)
 
 **Security Guarantees:**
-- ✅ **No sensitive data in tracked files:** All passwords/secrets come from Ansible Vault via `env.j2`
-- ✅ **No hardcoded paths:** All templates use variables (`{{ app_directory }}`, `{{ quadlet_dir }}`)
-- ✅ **No infrastructure details:** No domain names, IPs, or server-specific configs in tracked templates
-- ✅ **Generic defaults:** Templates work for any deployment without modification
-- ✅ **Customization path:** Deployment-specific changes go in gitignored `config/` directory
+- **No sensitive data in tracked files:** All passwords/secrets come from Ansible Vault via `env.j2`
+- **No hardcoded paths:** All templates use variables (`{{ app_directory }}`, `{{ quadlet_dir }}`)
+- **No infrastructure details:** No domain names, IPs, or server-specific configs in tracked templates
+- **Generic defaults:** Templates work for any deployment without modification
+- **Customization path:** Deployment-specific changes go in gitignored `config/` directory
 
 ---
 

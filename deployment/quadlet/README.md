@@ -4,7 +4,7 @@ Systemd-native container orchestration for Senex Trader using Podman Quadlet.
 
 ---
 
-## 🎯 What is Quadlet?
+## What is Quadlet?
 
 **Quadlet** is built into Podman 4.4+ and provides systemd-native container management.
 
@@ -77,7 +77,7 @@ config/ansible/templates/quadlet/
 
 ---
 
-## 📝 Quadlet File Format
+## Quadlet File Format
 
 Quadlet uses `.container` files with systemd-style ini format.
 
@@ -120,7 +120,7 @@ TimeoutStartSec=120
 
 ---
 
-## 🚀 Deployment Locations
+## Deployment Locations
 
 ### Rootful Podman (Staging)
 ```
@@ -162,7 +162,7 @@ TimeoutStartSec=120
 
 ---
 
-## 🔧 How Quadlet Works
+## How Quadlet Works
 
 ### 1. Quadlet Generator (Automatic)
 
@@ -204,7 +204,7 @@ Image=your-registry.example.com/your-org/senex-trader:v0.2.25
 
 ---
 
-## 📦 Managing Services
+## Managing Services
 
 ### Staging (Rootful)
 
@@ -241,7 +241,7 @@ journalctl --user -u web.service -f
 
 ---
 
-## 🔄 Deployment Workflow
+## Deployment Workflow
 
 ### 1. Update Configuration
 
@@ -316,7 +316,7 @@ systemctl --user restart web.service
 
 ---
 
-## 🐛 Troubleshooting
+## Troubleshooting
 
 ### Service Won't Start
 
@@ -377,7 +377,7 @@ podman exec web ping postgres
 
 ---
 
-## 🔐 Security Features
+## Security Features
 
 ### Rootless Podman Benefits
 - Containers run as non-root user (UID 987 = senex)

@@ -11,7 +11,7 @@ from asgiref.sync import sync_to_async
 from accounts.models import TradingAccount
 from services.core.logging import get_logger
 from services.orders.history import OrderHistoryService
-from services.positions.lifecycle.leg_matcher import LegMatcher
+from services.positions.lifecycle.leg_matcher import LegMatcher, OrderAwareLegMatcher
 from services.positions.lifecycle.pnl_calculator import PositionPnLCalculator
 from trading.models import Position
 
@@ -45,7 +45,7 @@ class PositionSyncService:
         start_time = time.time()
 
         logger.info(
-            "🔄 Starting position sync for user %s (two-tier: app-managed + unmanaged)",
+            "Starting position sync for user %s (two-tier: app-managed + unmanaged)",
             user.id,
         )
 
@@ -98,15 +98,10 @@ class PositionSyncService:
                     "updated": 0,
                 }
 
-            # TWO-TIER SYNC APPROACH:
-            # 1. App-managed positions: use cached orders as source of truth
-            # 2. Unmanaged positions: use TastyTrade grouping (existing logic)
-
             imported_count = 0
             updated_count = 0
             errors = []
 
-            # Tier 1: Sync app-managed positions using cached orders
             logger.info(
                 "User %s: Tier 1 - syncing app-managed positions from cached orders...", user.id
             )
@@ -123,12 +118,10 @@ class PositionSyncService:
                 tier1_duration,
             )
 
-            # Tier 2: Sync unmanaged positions using TastyTrade grouping
             logger.info(
                 "User %s: Tier 2 - syncing unmanaged positions via TastyTrade grouping...", user.id
             )
             tier2_start = time.time()
-            # Group positions by underlying symbol (for multi-leg spreads)
             tt_positions = await self._group_positions_by_underlying(raw_positions)
             group_duration = time.time() - tier2_start
 
@@ -209,7 +202,7 @@ class PositionSyncService:
                 result["errors"] = errors
 
             logger.info(
-                "✅ Position sync complete for user %s: imported=%s, updated=%s, closed_pending=%s, closed_broker=%s "
+                "Position sync complete for user %s: imported=%s, updated=%s, closed_pending=%s, closed_broker=%s "
                 "(total: %.2fs, breakdown: order_history=%.2fs, fetch=%.2fs, tier1=%.2fs, tier2=%.2fs, pending=%.2fs, broker_close=%.2fs)",
                 user.id,
                 imported_count,
@@ -279,9 +272,7 @@ class PositionSyncService:
                         "total_unrealized_pnl": Decimal("0"),
                     }
 
-                # Extract leg data
                 leg_data = {
-                    # Full OCC symbol for options
                     "symbol": getattr(pos, "symbol", None),
                     "instrument_type": str(getattr(pos, "instrument_type", "unknown")),
                     "quantity": int(getattr(pos, "quantity", 0)),
@@ -297,16 +288,9 @@ class PositionSyncService:
                     ),
                 }
 
-                # Add to legs
                 grouped_positions[underlying]["legs"].append(leg_data)
 
-                # Note: total_quantity will be calculated after all legs are added
-                # For multi-leg positions (spreads), quantity = min(abs(leg quantities))
-                # This is calculated below during position_data construction
-
-                # Calculate P&L for this leg using centralized calculator
                 avg_price = getattr(pos, "average_open_price", None)
-                # Prefer mark_price (live) over close_price (can be stale)
                 mark_price = getattr(pos, "mark_price", None)
                 close_price = getattr(pos, "close_price", None)
                 current_price = mark_price if mark_price is not None else close_price
@@ -316,7 +300,6 @@ class PositionSyncService:
                 if avg_price and current_price and quantity:
                     multiplier = getattr(pos, "multiplier", 100)
 
-                    # Use PositionPnLCalculator for direction-aware P&L calculation
                     leg_pnl = PositionPnLCalculator.calculate_leg_pnl(
                         avg_price=avg_price,
                         current_price=current_price,
@@ -542,13 +525,13 @@ class PositionSyncService:
                 logger.error(
                     f"Position reconstruction failed for position {existing_position.id} "
                     f"(symbol={existing_position.symbol}, user={existing_position.user_id}, "
-                    f"broker_order_ids={existing_position.broker_order_ids}): {e}",
+                    f"opening_order_id={existing_position.opening_order_id}): {e}",
                     exc_info=True,
                     extra={
                         "position_id": existing_position.id,
                         "symbol": existing_position.symbol,
                         "user_id": existing_position.user_id,
-                        "broker_order_ids": existing_position.broker_order_ids,
+                        "opening_order_id": existing_position.opening_order_id,
                         "error_type": "position_reconstruction_failure",
                     },
                 )
@@ -565,6 +548,8 @@ class PositionSyncService:
 
         if existing_position:
             # Update existing position
+            # Track which fields we actually modify to use update_fields
+            # This prevents race conditions with concurrent processes
             protected_fields = [
                 "user",
                 "trading_account",
@@ -578,6 +563,8 @@ class PositionSyncService:
                 "quantity",  # Preserve quantity (use cached orders for app-managed positions)
                 "opening_price_effect",  # Preserve credit/debit status
             ]
+
+            modified_fields = []
 
             for field, value in position_data.items():
                 if field == "metadata":
@@ -612,26 +599,31 @@ class PositionSyncService:
                         merged_metadata["sync_timestamp"] = value.get("sync_timestamp")
                         merged_metadata["sync_source"] = value.get("sync_source")
 
-                    setattr(existing_position, field, merged_metadata)
+                    # Only save metadata if it actually changed
+                    if merged_metadata != existing_metadata:
+                        setattr(existing_position, field, merged_metadata)
+                        modified_fields.append("metadata")
                 elif field not in protected_fields:
-                    # Only update non-protected fields
+                    # Only update non-protected fields when value actually changes
                     old_value = getattr(existing_position, field, None)
                     if old_value != value:
-                        # Allow updates when:
-                        # 1. Old value is None (one-time population)
-                        # 2. Old value is not None and differs (normal update)
                         logger.info(
                             f"Position {existing_position.id}: Updating {field} "
                             f"from {old_value} to {value}"
                         )
-                    setattr(existing_position, field, value)
+                        setattr(existing_position, field, value)
+                        modified_fields.append(field)
 
-            await existing_position.asave()
+            # Use update_fields to only save modified fields
+            # This prevents overwriting concurrent changes to protected fields
+            if modified_fields:
+                await existing_position.asave(update_fields=modified_fields)
             has_legs = bool(existing_position.metadata and existing_position.metadata.get("legs"))
             logger.info(
                 f"Updated position {existing_position.id}: "
                 f"strategy_type={existing_position.strategy_type}, "
-                f"has_legs_in_metadata={has_legs}"
+                f"has_legs_in_metadata={has_legs}, "
+                f"fields_updated={modified_fields}"
             )
             return False
         # Create new position
@@ -723,12 +715,12 @@ class PositionSyncService:
                     reason = f"order_{order_status.lower()}"
                     position.metadata["closure_reason"] = reason
                     position.metadata["closure_timestamp"] = dj_timezone.now().isoformat()
-                    await position.asave()
+                    await position.asave(update_fields=["status", "metadata"])
 
                     # Also update trade status
                     if first_trade:
                         first_trade.status = order_status.lower()
-                        await first_trade.asave()
+                        await first_trade.asave(update_fields=["status"])
 
                     closed_count += 1
                     logger.info(
@@ -754,7 +746,7 @@ class PositionSyncService:
                                 f"'{history_status}'. Marking as open."
                             )
                             position.lifecycle_state = "open_full"
-                            await position.asave()
+                            await position.asave(update_fields=["lifecycle_state"])
 
                             if first_trade:
                                 first_trade.status = "filled"
@@ -763,7 +755,7 @@ class PositionSyncService:
                                     if hasattr(order_history, "filled_at")
                                     else dj_timezone.now()
                                 )
-                                await first_trade.asave()
+                                await first_trade.asave(update_fields=["status", "filled_at"])
 
                         elif history_status in ["cancelled", "rejected", "expired"]:
                             logger.info(
@@ -775,11 +767,11 @@ class PositionSyncService:
                             position.metadata = position.metadata or {}
                             reason = f"order_{history_status.lower()}"
                             position.metadata["closure_reason"] = reason
-                            await position.asave()
+                            await position.asave(update_fields=["lifecycle_state", "metadata"])
 
                             if first_trade:
                                 first_trade.status = history_status.lower()
-                                await first_trade.asave()
+                                await first_trade.asave(update_fields=["status"])
                             closed_count += 1
                         else:
                             logger.warning(
@@ -886,8 +878,10 @@ class PositionSyncService:
                 position.unrealized_pnl = Decimal("0")  # No more unrealized P&L when closed
 
                 # Set closed_at timestamp if not already set
+                fields_to_save = ["lifecycle_state", "quantity", "unrealized_pnl", "metadata"]
                 if not position.closed_at:
                     position.closed_at = dj_timezone.now()
+                    fields_to_save.append("closed_at")
 
                 # Add closure metadata
                 position.metadata = position.metadata or {}
@@ -895,11 +889,11 @@ class PositionSyncService:
                 position.metadata["closure_detected_at"] = dj_timezone.now().isoformat()
                 position.metadata["closure_method"] = "position_sync_detection"
 
-                await position.asave()
+                await position.asave(update_fields=fields_to_save)
                 closed_count += 1
 
                 logger.info(
-                    f"✅ Closed position {position.id} ({position.symbol}): "
+                    f"Closed position {position.id} ({position.symbol}): "
                     f"realized_pnl=${position.total_realized_pnl}, "
                     f"closed_at={position.closed_at.isoformat()}"
                 )
@@ -999,7 +993,7 @@ class PositionSyncService:
         underlying (e.g., 5 QQQ positions) into one.
 
         For app-managed positions:
-        1. Load from database using broker_order_ids
+        1. Load from database using opening_order_id
         2. Get opening order from cached_orders for structure
         3. Find matching legs in raw_positions for current prices
         4. Update only market data (prices, P&L), not structure
@@ -1064,9 +1058,10 @@ class PositionSyncService:
 
         Returns dict with:
         - legs_by_symbol: OCC symbol -> leg data lookup map
-        - cached_orders_map: broker_order_id -> CachedOrder lookup map
+        - cached_orders_map: broker_order_id -> TastyTradeOrderHistory lookup map
         - preloaded_orders: position_id -> filled orders lookup map
         - leg_matcher: LegMatcher utility instance
+        - order_aware_matcher: OrderAwareLegMatcher for position isolation
         - pnl_calculator: PositionPnLCalculator utility instance
         """
         # Build leg lookup map
@@ -1078,11 +1073,17 @@ class PositionSyncService:
         # Batch load filled profit target orders
         preloaded_orders = await self._batch_load_filled_orders(app_managed_positions)
 
+        # Create order-aware matcher for position isolation
+        # This uses opening_order_id to track which legs belong to which position
+        cached_orders_list = list(cached_orders_map.values())
+        order_aware_matcher = OrderAwareLegMatcher(cached_orders_list, app_managed_positions)
+
         return {
             "legs_by_symbol": legs_by_symbol,
             "cached_orders_map": cached_orders_map,
             "preloaded_orders": preloaded_orders,
             "leg_matcher": LegMatcher(legs_by_symbol),
+            "order_aware_matcher": order_aware_matcher,
             "pnl_calculator": PositionPnLCalculator(),
         }
 
@@ -1111,26 +1112,33 @@ class PositionSyncService:
     async def _batch_load_cached_orders(
         self, app_managed_positions: list[Position]
     ) -> dict[str, object]:
-        """Batch load all opening orders to avoid N+1 queries."""
-        from trading.models import CachedOrder
+        """
+        Batch load all opening orders to avoid N+1 queries.
 
-        all_broker_order_ids = [
-            pos.broker_order_ids[0]
-            for pos in app_managed_positions
-            if pos.broker_order_ids and len(pos.broker_order_ids) > 0
-        ]
+        Uses opening_order_id to look up cached orders.
+        """
+        from trading.models import TastyTradeOrderHistory
 
-        if not all_broker_order_ids:
+        # Collect all order IDs to load
+        all_order_ids = set()
+
+        for pos in app_managed_positions:
+            if pos.opening_order_id:
+                all_order_ids.add(pos.opening_order_id)
+
+        if not all_order_ids:
             return {}
 
         cached_orders_map = {
             order.broker_order_id: order
-            async for order in CachedOrder.objects.filter(broker_order_id__in=all_broker_order_ids)
+            async for order in TastyTradeOrderHistory.objects.filter(
+                broker_order_id__in=list(all_order_ids)
+            )
         }
 
         logger.debug(
             f"Batch loaded {len(cached_orders_map)} cached orders for "
-            f"{len(all_broker_order_ids)} positions"
+            f"{len(all_order_ids)} positions"
         )
         return cached_orders_map
 
@@ -1189,10 +1197,19 @@ class PositionSyncService:
         return True
 
     def _get_opening_order(self, position: Position, cached_orders_map: dict):
-        """Get opening order from cached orders map."""
-        if not position.broker_order_ids or len(position.broker_order_ids) == 0:
-            return None
-        return cached_orders_map.get(position.broker_order_ids[0])
+        """
+        Get opening order from cached orders map using opening_order_id.
+        """
+        if position.opening_order_id:
+            order = cached_orders_map.get(position.opening_order_id)
+            if order:
+                return order
+            logger.warning(
+                f"Position {position.id}: opening_order_id={position.opening_order_id} "
+                f"not found in cache"
+            )
+
+        return None
 
     def _calculate_fill_price(self, position: Position, opening_order) -> Decimal:
         """Calculate actual fill price from opening order."""
@@ -1365,11 +1382,13 @@ class PositionSyncService:
         position.metadata["sync_timestamp"] = dj_timezone.now().isoformat()
         position.metadata["sync_source"] = "cached_orders_with_tt_prices"
 
+        fields_to_save = ["metadata", "unrealized_pnl"]
         if fill_price is not None:
             position.avg_price = fill_price
+            fields_to_save.append("avg_price")
         position.unrealized_pnl = total_unrealized_pnl
 
-        await position.asave()
+        await position.asave(update_fields=fields_to_save)
 
     async def _populate_profit_target_credits(
         self, position: Position, fill_price: Decimal
@@ -1492,11 +1511,13 @@ class PositionSyncService:
 
         # ASYNC: Query cached orders BEFORE transaction
         # This must happen outside transaction to avoid SynchronousOnlyOperation
-        from trading.models import CachedOrder
+        from trading.models import TastyTradeOrderHistory
 
         cached_orders_map = {
             co.broker_order_id: co
-            async for co in CachedOrder.objects.filter(broker_order_id__in=profit_target_order_ids)
+            async for co in TastyTradeOrderHistory.objects.filter(
+                broker_order_id__in=profit_target_order_ids
+            )
         }
 
         # Check for missing or cancelled order IDs
@@ -1523,7 +1544,7 @@ class PositionSyncService:
         # Query cached orders for profit target fills
         filled_orders = [
             order
-            async for order in CachedOrder.objects.filter(
+            async for order in TastyTradeOrderHistory.objects.filter(
                 broker_order_id__in=profit_target_order_ids, status="Filled"
             )
         ]
@@ -1619,8 +1640,16 @@ class PositionSyncService:
                         f"{new_quantity}/{original_quantity} remaining, state → open_partial"
                     )
 
-                # Save all changes atomically
-                position.save()
+                # Save only the modified fields atomically
+                position.save(
+                    update_fields=[
+                        "quantity",
+                        "total_realized_pnl",
+                        "lifecycle_state",
+                        "profit_target_details",
+                        "metadata",
+                    ]
+                )
                 return True
 
         # Execute atomic update
@@ -1639,8 +1668,8 @@ class PositionSyncService:
             positions: List of positions to load orders for
 
         Returns:
-            Dict mapping position_id -> {order_id: CachedOrder}
-            Example: {123: {"abc-order-1": CachedOrder(...), "abc-order-2": CachedOrder(...)}}
+            Dict mapping position_id -> {order_id: TastyTradeOrderHistory}
+            Example: {123: {"abc-order-1": TastyTradeOrderHistory(...), "abc-order-2": TastyTradeOrderHistory(...)}}
         """
         # Step 1: Collect all order IDs that need to be loaded
         order_ids_by_position = {}
@@ -1664,11 +1693,11 @@ class PositionSyncService:
             return {}
 
         # Single database query for all orders with eager loading
-        from trading.models import CachedOrder
+        from trading.models import TastyTradeOrderHistory
 
         filled_orders = {
             order.broker_order_id: order
-            async for order in CachedOrder.objects.filter(
+            async for order in TastyTradeOrderHistory.objects.filter(
                 broker_order_id__in=all_order_ids, status="Filled"
             ).select_related("trading_account")
         }
@@ -1698,7 +1727,7 @@ class PositionSyncService:
 
         Args:
             position: Position to calculate for
-            preloaded_orders: Optional pre-loaded orders dict {order_id: CachedOrder} to avoid queries
+            preloaded_orders: Optional pre-loaded orders dict {order_id: TastyTradeOrderHistory} to avoid queries
 
         Returns:
             Dict mapping OCC symbol -> quantity closed
@@ -1730,11 +1759,11 @@ class PositionSyncService:
             )
         else:
             # Fallback to database query (only if preloaded_orders not provided)
-            from trading.models import CachedOrder
+            from trading.models import TastyTradeOrderHistory
 
             filled_orders = [
                 order
-                async for order in CachedOrder.objects.filter(
+                async for order in TastyTradeOrderHistory.objects.filter(
                     broker_order_id__in=filled_order_ids, status="Filled"
                 )
             ]

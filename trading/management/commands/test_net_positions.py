@@ -115,12 +115,12 @@ class Command(AsyncCommand):
         if len(net_positions) < len(raw_positions):
             self.stdout.write(
                 self.style.SUCCESS(
-                    "\n✓ SDK DOES group/net positions (fewer returned with net_positions=True)"
+                    "\n[OK] SDK DOES group/net positions (fewer returned with net_positions=True)"
                 )
             )
             self.stdout.write("  This means we can replace custom grouping logic.")
         elif len(net_positions) == len(raw_positions):
-            self.stdout.write(self.style.WARNING("\n✗ SDK DOES NOT group positions (same count)"))
+            self.stdout.write(self.style.WARNING("\n[FAIL] SDK DOES NOT group positions (same count)"))
             self.stdout.write("  We may still need custom grouping logic.")
         else:
             self.stdout.write(

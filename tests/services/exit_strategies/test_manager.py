@@ -52,7 +52,7 @@ class TestExitManager:
         position.unrealized_pnl = Decimal("-30.00")
         position.initial_risk = Decimal("50.00")
 
-        should_exit, reason, evaluations = await manager.should_exit(position)
+        should_exit, reason, _evaluations = await manager.should_exit(position)
 
         # Should exit (stop loss triggered)
         assert should_exit is True
@@ -92,7 +92,7 @@ class TestExitManager:
         position.unrealized_pnl = Decimal("25.00")
         position.initial_risk = Decimal("50.00")
 
-        should_exit, reason, evaluations = await manager.should_exit(position)
+        should_exit, reason, _evaluations = await manager.should_exit(position)
 
         # Should NOT exit (only one strategy triggered)
         assert should_exit is False
@@ -102,7 +102,7 @@ class TestExitManager:
     async def test_all_mode_all_met(self):
         """Test ALL mode with all conditions met."""
         # Both will trigger on large profit
-        profit_exit = ProfitTargetExit(target_percentage=10.0)  # Low threshold
+        ProfitTargetExit(target_percentage=10.0)  # Low threshold
         # Note: Stop loss won't trigger on profit, so this test needs rethinking
 
         # Better example: Use time-based exits that can both trigger
@@ -195,7 +195,7 @@ class TestExitManager:
         position.initial_risk = Decimal("50.00")
 
         # Should handle error gracefully
-        should_exit, reason, evaluations = await manager.should_exit(position)
+        should_exit, _reason, evaluations = await manager.should_exit(position)
 
         # Should still exit (profit target triggered)
         assert should_exit is True
@@ -225,7 +225,7 @@ class TestExitManager:
         position.metadata = {"expiration_date": future_date}
         position.opened_at = timezone.now() - timedelta(days=10)
 
-        should_exit, reason, evaluations = await manager.should_exit(position)
+        should_exit, _reason, evaluations = await manager.should_exit(position)
 
         # Should exit (time-based triggered)
         assert should_exit is True

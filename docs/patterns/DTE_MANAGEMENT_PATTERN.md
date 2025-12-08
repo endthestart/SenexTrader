@@ -15,7 +15,7 @@ The DTE management system follows a **state-based reconciliation** approach:
 
 ## Critical Requirements
 
-### 1. REPLACE, Don't Create ⚠️
+### 1. REPLACE, Don't Create 
 
 **CRITICAL**: DTE automation must CLOSE existing positions, NEVER create new ones.
 
@@ -46,23 +46,28 @@ await trade.asave()
 
 The system uses **progressive escalation** based on DTE to eliminate assignment risk:
 
-#### Credit Spreads (e.g., sold call spread at $1.00 on $3 wide)
-- **Max Loss**: $3.00 - $1.00 = $2.00
-- **DTE 7**: Willing to pay $1.40 (70% of max loss)
-- **DTE 6**: Willing to pay $1.80 (90% of max loss)
-- **DTE 5**: Willing to pay $2.20 (110% - accepting small loss)
-- **DTE 4**: Willing to pay $2.60 (130% - accepting moderate loss)
-- **DTE 3**: MARKET order (exit at any price)
+#### Credit Spreads (e.g., sold put spread at $1.50 on $3 wide)
+- **Max Loss**: $3.00 - $1.50 = $1.50
+- **DTE 7**: Pay $1.50 (breakeven - entry price)
+- **DTE 6**: Pay $2.55 (entry + 70% of max loss)
+- **DTE 5**: Pay $2.70 (entry + 80% of max loss)
+- **DTE 4**: Pay $2.85 (entry + 90% of max loss)
+- **DTE ≤3**: Pay $3.00 (full spread width - accept max loss to guarantee exit)
+
+**Formula**: `close_price = entry_price + (% × max_loss)`
 
 **Rationale**: Assignment risk increases exponentially as DTE → 0. We prefer controlled losses over assignment complications.
 
-#### Debit Spreads (e.g., bought put spread at $2.00 on $3 wide)
-- **Max Value**: $3.00
-- **DTE 7**: Accept $0.90 (30% of max value)
-- **DTE 6**: Accept $0.60 (20% of max value)
-- **DTE 5**: Accept $0.30 (10% of max value)
-- **DTE 4**: Accept $0.15 (5% of max value)
-- **DTE 3**: MARKET order
+#### Debit Spreads (e.g., bought put spread at $1.50 on $3 wide)
+- **Max Loss**: $1.50 (lose entire debit paid)
+- **Max Profit**: $3.00 - $1.50 = $1.50 (spread goes to full width)
+- **DTE 7**: Sell for $1.50 (breakeven - entry price)
+- **DTE 6**: Sell for $0.45 (entry - 70% of max loss)
+- **DTE 5**: Sell for $0.30 (entry - 80% of max loss)
+- **DTE 4**: Sell for $0.15 (entry - 90% of max loss)
+- **DTE ≤3**: Sell for $0.00 (accept total loss to guarantee exit)
+
+**Formula**: `sell_price = entry_price - (% × max_loss)` where `max_loss = entry_price`
 
 ### 3. Profit Target Validation
 
@@ -136,14 +141,14 @@ graph TD
 
 ```mermaid
 graph LR
-    A[DTE 7: 70% max loss] --> B[Order doesn't fill]
-    B --> C[DTE 6: 90% max loss]
+    A[DTE 7: Breakeven] --> B[Order doesn't fill]
+    B --> C[DTE 6: +70% max loss]
     C --> D[Order doesn't fill]
-    D --> E[DTE 5: 110% max loss]
+    D --> E[DTE 5: +80% max loss]
     E --> F[Order doesn't fill]
-    F --> G[DTE 4: 130% max loss]
+    F --> G[DTE 4: +90% max loss]
     G --> H[Order doesn't fill]
-    H --> I[DTE 3: MARKET order]
+    H --> I[DTE ≤3: Full spread width]
 ```
 
 ## Idempotency & Retry Logic
@@ -162,31 +167,26 @@ graph LR
 ## Example: Full Position Lifecycle
 
 ```
-Sep 25 (45 DTE): Open Senex Trident position
-    - Create 3 spreads (2 puts, 1 call)
-    - Place 3 profit targets (40%, 60%, 50%)
-
-Oct 6 (34 DTE): Put Spread 1 profit target fills at 40%
-    - Position now has 2 open spreads
-
-Oct 8 (32 DTE): Put Spread 2 profit target fills at 60%
-    - Position now has 1 open spread (call)
+Sep 25 (45 DTE): Open Bull Put Spread
+    - $3 wide spread, received $1.50 credit
+    - Max loss = $1.50
+    - Place profit target at 40% ($0.90 debit to close)
 
 Oct 31 (7 DTE): DTE Management begins
-    - Cancel call spread profit target (#410555945)
+    - Cancel profit target order
     - Create Trade with trade_type="close"
-    - Place closing order at $1.40 (70% of max loss)
+    - Place closing order at $1.50 (breakeven)
 
 Nov 1 (6 DTE): Order didn't fill
     - Cancel previous order
-    - Place new order at $1.80 (90% of max loss)
+    - Place new order at $2.55 (entry + 70% of max loss)
 
 Nov 2 (5 DTE): Order didn't fill
     - Cancel previous order
-    - Place new order at $2.20 (110% of max loss)
+    - Place new order at $2.70 (entry + 80% of max loss)
 
-Nov 3 (4 DTE): Order fills at $2.20
-    - Position closed with controlled loss
+Nov 3 (4 DTE): Order fills at $2.70
+    - Position closed with $1.20 loss
     - Avoided assignment risk
 ```
 
@@ -246,22 +246,25 @@ Nov 3 (4 DTE): Order fills at $2.20
 # DTE threshold to start risk management
 DTE_RISK_MANAGEMENT_THRESHOLD = 7
 
-# Price escalation percentages (credit spreads)
+# Price escalation for CREDIT spreads
+# Formula: close_price = entry_price + (% × max_loss)
 DTE_ESCALATION_CREDIT = {
-    7: 0.70,  # 70% of max loss
-    6: 0.90,  # 90% of max loss
-    5: 1.10,  # 110% of max loss (accept loss)
-    4: 1.30,  # 130% of max loss
-    3: None,  # MARKET order
+    7: 0.00,  # Breakeven (entry price only)
+    6: 0.70,  # Entry + 70% of max loss
+    5: 0.80,  # Entry + 80% of max loss
+    4: 0.90,  # Entry + 90% of max loss
+    3: 1.00,  # Full spread width (max loss)
 }
 
-# Price escalation percentages (debit spreads)
+# Price escalation for DEBIT spreads
+# Formula: sell_price = entry_price - (% × max_loss)
+# where max_loss = entry_price (lose entire debit paid)
 DTE_ESCALATION_DEBIT = {
-    7: 0.30,  # Accept 30% of max value
-    6: 0.20,  # Accept 20% of max value
-    5: 0.10,  # Accept 10% of max value
-    4: 0.05,  # Accept 5% of max value
-    3: None,  # MARKET order
+    7: 0.00,  # Breakeven (entry price - 0%)
+    6: 0.70,  # Entry - 70% of max loss (accept 70% loss)
+    5: 0.80,  # Entry - 80% of max loss (accept 80% loss)
+    4: 0.90,  # Entry - 90% of max loss (accept 90% loss)
+    3: 1.00,  # Entry - 100% = $0.00 (accept total loss)
 }
 ```
 

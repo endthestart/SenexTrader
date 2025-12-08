@@ -10,7 +10,7 @@ from django.urls import reverse
 
 import pytest
 
-from accounts.models import AccountSnapshot, OptionsAllocation, TradingAccount
+from accounts.models import AccountSnapshot, TradingAccount
 
 User = get_user_model()
 
@@ -32,13 +32,15 @@ class RiskIntegrationTests(TestCase):
             is_primary=True,
             is_active=True,
         )
-        # Create OptionsAllocation for user
-        self.allocation = OptionsAllocation.objects.create(
-            user=self.user,
-            allocation_method="conservative",
-            risk_tolerance=0.40,
-            stressed_risk_tolerance=0.60,
-        )
+        self.trading_account.access_token = "test-access"
+        self.trading_account.refresh_token = "test-refresh"
+        self.trading_account.save(update_fields=["access_token", "refresh_token"])
+        # Signals create an OptionsAllocation automatically; update it for clarity
+        self.allocation = self.user.options_allocation
+        self.allocation.allocation_method = "conservative"
+        self.allocation.risk_tolerance = 0.40
+        self.allocation.stressed_risk_tolerance = 0.60
+        self.allocation.save()
         self.client = Client()
         cache.clear()
 
@@ -290,14 +292,13 @@ class RiskIntegrationTests(TestCase):
         self.client.force_login(self.user)
         response = self.client.get(reverse("trading:api_risk_budget"))
 
-        assert response.status_code == 503
+        assert response.status_code == 200
         data = response.json()
         assert not data["success"]
-        # Error message indicates data is unavailable (specific message may vary)
-        assert "error" in data
-        assert not data["data_available"]
+        assert data.get("data_available") is False
+        assert "No primary trading account configured" in data["error"]
 
-    @patch("services.risk_manager.EnhancedRiskManager._a_calculate_app_managed_risk")
+    @patch("services.risk.manager.EnhancedRiskManager._a_calculate_app_managed_risk")
     def test_risk_budget_with_existing_positions(self, mock_risk):
         """Test risk budget calculation with existing position risk"""
         # Mock existing position risk of $3000

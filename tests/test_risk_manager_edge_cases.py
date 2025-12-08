@@ -36,8 +36,9 @@ class RiskCalculationAccuracyTests(TestCase):
             password="testpass123",
         )
         self.risk_manager = EnhancedRiskManager(self.user)
-        OptionsAllocation.objects.create(
-            user=self.user, risk_tolerance=0.40, stressed_risk_tolerance=0.60
+        OptionsAllocation.objects.update_or_create(
+            user=self.user,
+            defaults={"risk_tolerance": 0.40, "stressed_risk_tolerance": 0.60},
         )
 
     def test_max_risk_credit_spread_calculation(self):
@@ -208,10 +209,12 @@ class StressScenarioTests(TestCase):
             password="testpass123",
         )
         self.risk_manager = EnhancedRiskManager(self.user)
-        self.allocation = OptionsAllocation.objects.create(
+        self.allocation, _ = OptionsAllocation.objects.update_or_create(
             user=self.user,
-            risk_tolerance=Decimal("0.40"),  # Normal: 40%
-            stressed_risk_tolerance=Decimal("0.60"),  # Stressed: 60%
+            defaults={
+                "risk_tolerance": Decimal("0.40"),  # Normal: 40%
+                "stressed_risk_tolerance": Decimal("0.60"),  # Stressed: 60%
+            },
         )
 
     def test_stress_increases_available_capital(self):
@@ -318,8 +321,9 @@ class BoundaryConditionTests(TestCase):
             password="testpass123",
         )
         self.risk_manager = EnhancedRiskManager(self.user)
-        OptionsAllocation.objects.create(
-            user=self.user, risk_tolerance=Decimal("0.40"), stressed_risk_tolerance=Decimal("0.60")
+        OptionsAllocation.objects.update_or_create(
+            user=self.user,
+            defaults={"risk_tolerance": Decimal("0.40"), "stressed_risk_tolerance": Decimal("0.60")},
         )
 
     def test_portfolio_at_95_percent_capacity(self):
@@ -432,7 +436,7 @@ class BoundaryConditionTests(TestCase):
             assert can_open  # Changed: $100 is within $10k budget
 
             # Cannot exceed $10k budget
-            can_open, msg = self.risk_manager.can_open_position(Decimal("15000"))
+            can_open, _msg = self.risk_manager.can_open_position(Decimal("15000"))
             assert not can_open
 
     def test_zero_buying_power(self):
@@ -461,7 +465,7 @@ class BoundaryConditionTests(TestCase):
             assert strategy_power == Decimal("0")
 
             # Cannot open any position with zero capital
-            can_open, msg = self.risk_manager.can_open_position(Decimal("100"))
+            can_open, _msg = self.risk_manager.can_open_position(Decimal("100"))
             assert not can_open
 
     def test_account_data_unavailable(self):
@@ -524,7 +528,9 @@ class UtilizationPercentTests(TestCase):
             password="testpass123",
         )
         self.risk_manager = EnhancedRiskManager(self.user)
-        OptionsAllocation.objects.create(user=self.user, risk_tolerance=Decimal("0.40"))
+        OptionsAllocation.objects.update_or_create(
+            user=self.user, defaults={"risk_tolerance": Decimal("0.40")}
+        )
 
     def test_utilization_percentage_calculation(self):
         """Test utilization percentage is calculated correctly"""

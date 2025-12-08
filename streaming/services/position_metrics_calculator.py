@@ -31,6 +31,7 @@ from services.core.cache import CacheManager
 from services.core.logging import get_logger
 from services.market_data.greeks import GreeksService
 from services.positions.lifecycle.pnl_calculator import PositionPnLCalculator
+from streaming.constants import ACCOUNT_STATE_CACHE_TTL
 from streaming.services.enhanced_cache import enhanced_cache
 from trading.models import Position
 
@@ -151,7 +152,9 @@ class PositionMetricsCalculator:
                 "available": True,
             }
             account_state_key = CacheManager.account_state(self.user_id, account_obj.account_number)
-            await enhanced_cache.set(account_state_key, account_state_data, ttl=120)
+            await enhanced_cache.set(
+                account_state_key, account_state_data, ttl=ACCOUNT_STATE_CACHE_TTL
+            )
 
             # Save to database
             try:

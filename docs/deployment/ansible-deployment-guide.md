@@ -590,8 +590,8 @@ podman exec -it web python manage.py shell
 **Issue:** External access to staging fails
 
 **Symptoms:**
-- Health check works locally: `curl http://localhost:8000/health/` ✅
-- External access fails: `curl http://10.0.0.100:8000/health/` ❌ (timeout)
+- Health check works locally: `curl http://localhost:8000/health/`
+- External access fails: `curl http://10.0.0.100:8000/health/` (timeout)
 - Nginx proxy at 10.0.0.209 cannot reach application
 
 **Root Cause:** UFW blocking external traffic to Podman containers

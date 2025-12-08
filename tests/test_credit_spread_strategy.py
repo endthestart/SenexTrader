@@ -34,7 +34,7 @@ class TestCreditSpreadDirectionParity:
         report.iv_rank = 60.0
         report.market_stress_level = 25.0
 
-        unified_score, unified_explanation = await unified.a_score_market_conditions(report)
+        unified_score, _unified_explanation = await unified.a_score_market_conditions(report)
 
         assert unified_score >= 90.0
         assert unified.spread_direction == SpreadDirection.BULLISH
@@ -50,7 +50,7 @@ class TestCreditSpreadDirectionParity:
         report.current_iv = 0.25
         report.market_stress_level = 65.0
 
-        unified_score, unified_explanation = await unified.a_score_market_conditions(report)
+        unified_score, _unified_explanation = await unified.a_score_market_conditions(report)
 
         assert unified_score >= 60.0
         assert unified.spread_direction == SpreadDirection.BEARISH
@@ -127,8 +127,8 @@ class TestCreditSpreadDirectionParity:
 
         assert bullish.spread_direction == SpreadDirection.BULLISH
         assert bearish.spread_direction == SpreadDirection.BEARISH
-        assert bullish.strategy_name == "bull_put_spread"
-        assert bearish.strategy_name == "bear_call_spread"
+        assert bullish.strategy_name == "short_put_vertical"
+        assert bearish.strategy_name == "short_call_vertical"
 
 
 class TestCreditSpreadTargetCriteria:

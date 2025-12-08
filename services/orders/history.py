@@ -6,12 +6,13 @@ Creates local cache of order data for position reconstruction.
 from datetime import datetime, timedelta
 from decimal import Decimal
 
+from asgiref.sync import sync_to_async
 from django.contrib.auth import get_user_model
 from django.utils import timezone
 
 from accounts.models import TradingAccount
 from services.core.logging import get_logger
-from trading.models import CachedOrder, CachedOrderChain, Position
+from trading.models import CachedOrderChain, Position, TastyTradeOrderHistory
 
 User = get_user_model()
 logger = get_logger(__name__)
@@ -57,8 +58,8 @@ class OrderHistoryService:
 
             from services.core.data_access import get_oauth_session
 
-            # Get OAuth session (ensure user is fetched)
-            user = account.user
+            # Get OAuth session (ensure user is fetched via sync_to_async to avoid async context error)
+            user = await sync_to_async(lambda: account.user)()
             session = await get_oauth_session(user)
             if not session:
                 result["errors"].append("Unable to obtain TastyTrade session")
@@ -178,10 +179,12 @@ class OrderHistoryService:
             price = Decimal(str(order.price)) if hasattr(order, "price") and order.price else None
 
         # Check if order already exists
-        existing_order = await CachedOrder.objects.filter(broker_order_id=broker_order_id).afirst()
+        existing_order = await TastyTradeOrderHistory.objects.filter(
+            broker_order_id=broker_order_id
+        ).afirst()
 
         # Get user safely in async context
-        user = account.user
+        user = await sync_to_async(lambda: account.user)()
 
         order_fields = {
             "user": user,
@@ -212,7 +215,7 @@ class OrderHistoryService:
             return False
         # Create new order
         order_fields["broker_order_id"] = broker_order_id
-        await CachedOrder.objects.acreate(**order_fields)
+        await TastyTradeOrderHistory.objects.acreate(**order_fields)
         logger.debug(f"Created new cached order {broker_order_id}")
         return True
 
@@ -440,7 +443,7 @@ class OrderHistoryService:
             ),
         }
 
-    async def get_position_orders(self, position: Position) -> list[CachedOrder]:
+    async def get_position_orders(self, position: Position) -> list[TastyTradeOrderHistory]:
         """
         Get all orders related to a position from cache.
         Includes opening order + all profit targets.
@@ -449,12 +452,12 @@ class OrderHistoryService:
             position: Position to get orders for
 
         Returns:
-            List of CachedOrder objects
+            List of TastyTradeOrderHistory objects
         """
         # Query by underlying symbol, date range, user, and account
         orders = [
             order
-            async for order in CachedOrder.objects.filter(
+            async for order in TastyTradeOrderHistory.objects.filter(
                 user=position.user,
                 trading_account=position.trading_account,
                 underlying_symbol=position.symbol,
@@ -466,7 +469,9 @@ class OrderHistoryService:
         logger.debug(f"Found {len(orders)} cached orders for position {position.id}")
         return orders
 
-    async def get_opening_order_for_position(self, position: Position) -> CachedOrder | None:
+    async def get_opening_order_for_position(
+        self, position: Position
+    ) -> TastyTradeOrderHistory | None:
         """
         Find the opening order that created this position.
 
@@ -474,23 +479,23 @@ class OrderHistoryService:
             position: Position to find opening order for
 
         Returns:
-            CachedOrder or None
+            TastyTradeOrderHistory or None
         """
-        # Try to find by broker_order_id in position metadata
-        broker_order_ids = position.broker_order_ids or []
-        if broker_order_ids:
-            for order_id in broker_order_ids:
-                order = await CachedOrder.objects.filter(broker_order_id=order_id).afirst()
-                if order:
-                    logger.debug(
-                        f"Found opening order {order.broker_order_id} for position "
-                        f"{position.id}"
-                    )
-                    return order
+        # Use opening_order_id to find the order
+        if position.opening_order_id:
+            order = await TastyTradeOrderHistory.objects.filter(
+                broker_order_id=position.opening_order_id
+            ).afirst()
+            if order:
+                logger.debug(
+                    f"Found opening order {order.broker_order_id} for position "
+                    f"{position.id}"
+                )
+                return order
 
         # Fallback: search by symbol, time range, and status
         if position.opened_at:
-            order = await CachedOrder.objects.filter(
+            order = await TastyTradeOrderHistory.objects.filter(
                 user=position.user,
                 trading_account=position.trading_account,
                 underlying_symbol=position.symbol,
@@ -511,7 +516,7 @@ class OrderHistoryService:
 
     async def link_profit_targets_to_opening_order(
         self, opening_order_id: str
-    ) -> list[CachedOrder]:
+    ) -> list[TastyTradeOrderHistory]:
         """
         Find all profit target orders linked to opening order.
 
@@ -519,14 +524,14 @@ class OrderHistoryService:
             opening_order_id: Broker order ID of opening order
 
         Returns:
-            List of CachedOrder objects (profit targets)
+            List of TastyTradeOrderHistory objects (profit targets)
         """
         # Query by parent_order_id or complex_order_id
         profit_targets = [
             order
             async for order in (
-                CachedOrder.objects.filter(parent_order_id=opening_order_id)
-                | CachedOrder.objects.filter(complex_order_id=opening_order_id)
+                TastyTradeOrderHistory.objects.filter(parent_order_id=opening_order_id)
+                | TastyTradeOrderHistory.objects.filter(complex_order_id=opening_order_id)
             )
         ]
 

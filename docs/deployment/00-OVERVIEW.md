@@ -2,11 +2,12 @@
 
 ## Purpose
 
-This documentation provides a comprehensive guide for deploying Senex Trader to production at **your-domain.com** using Ansible and Podman. The deployment strategy is designed to be:
+Guide for deploying Senex Trader to production using Ansible and Podman.
 
+Design goals:
 - **Secure**: Secrets encrypted, SSL/TLS everywhere, rootless containers
 - **Scalable**: Start simple, grow incrementally as traffic increases
-- **Reliable**: Automated backups, health checks, disaster recovery procedures
+- **Reliable**: Automated backups, health checks, disaster recovery
 - **Cost-Effective**: Optimized resource usage with clear scaling paths
 
 ## Technology Stack

@@ -3,31 +3,77 @@ Production settings for Senex Trader application.
 
 This configuration is optimized for production deployment with security,
 performance, and reliability considerations.
+
+Secrets Management:
+    Secrets can be loaded from HashiCorp Vault (recommended) or environment variables.
+
+    To use Vault, set these environment variables:
+        VAULT_ADDR: Vault server URL (e.g., https://vault.example.com)
+        VAULT_TOKEN: Authentication token (simple setup)
+        OR
+        VAULT_ROLE_ID + VAULT_SECRET_ID: AppRole credentials (production)
+
+    If Vault is not configured, secrets fall back to environment variables.
 """
 
 import copy
 import os
 from pathlib import Path
 
-from services.core.logging import LOGGING as BASE_LOGGING
+from services.core.logging import LOGGING as BASE_LOGGING  # noqa: E402
 
-from .base import *
+from .base import *  # noqa: F403
+
+# ================================================================================
+# SECRETS MANAGEMENT (Vault or Environment Variables)
+# ================================================================================
+
+# Check if Vault is configured
+VAULT_ENABLED = bool(os.environ.get("VAULT_ADDR"))
+
+if VAULT_ENABLED:
+    from services.core.vault import VaultError, get_secret
+
+    print("Vault configured - loading secrets from HashiCorp Vault")
+    try:
+        # Load all secrets from Vault (cached after first call)
+        SECRET_KEY = get_secret("secret_key")
+        FIELD_ENCRYPTION_KEY = get_secret("field_encryption_key")
+        _db_password = get_secret("db_password")
+        _db_user = get_secret("db_user", default=os.environ.get("DB_USER", "senex_user"))
+        _tastytrade_client_id = get_secret("tastytrade_client_id")
+        _tastytrade_client_secret = get_secret("tastytrade_client_secret")
+        _email_host_user = get_secret("email_host_user", default="")
+        _email_host_password = get_secret("email_host_password", default="")
+        print("Secrets loaded from Vault successfully")
+    except VaultError as e:
+        raise ValueError(f"Failed to load secrets from Vault: {e}") from e
+else:
+    print("Vault not configured - using environment variables for secrets")
+    # Fall back to environment variables
+    SECRET_KEY = os.environ.get("SECRET_KEY")
+    _db_password = os.environ.get("DB_PASSWORD")
+    _db_user = os.environ.get("DB_USER", "senex_user")
+    _tastytrade_client_id = os.environ.get("TASTYTRADE_CLIENT_ID")
+    _tastytrade_client_secret = os.environ.get("TASTYTRADE_CLIENT_SECRET")
+    _email_host_user = os.environ.get("EMAIL_HOST_USER", "")
+    _email_host_password = os.environ.get("EMAIL_HOST_PASSWORD", "")
 
 # ================================================================================
 # PRODUCTION SECURITY SETTINGS
 # ================================================================================
 
-# SECURITY WARNING: This must be set in production
-SECRET_KEY = os.environ.get("SECRET_KEY")
+# Validate required secrets
 if not SECRET_KEY:
-    raise ValueError("SECRET_KEY environment variable must be set in production")
+    raise ValueError("SECRET_KEY must be set (via Vault or SECRET_KEY env var)")
 
-# Encryption key check
+# Encryption key check (FIELD_ENCRYPTION_KEY loaded in base.py if not from Vault)
 if not FIELD_ENCRYPTION_KEY:
     from django.core.exceptions import ImproperlyConfigured
 
     raise ImproperlyConfigured(
         "FIELD_ENCRYPTION_KEY must be set in production. "
+        "Configure Vault or set FIELD_ENCRYPTION_KEY env var. "
         "Generate with: python -c 'from cryptography.fernet import Fernet; "
         "print(Fernet.generate_key().decode())'"
     )
@@ -84,8 +130,8 @@ DATABASES = {
     "default": {
         "ENGINE": "django.db.backends.postgresql",
         "NAME": os.environ.get("DB_NAME", "senextrader"),
-        "USER": os.environ.get("DB_USER", "senex_user"),
-        "PASSWORD": os.environ.get("DB_PASSWORD"),
+        "USER": _db_user if VAULT_ENABLED else os.environ.get("DB_USER", "senex_user"),
+        "PASSWORD": _db_password if VAULT_ENABLED else os.environ.get("DB_PASSWORD"),
         "HOST": os.environ.get("DB_HOST", "localhost"),
         "PORT": os.environ.get("DB_PORT", "5432"),
         "OPTIONS": {
@@ -98,7 +144,7 @@ DATABASES = {
 }
 
 if not DATABASES["default"]["PASSWORD"]:
-    raise ValueError("DB_PASSWORD environment variable must be set in production")
+    raise ValueError("DB_PASSWORD must be set (via Vault or DB_PASSWORD env var)")
 
 # Database Connection Pool Configuration
 DATABASE_POOL_MIN_SIZE = int(os.environ.get("DB_POOL_MIN_SIZE", "2"))
@@ -197,55 +243,60 @@ LOGGING = copy.deepcopy(BASE_LOGGING)
 
 if CONTAINER_MODE:
     # Container mode: Log to stdout/stderr only (Docker/Kubernetes best practice)
-    # Containers aggregate logs via stdout/stderr, no file logging needed
-    # Use journald-optimized formatter (no timestamp - journald adds its own)
     LOGGING["handlers"]["console"]["formatter"] = "console_journald"
 
-    LOGGING["loggers"]["django"]["handlers"] = ["console"]
+    LOGGING["handlers"]["mail_admins"] = {
+        "level": "ERROR",
+        "class": "django.utils.log.AdminEmailHandler",
+        "include_html": True,
+        "filters": ["sensitive_data"],
+    }
+
+    LOGGING["loggers"]["django"]["handlers"] = ["console", "mail_admins"]
     LOGGING["loggers"]["django.request"] = {
-        "handlers": ["console"],
+        "handlers": ["console", "mail_admins"],
         "level": "ERROR",
         "propagate": False,
     }
-    LOGGING["loggers"]["services"]["handlers"] = ["console"]
-    LOGGING["loggers"]["streaming"]["handlers"] = ["console"]
+    LOGGING["loggers"]["services"]["handlers"] = ["console", "mail_admins"]
+    LOGGING["loggers"]["streaming"]["handlers"] = ["console", "mail_admins"]
     LOGGING["loggers"]["trading"] = {
-        "handlers": ["console"],
+        "handlers": ["console", "mail_admins"],
         "level": "INFO",
         "propagate": False,
     }
     LOGGING["loggers"]["accounts"] = {
-        "handlers": ["console"],
+        "handlers": ["console", "mail_admins"],
         "level": "INFO",
         "propagate": False,
     }
     LOGGING["loggers"]["celery"] = {
-        "handlers": ["console"],
+        "handlers": ["console", "mail_admins"],
         "level": "INFO",
         "propagate": False,
     }
     LOGGING["loggers"]["celery.task"] = {
-        "handlers": ["console"],
+        "handlers": ["console", "mail_admins"],
         "level": "INFO",
         "propagate": False,
     }
-    # Silence noisy third-party libraries that flood logs in production
+    # Silence noisy third-party libraries
     LOGGING["loggers"]["tastytrade"] = {
         "handlers": ["console"],
-        "level": "WARNING",  # Reduce from INFO - floods logs with market data
+        "level": "WARNING",
         "propagate": False,
     }
     LOGGING["loggers"]["websockets"] = {
         "handlers": ["console"],
-        "level": "WARNING",  # Reduce verbosity - connection details only when needed
+        "level": "WARNING",
         "propagate": False,
     }
     LOGGING["loggers"]["websockets.client"] = {
         "handlers": ["console"],
-        "level": "ERROR",  # Only show errors - connection lifecycle is noisy
+        "level": "ERROR",
         "propagate": False,
     }
-    LOGGING["root"]["handlers"] = ["console"]
+    LOGGING["root"]["handlers"] = ["console", "mail_admins"]
     LOGGING["root"]["level"] = "INFO"
 else:
     # Bare-metal mode: Log to files in /var/log/senextrader
@@ -254,44 +305,40 @@ else:
 
     # Override file paths for production
     LOGGING["handlers"]["file_structured"]["filename"] = "/var/log/senextrader/application.log"
-    LOGGING["handlers"]["file_structured"]["maxBytes"] = 50 * 1024 * 1024  # 50MB
+    LOGGING["handlers"]["file_structured"]["maxBytes"] = 50 * 1024 * 1024
     LOGGING["handlers"]["file_structured"]["backupCount"] = 10
 
     LOGGING["handlers"]["error_file"]["filename"] = "/var/log/senextrader/errors.log"
-    LOGGING["handlers"]["error_file"]["maxBytes"] = 50 * 1024 * 1024  # 50MB
+    LOGGING["handlers"]["error_file"]["maxBytes"] = 50 * 1024 * 1024
     LOGGING["handlers"]["error_file"]["backupCount"] = 10
 
     LOGGING["handlers"]["trading_file"]["filename"] = "/var/log/senextrader/trading.log"
-    LOGGING["handlers"]["trading_file"]["maxBytes"] = 100 * 1024 * 1024  # 100MB
+    LOGGING["handlers"]["trading_file"]["maxBytes"] = 100 * 1024 * 1024
     LOGGING["handlers"]["trading_file"]["backupCount"] = 20
 
-    # Add security file handler for production
     LOGGING["handlers"]["security_file"] = {
         "class": "logging.handlers.RotatingFileHandler",
         "filename": "/var/log/senextrader/security.log",
-        "maxBytes": 50 * 1024 * 1024,  # 50MB
+        "maxBytes": 50 * 1024 * 1024,
         "backupCount": 10,
         "formatter": "structured",
         "level": "WARNING",
         "filters": ["sensitive_data"],
     }
 
-    # Add admin email handler for error notifications
     LOGGING["handlers"]["mail_admins"] = {
         "level": "ERROR",
         "class": "django.utils.log.AdminEmailHandler",
         "include_html": True,
-        "filters": ["sensitive_data"],  # Redact tokens/passwords before emailing
+        "filters": ["sensitive_data"],
     }
 
-    # Add security logger
     LOGGING["loggers"]["django.security"] = {
         "handlers": ["security_file", "error_file", "mail_admins"],
         "level": "WARNING",
         "propagate": False,
     }
 
-    # Disable console handler in production, add email notifications for errors
     LOGGING["loggers"]["django"]["handlers"] = ["file_structured", "error_file", "mail_admins"]
     LOGGING["loggers"]["django.request"] = {
         "handlers": ["file_structured", "error_file", "mail_admins"],
@@ -311,7 +358,6 @@ else:
         "propagate": False,
     }
 
-    # Celery error logging (celery uses root logger + celery logger)
     LOGGING["loggers"]["celery"] = {
         "handlers": ["file_structured", "error_file", "mail_admins"],
         "level": "INFO",
@@ -323,7 +369,6 @@ else:
         "propagate": False,
     }
 
-    # Set root logger to file + email
     LOGGING["root"]["handlers"] = ["file_structured", "error_file", "mail_admins"]
     LOGGING["root"]["level"] = "WARNING"
 
@@ -331,7 +376,6 @@ else:
 # PERFORMANCE OPTIMIZATIONS
 # ================================================================================
 
-# Database query optimization
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 # Email backend for production (configure based on your email service)
@@ -339,8 +383,8 @@ EMAIL_BACKEND = "django.core.mail.backends.smtp.EmailBackend"
 EMAIL_HOST = os.environ.get("EMAIL_HOST", "smtp.gmail.com")
 EMAIL_PORT = int(os.environ.get("EMAIL_PORT", "587"))
 EMAIL_USE_TLS = os.environ.get("EMAIL_USE_TLS", "True").lower() == "true"
-EMAIL_HOST_USER = os.environ.get("EMAIL_HOST_USER", "")
-EMAIL_HOST_PASSWORD = os.environ.get("EMAIL_HOST_PASSWORD", "")
+EMAIL_HOST_USER = _email_host_user if VAULT_ENABLED else os.environ.get("EMAIL_HOST_USER", "")
+EMAIL_HOST_PASSWORD = _email_host_password if VAULT_ENABLED else os.environ.get("EMAIL_HOST_PASSWORD", "")
 DEFAULT_FROM_EMAIL = os.environ.get("DEFAULT_FROM_EMAIL", "noreply@example.com")
 
 # ================================================================================
@@ -409,7 +453,11 @@ STREAMING_CONFIG = {
 # THIRD-PARTY API CONFIGURATION
 # ================================================================================
 
-# Validate OAuth configuration (inherited from base.py)
+# Validate OAuth configuration (use Vault secrets if available)
+if VAULT_ENABLED:
+    TASTYTRADE_OAUTH_CONFIG["CLIENT_ID"] = _tastytrade_client_id
+    TASTYTRADE_OAUTH_CONFIG["CLIENT_SECRET"] = _tastytrade_client_secret
+
 if not TASTYTRADE_OAUTH_CONFIG["CLIENT_ID"] or not TASTYTRADE_OAUTH_CONFIG["CLIENT_SECRET"]:
     raise ValueError("TastyTrade OAuth configuration incomplete in production")
 
@@ -455,9 +503,10 @@ LOG_RETENTION_DAYS = int(os.environ.get("LOG_RETENTION_DAYS", "90"))
 HEALTH_CHECK_BASIC_TIMEOUT = int(os.environ.get("HEALTH_CHECK_BASIC_TIMEOUT", "5"))
 HEALTH_CHECK_DETAILED_TIMEOUT = int(os.environ.get("HEALTH_CHECK_DETAILED_TIMEOUT", "30"))
 
-print("✅ Production settings loaded successfully")
-print(f"📊 Configured for hosts: {', '.join(ALLOWED_HOSTS)}")
-print(f"🔒 Security: SSL redirect={SECURE_SSL_REDIRECT}, HSTS={SECURE_HSTS_SECONDS}s")
-print(f"💾 Database: {DATABASES['default']['HOST']}:{DATABASES['default']['PORT']}")
-print(f"🔄 Redis: {REDIS_URL}")
-print(f"⚡ Celery: {len(CELERY_TASK_ROUTES)} task routes configured")
+print("Production settings loaded successfully")
+print(f"Secrets: {'Vault' if VAULT_ENABLED else 'Environment variables'}")
+print(f"Configured for hosts: {', '.join(ALLOWED_HOSTS)}")
+print(f"Security: SSL redirect={SECURE_SSL_REDIRECT}, HSTS={SECURE_HSTS_SECONDS}s")
+print(f"Database: {DATABASES['default']['HOST']}:{DATABASES['default']['PORT']}")
+print(f"Redis: {REDIS_URL}")
+print(f"Celery: {len(CELERY_TASK_ROUTES)} task routes configured")

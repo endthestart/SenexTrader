@@ -1,42 +1,28 @@
 # Architecture Documentation
 
-This folder contains architectural documentation for Senex Trader, covering system design patterns, technical constraints, and architectural decisions.
-
-## Purpose
-
-Documents the architectural aspects of the system:
-- Design patterns and their rationale
-- Circular dependency management
-- System constraints and trade-offs
-- Integration patterns
-- Technical debt tracking
+System design patterns, technical constraints, and architectural decisions.
 
 ## Contents
 
-### Circular Dependency Management
-- `CIRCULAR_DEPENDENCIES.md` - Comprehensive documentation of all circular import dependencies, mitigation strategies, and guidelines for preventing new cycles
+### ADRs (Architecture Decision Records)
+- `ADR-032-Market-Analysis-Consolidation.md`
+- `ADR-043-Session-Per-Task-Pattern.md`
+- `ADR-DTE-CLOSING-ORDERS.md`
+- `ADR_023_STRATEGY_GENERATION_PARAMETER_SEPARATION.md`
 
-## File Count
-
-1 architecture document (work items have been moved to planning/)
+### Other
+- `CIRCULAR_DEPENDENCIES.md` - Circular import management
+- `PNL_CALCULATION_SIMPLE.md` - P&L calculation logic
+- `POSITION_CLOSURE_PNL_SPEC.md` - Position closure spec
+- `POSITION_MANAGEMENT_SIMPLE.md` - Position management overview
 
 ## Usage
 
-Reference these documents when:
-- Understanding system design decisions
+Reference when:
+- Making system design decisions
 - Managing circular dependencies
 - Planning architectural changes
-- Onboarding developers to the codebase
-- Evaluating technical debt
-
-## Related Documentation
-
-- Implementation: `/path/to/senextrader/`
-- Product specs: `../product/`
-- Work planning: `../planning/`
-- Optimization: `../optimization/`
-
-## Maintenance
+- Onboarding developers
 
 Architecture documents should be updated when:
 - New circular dependencies are discovered

@@ -41,7 +41,7 @@ class EmailService:
     RETRY_BACKOFF = 2.0  # exponential backoff multiplier
     MAX_DELAY = 10.0  # seconds (cap on exponential backoff)
 
-    def __init__(self, default_from_email: str = None):
+    def __init__(self, default_from_email: str | None = None):
         """
         Initialize email service.
 
@@ -57,7 +57,7 @@ class EmailService:
         subject: str,
         body: str,
         recipient: str,
-        from_email: str = None,
+        from_email: str | None = None,
         fail_silently: bool = True,
     ) -> bool:
         """
@@ -147,7 +147,7 @@ class EmailService:
         subject: str,
         body: str,
         recipient: str,
-        from_email: str = None,
+        from_email: str | None = None,
         fail_silently: bool = True,
     ) -> bool:
         """

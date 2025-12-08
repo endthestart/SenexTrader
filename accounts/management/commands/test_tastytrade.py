@@ -38,7 +38,7 @@ class Command(AsyncCommand):
         """Test 1: Verify user"""
         self.stdout.write(self.style.WARNING("\nTEST 1: User Verification"))
         self.stdout.write(f"User: {user.email}")
-        self.stdout.write(self.style.SUCCESS(f"✅ User verified: {user.email} (ID: {user.id})"))
+        self.stdout.write(self.style.SUCCESS(f"User verified: {user.email} (ID: {user.id})"))
         return user
 
     async def test_trading_account(self, user):
@@ -46,7 +46,7 @@ class Command(AsyncCommand):
         self.stdout.write(self.style.WARNING("\nTEST 2: Trading Account Configuration"))
 
         if not user:
-            self.stdout.write(self.style.ERROR("❌ No user provided"))
+            self.stdout.write(self.style.ERROR("No user provided"))
             return None
 
         try:
@@ -59,11 +59,11 @@ class Command(AsyncCommand):
             )()
 
             if not trading_account:
-                self.stdout.write(self.style.ERROR("❌ No primary TastyTrade account found"))
+                self.stdout.write(self.style.ERROR("No primary TastyTrade account found"))
                 return None
 
             self.stdout.write(
-                self.style.SUCCESS(f"✅ Found trading account: {trading_account.account_number}")
+                self.style.SUCCESS(f"Found trading account: {trading_account.account_number}")
             )
             self.stdout.write(f"   - Nickname: {getattr(trading_account, 'nickname', 'N/A')}")
             self.stdout.write(f"   - Is Primary: {trading_account.is_primary}")
@@ -72,18 +72,18 @@ class Command(AsyncCommand):
             if trading_account.refresh_token:
                 self.stdout.write(
                     self.style.SUCCESS(
-                        f"✅ Refresh token exists (length: "
+                        f"Refresh token exists (length: "
                         f"{len(trading_account.refresh_token)})"
                     )
                 )
             else:
-                self.stdout.write(self.style.ERROR("❌ No refresh token found"))
+                self.stdout.write(self.style.ERROR("No refresh token found"))
                 return None
 
             return trading_account
 
         except Exception as e:
-            self.stdout.write(self.style.ERROR(f"❌ Error checking trading account: {e}"))
+            self.stdout.write(self.style.ERROR(f"Error checking trading account: {e}"))
             return None
 
     def test_oauth_session(self, trading_account):
@@ -91,7 +91,7 @@ class Command(AsyncCommand):
         self.stdout.write(self.style.WARNING("\nTEST 3: OAuth Session Creation"))
 
         if not trading_account:
-            self.stdout.write(self.style.ERROR("❌ No trading account provided"))
+            self.stdout.write(self.style.ERROR("No trading account provided"))
             return None
 
         try:
@@ -101,19 +101,19 @@ class Command(AsyncCommand):
             session_result = session_service.create_session(trading_account.refresh_token)
 
             if session_result.get("success"):
-                self.stdout.write(self.style.SUCCESS("✅ OAuth session created successfully"))
+                self.stdout.write(self.style.SUCCESS("OAuth session created successfully"))
                 session = session_result.get("session")
                 self.stdout.write(f"   - Session type: {type(session).__name__}")
                 return session
             self.stdout.write(
                 self.style.ERROR(
-                    f"❌ OAuth session creation failed: " f"{session_result.get('error')}"
+                    f"OAuth session creation failed: " f"{session_result.get('error')}"
                 )
             )
             return None
 
         except Exception as e:
-            self.stdout.write(self.style.ERROR(f"❌ Error creating OAuth session: {e}"))
+            self.stdout.write(self.style.ERROR(f"Error creating OAuth session: {e}"))
             return None
 
     async def test_account_data_fetch(self, session, account_number):
@@ -121,7 +121,7 @@ class Command(AsyncCommand):
         self.stdout.write(self.style.WARNING("\nTEST 4: Account Data Fetch"))
 
         if not session:
-            self.stdout.write(self.style.ERROR("❌ No session provided"))
+            self.stdout.write(self.style.ERROR("No session provided"))
             return None
 
         try:
@@ -132,29 +132,29 @@ class Command(AsyncCommand):
             # Try async method first
             try:
                 account = await TTAccount.a_get(session, account_number)
-                self.stdout.write(self.style.SUCCESS("✅ Account fetched via async method"))
+                self.stdout.write(self.style.SUCCESS("Account fetched via async method"))
             except AttributeError:
                 # Fallback to sync method
                 self.stdout.write("ℹ️  Async method not available, trying sync...")
                 account = TTAccount.get(session, account_number)
-                self.stdout.write(self.style.SUCCESS("✅ Account fetched via sync method"))
+                self.stdout.write(self.style.SUCCESS("Account fetched via sync method"))
 
             if isinstance(account, list):
                 account = account[0] if account else None
 
             if not account:
-                self.stdout.write(self.style.ERROR("❌ No account returned"))
+                self.stdout.write(self.style.ERROR("No account returned"))
                 return None
 
             self.stdout.write(
-                self.style.SUCCESS(f"✅ Account object retrieved: {type(account).__name__}")
+                self.style.SUCCESS(f"Account object retrieved: {type(account).__name__}")
             )
             self.stdout.write(f"   - Account number: {getattr(account, 'account_number', 'N/A')}")
 
             return account
 
         except Exception as e:
-            self.stdout.write(self.style.ERROR(f"❌ Error fetching account data: {e}"))
+            self.stdout.write(self.style.ERROR(f"Error fetching account data: {e}"))
             return None
 
     async def test_balance_fetch(self, session, account, account_number):
@@ -162,7 +162,7 @@ class Command(AsyncCommand):
         self.stdout.write(self.style.WARNING("\nTEST 5: Balance and Buying Power Fetch"))
 
         if not session or not account:
-            self.stdout.write(self.style.ERROR("❌ No session or account provided"))
+            self.stdout.write(self.style.ERROR("No session or account provided"))
             return None
 
         try:
@@ -173,7 +173,7 @@ class Command(AsyncCommand):
                 try:
                     balances = await account.a_get_balances(session)
                     self.stdout.write(
-                        self.style.SUCCESS("✅ Balances fetched via account.a_get_balances()")
+                        self.style.SUCCESS("Balances fetched via account.a_get_balances()")
                     )
                 except Exception as e:
                     self.stdout.write(f"ℹ️  account.a_get_balances() failed: {e}")
@@ -183,7 +183,7 @@ class Command(AsyncCommand):
                 try:
                     balances = await account.__class__.a_get_balances(session, account_number)
                     self.stdout.write(
-                        self.style.SUCCESS("✅ Balances fetched via Account.a_get_balances()")
+                        self.style.SUCCESS("Balances fetched via Account.a_get_balances()")
                     )
                 except Exception as e:
                     self.stdout.write(f"ℹ️  Account.a_get_balances() failed: {e}")
@@ -196,21 +196,21 @@ class Command(AsyncCommand):
                     balances = await sync_to_async(account.get_balances)(session)
                     self.stdout.write(
                         self.style.SUCCESS(
-                            "✅ Balances fetched via sync_to_async(account.get_balances)"
+                            "Balances fetched via sync_to_async(account.get_balances)"
                         )
                     )
                 except Exception as e:
                     self.stdout.write(f"ℹ️  sync_to_async(account.get_balances) failed: {e}")
 
             if not balances:
-                self.stdout.write(self.style.ERROR("❌ No balances returned from any method"))
+                self.stdout.write(self.style.ERROR("No balances returned from any method"))
                 return None
 
             # Extract key financial data
             buying_power = getattr(balances, "buying_power", None)
             net_liquidating_value = getattr(balances, "net_liquidating_value", None)
 
-            self.stdout.write(self.style.SUCCESS("✅ Balance data retrieved:"))
+            self.stdout.write(self.style.SUCCESS("Balance data retrieved:"))
             if buying_power:
                 self.stdout.write(f"   - Buying Power: ${buying_power:,.2f}")
             else:
@@ -228,7 +228,7 @@ class Command(AsyncCommand):
             }
 
         except Exception as e:
-            self.stdout.write(self.style.ERROR(f"❌ Error fetching balances: {e}"))
+            self.stdout.write(self.style.ERROR(f"Error fetching balances: {e}"))
             return None
 
     def test_account_state_service(self, user):
@@ -236,7 +236,7 @@ class Command(AsyncCommand):
         self.stdout.write(self.style.WARNING("\nTEST 6: AccountStateService Integration"))
 
         if not user:
-            self.stdout.write(self.style.ERROR("❌ No user provided"))
+            self.stdout.write(self.style.ERROR("No user provided"))
             return None
 
         try:
@@ -252,13 +252,13 @@ class Command(AsyncCommand):
             self.stdout.write(f"   - Stale: {state.get('stale', True)}")
 
             if state.get("available") and state.get("buying_power") is not None:
-                self.stdout.write(self.style.SUCCESS("✅ AccountStateService working!"))
+                self.stdout.write(self.style.SUCCESS("AccountStateService working!"))
                 self.stdout.write(f"   - Buying Power: ${state['buying_power']:,.2f}")
                 if state.get("balance"):
                     self.stdout.write(f"   - Balance: ${state['balance']:,.2f}")
             else:
                 self.stdout.write(
-                    self.style.ERROR("❌ AccountStateService not returning valid data")
+                    self.style.ERROR("AccountStateService not returning valid data")
                 )
                 if "error" in state:
                     self.stdout.write(self.style.ERROR(f"   - Error: {state['error']}"))
@@ -266,7 +266,7 @@ class Command(AsyncCommand):
             return state
 
         except Exception as e:
-            self.stdout.write(self.style.ERROR(f"❌ Error testing AccountStateService: {e}"))
+            self.stdout.write(self.style.ERROR(f"Error testing AccountStateService: {e}"))
             return None
 
     async def run_tests(self, user):
@@ -307,10 +307,10 @@ class Command(AsyncCommand):
         self.stdout.write(self.style.SUCCESS(f"{'=' * 60}"))
 
         if balance_data and state and state.get("available"):
-            self.stdout.write(self.style.SUCCESS("🎉 ALL TESTS PASSED!"))
+            self.stdout.write(self.style.SUCCESS("ALL TESTS PASSED!"))
             self.stdout.write(self.style.SUCCESS("TastyTrade connection is working correctly"))
             if balance_data.get("buying_power"):
                 self.stdout.write(f"💰 Buying Power: ${balance_data['buying_power']:,.2f}")
         else:
-            self.stdout.write(self.style.ERROR("❌ SOME TESTS FAILED"))
+            self.stdout.write(self.style.ERROR("SOME TESTS FAILED"))
             self.stdout.write(self.style.ERROR("TastyTrade connection needs debugging"))

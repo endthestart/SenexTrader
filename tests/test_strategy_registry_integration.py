@@ -203,7 +203,7 @@ class TestSDKCompliance:
 
 @pytest.mark.django_db
 @pytest.mark.parametrize(
-    "strategy_name,strategy_class",
+    ("strategy_name", "strategy_class"),
     [(name, cls) for name, cls in get_all_strategies().items()],
 )
 class TestParametrizedStrategyValidation:

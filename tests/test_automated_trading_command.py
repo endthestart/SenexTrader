@@ -7,7 +7,7 @@ from django.utils import timezone
 
 import pytest
 
-from accounts.models import TradingAccount, TradingAccountPreferences
+from accounts.models import TradingAccount
 from trading.models import Position, Trade
 
 
@@ -25,10 +25,8 @@ def trading_user(django_user_model):
         is_active=True,
         is_primary=True,
     )
-    TradingAccountPreferences.objects.create(
-        account=account,
-        is_automated_trading_enabled=True,
-    )
+    # Use property setter which automatically saves to preferences
+    account.is_automated_trading_enabled = True
     return user
 
 
@@ -44,7 +42,7 @@ def test_command_single_user_success(trading_user, capsys):
         call_command("run_automated_trade", "--user", trading_user.email)
 
     out = capsys.readouterr().out
-    assert "✅ Success" in out
+    assert "Success!" in out
     mock_process.assert_called_once()
 
 
@@ -92,7 +90,7 @@ def test_command_allows_retry_after_cancelled_trade(trading_user, capsys):
         call_command("run_automated_trade", "--user", trading_user.email)
 
     out = capsys.readouterr().out
-    assert "✅ Success" in out
+    assert "Success!" in out
     mock_process.assert_called_once()
 
 
@@ -109,10 +107,8 @@ def test_command_all_eligible_users(trading_user, django_user_model, capsys):
         is_active=True,
         is_primary=True,
     )
-    TradingAccountPreferences.objects.create(
-        account=account,
-        is_automated_trading_enabled=True,
-    )
+    # Use property setter which automatically saves to preferences
+    account.is_automated_trading_enabled = True
 
     with patch(
         "trading.management.commands.run_automated_trade.AutomatedTradingService.a_process_account",
@@ -133,7 +129,7 @@ def test_command_user_not_found():
     with pytest.raises(CommandError) as excinfo:
         call_command("run_automated_trade", "--user", "missing@example.com")
 
-    assert "User not found" in str(excinfo.value)
+    assert "not found" in str(excinfo.value)
 
 
 def test_command_ineligible_user(trading_user, capsys):

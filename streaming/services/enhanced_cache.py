@@ -13,6 +13,15 @@ from django.core.cache import cache
 
 from services.core.cache import CacheTTL
 from services.core.logging import get_logger
+from streaming.constants import (
+    CACHE_BASE_RETRY_DELAY,
+    CACHE_DEFAULT_TTL,
+    CACHE_MAX_RETRIES,
+    HEARTBEAT_CACHE_TTL,
+    STREAM_LEASE_TTL,
+    THEO_CACHE_TTL,
+    TRADE_CACHE_TTL,
+)
 
 logger = get_logger(__name__)
 
@@ -71,7 +80,11 @@ class EnhancedCache:
     - Smart TTL management
     """
 
-    def __init__(self, max_retries: int = 2, base_retry_delay: float = 0.1):
+    def __init__(
+        self,
+        max_retries: int = CACHE_MAX_RETRIES,
+        base_retry_delay: float = CACHE_BASE_RETRY_DELAY,
+    ):
         """
         Initialize enhanced cache wrapper.
 
@@ -87,15 +100,15 @@ class EnhancedCache:
         self.ttl_config = {
             "quote": CacheTTL.QUOTE,
             "greeks": CacheTTL.GREEKS,
-            "trade": 30,  # Real-time trade data, not in central config yet
+            "trade": TRADE_CACHE_TTL,
             "summary": CacheTTL.SUMMARY,
             "profile": CacheTTL.PROFILE,
-            "theo": 60,  # Theoretical prices, not in central config yet
+            "theo": THEO_CACHE_TTL,
             "underlying": CacheTTL.QUOTE,
             "option_chain": CacheTTL.OPTION_CHAIN,
             "account_state": CacheTTL.ACCOUNT_STATE,
-            "stream_lease": 600,  # Stream leases (10 minutes)
-            "heartbeat": 30,  # Heartbeat data
+            "stream_lease": STREAM_LEASE_TTL,
+            "heartbeat": HEARTBEAT_CACHE_TTL,
         }
 
     async def get(self, key: str, default: Any = None) -> Any:
@@ -187,10 +200,8 @@ class EnhancedCache:
 
             if result == default:
                 self.stats.misses += 1
-                logger.debug(f"Cache miss for key: {key}")
             else:
                 self.stats.hits += 1
-                logger.debug(f"Cache hit for key: {key}")
 
             return result
         except Exception as e:
@@ -208,7 +219,6 @@ class EnhancedCache:
             self.stats.sets += 1
             self.stats.operation_count += 1
             self.stats.total_latency += time.time() - start_time
-            logger.debug(f"Cache set for key: {key} (TTL: {ttl}s)")
             return True
         except Exception as e:
             self.stats.errors += 1
@@ -225,7 +235,6 @@ class EnhancedCache:
             self.stats.deletes += 1
             self.stats.operation_count += 1
             self.stats.total_latency += time.time() - start_time
-            logger.debug(f"Cache delete for key: {key}")
             return True
         except Exception as e:
             self.stats.errors += 1
@@ -243,11 +252,8 @@ class EnhancedCache:
             self.stats.operation_count += 1
             self.stats.total_latency += time.time() - start_time
 
-            # Update hit/miss stats
             self.stats.hits += len(result)
             self.stats.misses += len(keys) - len(result)
-
-            logger.debug(f"Cache get_many: {len(result)}/{len(keys)} hits")
             return result
         except Exception as e:
             self.stats.errors += 1
@@ -270,7 +276,6 @@ class EnhancedCache:
             self.stats.sets += len(data)
             self.stats.operation_count += 1
             self.stats.total_latency += time.time() - start_time
-            logger.debug(f"Cache set_many: {len(data)} keys (TTL: {ttl}s)")
             return True
         except Exception as e:
             self.stats.errors += 1
@@ -303,7 +308,6 @@ class EnhancedCache:
             self.stats.deletes += deleted
             self.stats.operation_count += 1
             self.stats.total_latency += time.time() - start_time
-            logger.debug(f"Cache delete pattern '{pattern}': {deleted} keys deleted")
             return deleted
         except Exception as e:
             self.stats.errors += 1
@@ -327,7 +331,7 @@ class EnhancedCache:
                 return ttl
 
         # Default TTL
-        return 30
+        return CACHE_DEFAULT_TTL
 
     async def _retry_operation(self, operation, *args, **kwargs):
         """

@@ -90,15 +90,15 @@ class TestSenexTridentIntegration(TestCase):
         with patch.object(
             self.option_service, "get_option_chain", return_value=self.mock_option_chain
         ):
-            print("📊 Step 1: Fetching option chain data...")
+            print("Step 1: Fetching option chain data...")
             option_chain = await self.option_service.get_option_chain(self.user, "SPY", 45)
 
             assert option_chain["symbol"] == "SPY"
             assert option_chain["current_price"] == self.mock_current_price
-            print(f"   ✅ Option chain fetched for SPY at " f"${option_chain['current_price']}")
+            print(f"   Option chain fetched for SPY at " f"${option_chain['current_price']}")
 
         # Step 2: Test strike selection algorithm
-        print("\n🎯 Step 2: Testing strike selection algorithm...")
+        print("\nStep 2: Testing strike selection algorithm...")
         selected_strikes = await self.option_service.select_strikes(
             self.mock_current_price, option_chain, width=5
         )
@@ -110,16 +110,16 @@ class TestSenexTridentIntegration(TestCase):
         assert selected_strikes["long_call"] == self.expected_strikes["long_call"]
 
         print(
-            f"   ✅ Strikes selected - Put spread: "
+            f"   Strikes selected - Put spread: "
             f"{selected_strikes['short_put']}/{selected_strikes['long_put']}"
         )
         print(
-            f"   ✅ Strikes selected - Call spread: "
+            f"   Strikes selected - Call spread: "
             f"{selected_strikes['short_call']}/{selected_strikes['long_call']}"
         )
 
         # Step 3: Create trading suggestion
-        print("\n💡 Step 3: Creating trading suggestion...")
+        print("\nStep 3: Creating trading suggestion...")
         suggestion = await sync_to_async(TradingSuggestion.objects.create)(
             user=self.user,
             strategy_configuration=self.strategy_config,
@@ -140,15 +140,15 @@ class TestSenexTridentIntegration(TestCase):
             pricing_source="mock_test_data",
         )
 
-        print(f"   ✅ Trading suggestion created with ID: {suggestion.id}")
+        print(f"   Trading suggestion created with ID: {suggestion.id}")
         print(
-            f"   ✅ Symbol: {suggestion.underlying_symbol}, "
+            f"   Symbol: {suggestion.underlying_symbol}, "
             f"Put spreads: {suggestion.put_spread_quantity}, "
             f"Call spreads: {suggestion.call_spread_quantity}"
         )
 
         # Step 4: Mock order execution and create the position
-        print("\n🚀 Step 4: Executing Senex Trident order...")
+        print("\nStep 4: Executing Senex Trident order...")
 
         # Mock the order execution response
         mock_order_response = {
@@ -202,11 +202,11 @@ class TestSenexTridentIntegration(TestCase):
             assert execution_result["success"]
             assert execution_result["order_id"] == "test_order_123"
 
-            print(f"   ✅ Order executed successfully: {execution_result['order_id']}")
-            print(f"   ✅ Total legs created: {mock_order_response['total_legs']}")
+            print(f"   Order executed successfully: {execution_result['order_id']}")
+            print(f"   Total legs created: {mock_order_response['total_legs']}")
 
         # Step 5: Verify position was created
-        print("\n📈 Step 5: Verifying position creation...")
+        print("\nStep 5: Verifying position creation...")
 
         # Create the position that would result from order execution
         position = await sync_to_async(Position.objects.create)(
@@ -241,11 +241,11 @@ class TestSenexTridentIntegration(TestCase):
             status="filled",
         )
 
-        print(f"   ✅ Position created with ID: {position.id}")
-        print(f"   ✅ Opening trade recorded: {opening_trade.broker_order_id}")
+        print(f"   Position created with ID: {position.id}")
+        print(f"   Opening trade recorded: {opening_trade.broker_order_id}")
 
         # Step 6: Test profit target creation
-        print("\n🎯 Step 6: Creating profit targets...")
+        print("\nStep 6: Creating profit targets...")
 
         mock_execution_result = {
             "order_ids": [
@@ -298,10 +298,10 @@ class TestSenexTridentIntegration(TestCase):
         assert profit_result["status"] == "success"
         assert profit_result["order_ids"] == mock_execution_result["order_ids"]
 
-        print(f"   ✅ Profit targets created: {profit_result['total_orders']}")
+        print(f"   Profit targets created: {profit_result['total_orders']}")
         for target in mock_execution_result["targets"]:
             print(
-                "   ✅ Target: "
+                "   Target: "
                 f"{target['spread_type']} at {target['profit_percentage']}% "
                 f"(order {target['order_id']})"
             )
@@ -321,12 +321,12 @@ class TestSenexTridentIntegration(TestCase):
         assert put_target_60 == Decimal("1.00")
         assert call_target_50 == Decimal("0.875")
 
-        print(f"   ✅ Put spread 1 (40% target): ${put_credit} → ${put_target_40}")
-        print(f"   ✅ Put spread 2 (60% target): ${put_credit} → ${put_target_60}")
-        print(f"   ✅ Call spread (50% target): ${call_credit} → ${call_target_50}")
+        print(f"   Put spread 1 (40% target): ${put_credit} → ${put_target_40}")
+        print(f"   Put spread 2 (60% target): ${put_credit} → ${put_target_60}")
+        print(f"   Call spread (50% target): ${call_credit} → ${call_target_50}")
 
         # Step 8: Test position status and management
-        print("\n📊 Step 8: Verifying position management...")
+        print("\nStep 8: Verifying position management...")
 
         # Update position with real data that would come from broker
         position.avg_price = Decimal("6.75")  # Total credit received
@@ -339,15 +339,15 @@ class TestSenexTridentIntegration(TestCase):
         assert position.symbol == "SPY"
         assert position.quantity == 3
 
-        print(f"   ✅ Position managed - Symbol: {position.symbol}")
+        print(f"   Position managed - Symbol: {position.symbol}")
         print(
-            f"   ✅ Position value - Avg: ${position.avg_price}, "
+            f"   Position value - Avg: ${position.avg_price}, "
             f"Current: ${position.current_price}"
         )
-        print(f"   ✅ Unrealized P&L: ${position.unrealized_pnl}")
+        print(f"   Unrealized P&L: ${position.unrealized_pnl}")
 
-        print("\n🎉 === SENEX TRIDENT INTEGRATION TEST COMPLETED SUCCESSFULLY ===")
-        print("✅ All Phase 5 infrastructure components working together correctly!")
+        print("\n=== SENEX TRIDENT INTEGRATION TEST COMPLETED SUCCESSFULLY ===")
+        print("All Phase 5 infrastructure components working together correctly!")
 
     @pytest.mark.asyncio
     async def test_senex_trident_put_spreads_only_flow(self):
@@ -390,12 +390,12 @@ class TestSenexTridentIntegration(TestCase):
         assert selected_strikes.get("short_call") is None
         assert selected_strikes.get("long_call") is None
 
-        print("   ✅ Put spreads only configuration detected correctly")
+        print("   Put spreads only configuration detected correctly")
         print(
-            f"   ✅ Put spread strikes: "
+            f"   Put spread strikes: "
             f"{selected_strikes['short_put']}/{selected_strikes['long_put']}"
         )
-        print("   ✅ Call spread: Not possible (missing strikes)")
+        print("   Call spread: Not possible (missing strikes)")
 
     def test_even_strike_algorithm_edge_cases(self):
         """Test the critical even-strike selection algorithm with various prices."""
@@ -428,7 +428,7 @@ class TestSenexTridentIntegration(TestCase):
         for current_price, expected_strike in test_cases:
             result = self.strategy_service.calculate_base_strike(current_price)
             assert result == expected_strike
-            print(f"   ✅ ${current_price} → ${expected_strike} (even strike)")
+            print(f"   ${current_price} → ${expected_strike} (even strike)")
 
     def test_profit_target_percentage_validation(self):
         """Test Senex Trident specific profit target percentages."""
@@ -449,9 +449,9 @@ class TestSenexTridentIntegration(TestCase):
             profit_percentage = (profit / credit) * 100
 
             assert profit_percentage == Decimal(str(target_percent))
-            print(f"   ✅ {component}: {target_percent}% target → close at ${target_price}")
+            print(f"   {component}: {target_percent}% target → close at ${target_price}")
 
-        print("   ✅ All Senex Trident profit targets validated")
+        print("   All Senex Trident profit targets validated")
 
     def tearDown(self):
         """Clean up test data."""

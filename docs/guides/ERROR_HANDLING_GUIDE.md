@@ -13,12 +13,12 @@ Wraps methods in try/except with standardized logging.
 **Location**: `services/decorators.py`
 
 **When to Use**:
-- ✅ New utility methods without complex error handling
-- ✅ Methods that should fail gracefully with logging
-- ✅ Methods where a simple return value on error is appropriate
-- ❌ Methods with complex error recovery logic
-- ❌ Methods that need specific exception types
-- ❌ Methods with multiple error paths
+- New utility methods without complex error handling
+- Methods that should fail gracefully with logging
+- Methods where a simple return value on error is appropriate
+- Methods with complex error recovery logic
+- Methods that need specific exception types
+- Methods with multiple error paths
 
 **Examples**:
 
@@ -47,10 +47,10 @@ def parse_occ_symbol(self, symbol: str) -> dict | None:
 Auto-setup TastyTrade OAuth session for async methods.
 
 **When to Use**:
-- ✅ Async methods that need TastyTrade API access
-- ✅ Methods that should fail gracefully if session unavailable
-- ❌ Methods that need custom session error handling
-- ❌ Sync methods (use `@require_session_sync` instead)
+- Async methods that need TastyTrade API access
+- Methods that should fail gracefully if session unavailable
+- Methods that need custom session error handling
+- Sync methods (use `@require_session_sync` instead)
 
 **Example**:
 
@@ -142,7 +142,7 @@ async def a_execute_order(self, order_spec: OrderSpec) -> dict:
 
 ## Anti-Patterns to Avoid
 
-### ❌ Silent Failures
+### Silent Failures
 
 ```python
 # BAD: Error swallowed, no logging
@@ -160,7 +160,7 @@ def get_data(self):
     return self.client.fetch()
 ```
 
-### ❌ Redundant Decorator + Try/Except
+### Redundant Decorator + Try/Except
 
 ```python
 # BAD: Decorator + try/except is redundant
@@ -180,7 +180,7 @@ async def fetch(self):
     return await self.client.get()
 ```
 
-### ❌ Generic Exception Messages
+### Generic Exception Messages
 
 ```python
 # BAD: Vague error message

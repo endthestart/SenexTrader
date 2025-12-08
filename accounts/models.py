@@ -107,6 +107,13 @@ class TradingAccountPreferences(models.Model):
         default=0,
         help_text="Limit price offset (in cents) when automation submits credit trades",
     )
+    auto_profit_targets_enabled = models.BooleanField(
+        default=True,
+        help_text=(
+            "Automatically create profit target orders when spread positions open. "
+            "Does not affect Senex Trident which always uses its own algorithm."
+        ),
+    )
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -132,10 +139,16 @@ class TradingAccount(models.Model):
     account_number = models.CharField(max_length=50)
     account_nickname = models.CharField(max_length=100, blank=True)
 
+    # TODO: access_token field is unused and can be removed.
+    # We always use the TastyTrade SDK which takes refresh_token and internally
+    # calls /oauth/token to get a fresh access_token (which it renames to session_token).
+    # We never make direct API calls - the SDK handles everything.
+    # The only reason we store access_token is historical; is_configured checks it
+    # but should check refresh_token instead. See: 2025-12-03 security review.
     access_token = EncryptedTextField(blank=True)
     refresh_token = EncryptedTextField(blank=True)
-    token_type = models.CharField(max_length=20, blank=True)
-    scope = models.CharField(max_length=200, blank=True)
+    # NOTE: token_type removed - always "Bearer" in OAuth 2.0
+    # NOTE: scope removed - never used
     token_expires_at = models.DateTimeField(null=True, blank=True)
     metadata = models.JSONField(default=dict, encoder=DjangoJSONEncoder)
 
@@ -155,9 +168,8 @@ class TradingAccount(models.Model):
     )
 
     last_authenticated = models.DateTimeField(null=True, blank=True)
-    # Token rotation tracking (Phase 2)
-    token_refresh_count = models.IntegerField(default=0)
-    last_token_rotation = models.DateTimeField(null=True, blank=True)
+    # NOTE: token_refresh_count removed - unused telemetry
+    # NOTE: last_token_rotation removed - unused telemetry
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -168,6 +180,11 @@ class TradingAccount(models.Model):
             models.Index(fields=["user", "is_active"]),
         ]
 
+    def __init__(self, *args, **kwargs):
+        self._pending_trading_pref_updates: dict[str, int | bool] = {}
+        self._extract_trading_pref_kwargs(kwargs)
+        super().__init__(*args, **kwargs)
+
     def __str__(self):
         return f"{self.user.email} - {self.account_number} ({self.connection_type})"
 
@@ -177,6 +194,7 @@ class TradingAccount(models.Model):
                 user=self.user, connection_type=self.connection_type, is_primary=True
             ).exclude(pk=self.pk).update(is_primary=False)
         super().save(*args, **kwargs)
+        self._apply_pending_trading_preferences()
 
     @property
     def is_configured(self) -> bool:
@@ -184,25 +202,31 @@ class TradingAccount(models.Model):
 
     @property
     def is_automated_trading_enabled(self):
-        # TradingAccountPreferences is created automatically via signals when TradingAccount is created
-        return self.trading_preferences.is_automated_trading_enabled
+        pending = getattr(self, "_pending_trading_pref_updates", {})
+        if not self.pk and "is_automated_trading_enabled" in pending:
+            return pending["is_automated_trading_enabled"]
+        prefs = self._ensure_trading_preferences(auto_create=self.pk is not None)
+        if prefs:
+            return prefs.is_automated_trading_enabled
+        return False
 
     @is_automated_trading_enabled.setter
     def is_automated_trading_enabled(self, value):
-        # TradingAccountPreferences is created automatically via signals when TradingAccount is created
-        self.trading_preferences.is_automated_trading_enabled = value
-        self.trading_preferences.save(update_fields=["is_automated_trading_enabled"])
+        self._set_trading_pref_value("is_automated_trading_enabled", value)
 
     @property
     def automated_entry_offset_cents(self):
-        # TradingAccountPreferences is created automatically via signals when TradingAccount is created
-        return self.trading_preferences.automated_entry_offset_cents
+        pending = getattr(self, "_pending_trading_pref_updates", {})
+        if not self.pk and "automated_entry_offset_cents" in pending:
+            return pending["automated_entry_offset_cents"]
+        prefs = self._ensure_trading_preferences(auto_create=self.pk is not None)
+        if prefs:
+            return prefs.automated_entry_offset_cents
+        return 0
 
     @automated_entry_offset_cents.setter
     def automated_entry_offset_cents(self, value):
-        # TradingAccountPreferences is created automatically via signals when TradingAccount is created
-        self.trading_preferences.automated_entry_offset_cents = value
-        self.trading_preferences.save(update_fields=["automated_entry_offset_cents"])
+        self._set_trading_pref_value("automated_entry_offset_cents", value)
 
     @property
     def privacy_mode(self):
@@ -230,8 +254,6 @@ class TradingAccount(models.Model):
             self.refresh_token = new_refresh_token
         if expires_in_seconds:
             self.token_expires_at = timezone.now() + timedelta(seconds=expires_in_seconds)
-        self.token_refresh_count += 1
-        self.last_token_rotation = timezone.now()
         self.save()
 
     def get_oauth_session(self):
@@ -272,6 +294,58 @@ class TradingAccount(models.Model):
         self.save(update_fields=["last_authenticated"])
 
         return session
+
+    def _extract_trading_pref_kwargs(self, kwargs):
+        pref_fields = ("is_automated_trading_enabled", "automated_entry_offset_cents")
+        for field in pref_fields:
+            if field in kwargs:
+                self._pending_trading_pref_updates[field] = kwargs.pop(field)
+
+    def _apply_pending_trading_preferences(self):
+        if not getattr(self, "_pending_trading_pref_updates", None):
+            return
+        if not self.pk:
+            return
+        prefs = self._ensure_trading_preferences(auto_create=True)
+        if not prefs:
+            return
+        update_fields = []
+        for field, value in self._pending_trading_pref_updates.items():
+            setattr(prefs, field, value)
+            update_fields.append(field)
+        if update_fields:
+            prefs.save(update_fields=update_fields)
+        self._pending_trading_pref_updates.clear()
+
+    def _queue_trading_pref_update(self, field: str, value):
+        if not hasattr(self, "_pending_trading_pref_updates"):
+            self._pending_trading_pref_updates = {}
+        self._pending_trading_pref_updates[field] = value
+
+    def _set_trading_pref_value(self, field: str, value):
+        if not self.pk:
+            self._queue_trading_pref_update(field, value)
+            return
+        prefs = self._ensure_trading_preferences(auto_create=True)
+        if not prefs:
+            return
+        setattr(prefs, field, value)
+        prefs.save(update_fields=[field])
+
+    def _ensure_trading_preferences(self, auto_create: bool = False):
+        try:
+            return self.trading_preferences
+        except TradingAccountPreferences.DoesNotExist:
+            if not auto_create or not self.pk:
+                return None
+        prefs, _created = TradingAccountPreferences.objects.get_or_create(
+            account=self,
+            defaults={
+                "is_automated_trading_enabled": False,
+                "automated_entry_offset_cents": 0,
+            },
+        )
+        return prefs
 
 
 class OptionsAllocation(models.Model):

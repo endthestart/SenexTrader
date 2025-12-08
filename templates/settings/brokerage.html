@@ -102,7 +102,7 @@
 <script>
 // Manual streaming reconnection
 function forceReconnect() {
-    console.log('🔄 Manual reconnect triggered');
+    window.logStreamInfo('Manual reconnect triggered');
 
     // Reset streaming state
     window.streamersReady = false;
@@ -113,7 +113,7 @@ function forceReconnect() {
         try {
             window.streamerWebSocket.close();
         } catch (e) {
-            console.log('WebSocket already closed');
+            window.logStreamInfo('WebSocket already closed');
         }
     }
 
@@ -141,7 +141,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 const data = await response.json();
 
                 if (data.success) {
-                    console.log('Privacy mode updated:', isEnabled);
+                    window.logStreamInfo('Privacy mode updated:', isEnabled);
                 } else {
                     console.error('Failed to update privacy mode:', data.error);
                     this.checked = !isEnabled;

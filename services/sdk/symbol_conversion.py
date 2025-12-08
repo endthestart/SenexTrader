@@ -19,8 +19,8 @@ def streamer_to_occ_fixed(streamer_symbol: str) -> str:
 
     Example of SDK bug:
         Input:  .QQQ251219P599.78
-        SDK:    QQQ   251219P005997800 (22 chars, strike=5997800) ❌
-        Fixed:  QQQ   251219P00599780  (21 chars, strike=599780)  ✓
+        SDK:    QQQ   251219P005997800 (22 chars, strike=5997800) 
+        Fixed:  QQQ   251219P00599780  (21 chars, strike=599780)  [OK]
 
     Args:
         streamer_symbol: DXFeed/streamer format symbol (e.g., '.QQQ251219P599.78')

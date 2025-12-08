@@ -7,7 +7,7 @@ The daily trade suggestions task (`generate_and_email_daily_suggestions`) analyz
 ## TastyTrade API Limits
 
 **Critical Limits:**
-- Market data requests: **2 requests/sec per IP** ⚠️
+- Market data requests: **2 requests/sec per IP** 
 - Default API limit: 250 requests/sec per IP
 - Order requests: 40 requests/sec per IP
 - DXFeed subscriptions: Up to 100,000 concurrent
@@ -27,7 +27,7 @@ Cache Population (quote:{symbol})
     ↓
 Parallel Processing (Semaphore(5))
     ↓
-Strategy Scoring → get_quote() → Cache Hit ✅
+Strategy Scoring → get_quote() → Cache Hit
     ↓
 Email Generation
 ```
@@ -41,13 +41,13 @@ Email Generation
 
 ### 1. Subscribe to ALL Watchlist Symbols
 
-**Wrong ❌:**
+**Wrong :**
 ```python
 streaming_ready = await manager.ensure_streaming_for_automation(symbols[:5])
 # Only subscribes first 5, but processes all 19 → 429 errors
 ```
 
-**Correct ✅:**
+**Correct:**
 ```python
 streaming_ready = await manager.ensure_streaming_for_automation(symbols)
 # Subscribes ALL symbols → cache populated → no API calls
@@ -68,13 +68,13 @@ await asyncio.sleep(3)  # Wait for cache population
 
 ### 3. Use Correct Quote API
 
-**Wrong ❌:**
+**Wrong :**
 ```python
 from tastytrade.instruments import Equity
 equity = await Equity.a_get(session, [symbol])  # Returns metadata, not quotes
 ```
 
-**Correct ✅:**
+**Correct:**
 ```python
 from tastytrade.market_data import a_get_market_data
 market_data = await a_get_market_data(session, symbol, InstrumentType.EQUITY)

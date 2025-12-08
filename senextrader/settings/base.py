@@ -12,9 +12,9 @@ from celery.schedules import crontab
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
 
-# ===============================================================================#
+# ================================================================================
 # CORE APPLICATION SETTINGS
-# ===============================================================================#
+# ================================================================================
 
 APP_BASE_URL = os.environ.get("APP_BASE_URL", "https://example.com")
 
@@ -67,6 +67,7 @@ TEMPLATES = [
                 "accounts.context_processors.broker_account_status",
                 "senextrader.context_processors.dry_run_mode",
                 "senextrader.context_processors.privacy_mode",
+                "senextrader.context_processors.app_environment",
             ],
         },
     },
@@ -270,22 +271,23 @@ OPTION_CHAIN_CACHE_TTL = 600  # 10 minutes
 
 # Default watchlist symbols for new users
 # Top high-volume equities commonly used for options trading
+# Format: (symbol, description)
 DEFAULT_WATCHLIST_SYMBOLS = [
-    "SPY",  # S&P 500 ETF
-    "QQQ",  # Nasdaq 100 ETF
-    "IWM",  # Russell 2000 ETF
-    "AAPL",  # Apple
-    "MSFT",  # Microsoft
-    "NVDA",  # NVIDIA
-    "GOOGL",  # Alphabet
-    "AMZN",  # Amazon
-    "META",  # Meta
-    "TSLA",  # Tesla
-    "JPM",  # JPMorgan Chase
-    "V",  # Visa
-    "WMT",  # Walmart
-    "AMD",  # AMD
-    "NFLX",  # Netflix
+    ("SPY", "SPDR S&P 500 ETF Trust"),
+    ("QQQ", "Invesco QQQ Trust"),
+    ("IWM", "iShares Russell 2000 ETF"),
+    ("AAPL", "Apple Inc."),
+    ("MSFT", "Microsoft Corporation"),
+    ("NVDA", "NVIDIA Corporation"),
+    ("GOOGL", "Alphabet Inc."),
+    ("AMZN", "Amazon.com, Inc."),
+    ("META", "Meta Platforms, Inc."),
+    ("TSLA", "Tesla, Inc."),
+    ("JPM", "JPMorgan Chase & Co."),
+    ("V", "Visa Inc."),
+    ("WMT", "Walmart Inc."),
+    ("AMD", "Advanced Micro Devices, Inc."),
+    ("NFLX", "Netflix, Inc."),
 ]
 
 # Minimum days of historical data required for technical analysis

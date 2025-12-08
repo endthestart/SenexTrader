@@ -37,7 +37,7 @@ Multi-strategy trading platform with intelligent strategy selection, real-time m
 **Backend**: Python 3.12, Django 5.2
 **Database**: SQLite (dev), PostgreSQL (prod)
 **Async**: Celery + Redis, Django Channels
-**Trading API**: TastyTrade SDK 10.3
+**Trading API**: TastyTrade SDK 11.0
 **Testing**: pytest
 **Code Quality**: ruff, black, mypy, bandit
 
@@ -62,7 +62,7 @@ Multi-strategy trading platform with intelligent strategy selection, real-time m
    ```bash
    # Fedora/RHEL
    sudo dnf install podman podman-compose
-   
+
    # Ubuntu/Debian
    sudo apt-get install podman podman-compose
    ```
@@ -95,17 +95,17 @@ Multi-strategy trading platform with intelligent strategy selection, real-time m
    ```
 
 7. **Generate encryption key and update .env**
-   
+
    Generate `FIELD_ENCRYPTION_KEY`:
    ```bash
    python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
    ```
-   
+
    Copy the output and add to `.env`:
    ```bash
    FIELD_ENCRYPTION_KEY=<paste-generated-key-here>
    ```
-   
+
    **Optional**: If developing remotely (over SSH), also set:
    ```bash
    ALLOWED_HOSTS=localhost,127.0.0.1,your-remote-host
@@ -235,13 +235,13 @@ TASTYTRADE_DRY_RUN = False  # Hardcoded - attempts to enable will raise ValueErr
 ```
 
 #### Expected Behavior
-- ✅ All validation logic runs normally
-- ✅ Strategy selection and market analysis execute
-- ✅ TastyTrade API validates order via `/orders/dry-run` endpoint
-- ✅ Returns buying power impact and fee calculations from TastyTrade
-- ✅ Order gets `order.id = -1` (TastyTrade sentinel for dry-run)
-- ❌ Order is NOT queued or executed by TastyTrade
-- ❌ No database records created (Position/Trade models)
+- All validation logic runs normally
+- Strategy selection and market analysis execute
+- TastyTrade API validates order via `/orders/dry-run` endpoint
+- Returns buying power impact and fee calculations from TastyTrade
+- Order gets `order.id = -1` (TastyTrade sentinel for dry-run)
+- Order is NOT queued or executed by TastyTrade
+- No database records created (Position/Trade models)
 - ℹ️ Returns `DryRunResult` dataclass with validation results
 
 #### Re-running Real Executions
@@ -250,7 +250,7 @@ After testing in dry-run mode:
 2. Restart Django server
 3. Execute trades normally - full API calls and database persistence
 
-⚠️ Dry-run mode cannot be enabled in production (raises `ValueError` on startup).
+Dry-run mode cannot be enabled in production (raises `ValueError` on startup).
 
 ### Key Conventions
 - **Simplicity First**: Choose the simplest solution that works
@@ -265,7 +265,7 @@ After testing in dry-run mode:
 
 **In-Repo Documentation:**
 - `docs/` directory
-- AI Configuration: `AGENTS.md`, `CLAUDE.md`, `AI.md` (in `.claude/` directory)
+- AI Configuration: `AI.md`, `AGENTS.md`, `CLAUDE.md` (root directory, gitignored)
 
 ---
 
@@ -293,10 +293,10 @@ After testing in dry-run mode:
 
 This project is licensed under the **Creative Commons Attribution-NonCommercial-ShareAlike 4.0 International License**.
 
-- ✅ **Free** for personal, educational, and research use
-- ❌ **Commercial use prohibited** without explicit permission
-- 📋 **Attribution required** - Give appropriate credit
-- 🔄 **Share-Alike** - Derivatives must use the same license
+- **Free** for personal, educational, and research use
+- **Commercial use prohibited** without explicit permission
+- **Attribution required** - Give appropriate credit
+- **Share-Alike** - Derivatives must use the same license
 
 See the [LICENSE](LICENSE) file for full details.
 

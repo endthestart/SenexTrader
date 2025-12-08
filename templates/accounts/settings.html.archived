@@ -283,13 +283,13 @@ document.addEventListener('DOMContentLoaded', function() {
     // Wait for global streamers to be ready
     function initializeStreaming() {
         if (window.streamersReady) {
-            console.log('Settings: Streamers already ready, setting up streaming...');
+            window.logStreamInfo('Settings: Streamers already ready, setting up streaming...');
             setupSettingsStreaming();
         } else {
-            console.log('Settings: Waiting for streamers-ready event...');
+            window.logStreamInfo('Settings: Waiting for streamers-ready event...');
 
             window.addEventListener('streamers-ready', function(e) {
-                console.log('Settings: Streamers ready event received:', e.detail);
+                window.logStreamInfo('Settings: Streamers ready event received:', e.detail);
                 setupSettingsStreaming();
             }, { once: true });
 
@@ -310,7 +310,7 @@ document.addEventListener('DOMContentLoaded', function() {
             return;
         }
 
-        console.log('Settings: Using global WebSocket for streaming data');
+        window.logStreamInfo('Settings: Using global WebSocket for streaming data');
         streamingHandlers.updateStreamStatus('Connected', 'success');
 
         // Register settings page message handler
@@ -350,7 +350,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Initialize risk calculations with pre-populated data
     if (initialAccountState.balance !== null && initialAccountState.buyingPower !== null) {
-        console.log('📊 Initializing with pre-populated data:', initialAccountState);
+        window.logStreamInfo('📊 Initializing with pre-populated data:', initialAccountState);
         updateRiskCalculations(initialAccountState.balance, initialAccountState.buyingPower);
 
         // Show warning if data is stale
@@ -358,7 +358,7 @@ document.addEventListener('DOMContentLoaded', function() {
             console.warn('⚠️ Using stale account data from:', initialAccountState.source);
         }
     } else {
-        console.log('📊 No initial balance data available, waiting for streaming updates');
+        window.logStreamInfo('📊 No initial balance data available, waiting for streaming updates');
     }
 });
 
@@ -462,10 +462,10 @@ document.getElementById('allocation-method').addEventListener('change', function
         const buyingPower = parseFloat(buyingPowerText);
 
         // Immediately recalculate with current values
-        console.log('Allocation method changed, recalculating with current values');
+        window.logStreamInfo('Allocation method changed, recalculating with current values');
         updateRiskCalculations(balance, buyingPower);
     } else {
-        console.log('Cannot recalculate - balance or buying power not available');
+        window.logStreamInfo('Cannot recalculate - balance or buying power not available');
     }
 });
 
@@ -600,7 +600,7 @@ saveAutomationOffsetButton?.addEventListener('click', async function() {
 
 // Manual streaming reconnection
 function forceReconnect() {
-    console.log('🔄 Manual reconnect triggered');
+    window.logStreamInfo('🔄 Manual reconnect triggered');
 
     // Reset streaming state
     window.streamersReady = false;
@@ -611,7 +611,7 @@ function forceReconnect() {
         try {
             window.streamerWebSocket.close();
         } catch (e) {
-            console.log('WebSocket already closed');
+            window.logStreamInfo('WebSocket already closed');
         }
     }
 

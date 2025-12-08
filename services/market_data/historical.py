@@ -368,27 +368,30 @@ class HistoricalDataProvider:
             latest_date = records["latest"]
             today = dj_timezone.now().date()
 
-            # CHECK FRESHNESS FIRST: If data is stale (> 1 day old), fetch recent data
+            # PRIORITY 1: If count is insufficient, fetch full historical range
+            # This takes precedence over freshness checks
+            if current_count < min_acceptable:
+                start_date, _end_date = self.calendar.get_trading_days_needed(symbol, target_days)
+                logger.info(
+                    f"{symbol}: Insufficient data ({current_count}/{min_acceptable}) - "
+                    f"fetching full {target_days} trading days"
+                )
+                return (start_date.date(), today, target_days)
+
+            # PRIORITY 2: Count is sufficient - check freshness
             if latest_date and latest_date < today:
                 days_gap = (today - latest_date).days
                 logger.info(
                     f"{symbol}: Data stale (latest={latest_date}, gap={days_gap} days) - "
                     f"fetching recent data"
                 )
-                # Fetch from day after latest to today
                 return (latest_date, today, days_gap)
 
-            # Data is fresh - check if count is sufficient
-            if current_count >= min_acceptable:
-                logger.debug(
-                    f"{symbol}: Data is fresh and sufficient ({current_count}/{min_acceptable})"
-                )
-                return None  # No missing data
-
-            # No data exists - fetch full range
-            start_date, end_date = self.calendar.get_trading_days_needed(symbol, target_days)
-            logger.info(f"{symbol}: No data exists, fetching {target_days} trading days")
-            return (start_date.date(), today, target_days)
+            # Data is fresh and sufficient
+            logger.debug(
+                f"{symbol}: Data is fresh and sufficient ({current_count}/{min_acceptable})"
+            )
+            return None
 
         except Exception as e:
             logger.error(f"Error identifying missing dates for {symbol}: {e}")
@@ -436,23 +439,11 @@ class HistoricalDataProvider:
             data = self._parse_csv_data(response.text, symbol)
 
             if data:
-                # Filter to only new records (after latest_date if exists)
-                from trading.models import HistoricalPrice
-
-                latest_record = (
-                    HistoricalPrice.objects.filter(symbol=symbol).order_by("-date").first()
-                )
-                latest_date = latest_record.date if latest_record else None
-
-                if latest_date:
-                    new_data = [p for p in data if p["date"] > latest_date]
-                else:
-                    new_data = data
-
-                if new_data:
-                    stored = self.store_in_database(symbol, new_data)
-                    logger.info(f"{symbol}: Added {stored} new records")
-                    return stored
+                # Store all fetched data - store_in_database handles duplicates
+                # via bulk_create with ignore_conflicts and bulk_update for changes
+                stored = self.store_in_database(symbol, data)
+                logger.info(f"{symbol}: Stored {stored} records (new + updated)")
+                return stored
 
             return 0
 
@@ -519,7 +510,7 @@ class HistoricalDataProvider:
 
             logger.info(
                 f"{symbol} now has {final_count}/{min_acceptable} days after adding {new_records} records "
-                f"({'✓ sufficient' if success else '✗ still insufficient'})"
+                f"({'PASS: sufficient' if success else 'FAIL: still insufficient'})"
             )
             return success
 

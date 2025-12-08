@@ -42,7 +42,7 @@ async def a_prepare_suggestion_context(
     # Log force generation (important for debugging)
     if force_generation and score < self.MIN_SCORE_THRESHOLD:
         logger.warning(
-            f"⚠️ Force generating {self.strategy_name} despite low score "
+            f"Force generating {self.strategy_name} despite low score "
             f"({score:.1f}) - user explicitly requested"
         )
 
@@ -82,7 +82,7 @@ Show warnings prominently when strategy generated with low score:
 ```html
 <!-- Yellow warning if generated with low score -->
 <div class="alert alert-warning">
-  <h6>⚠️ Unfavorable Market Conditions</h6>
+  <h6>Unfavorable Market Conditions</h6>
   <p>This strategy scored low (35/100) in current conditions.</p>
   <ul>
     <li>Reason 1...</li>
@@ -137,13 +137,13 @@ logger.info(f"Score too low ({score:.1f}) - not generating {strategy_name}")
 
 # When force generation bypasses threshold
 logger.warning(
-    f"⚠️ Force generating {strategy_name} despite low score ({score:.1f}) - "
+    f"Force generating {strategy_name} despite low score ({score:.1f}) - "
     f"user explicitly requested"
 )
 
 # In StrategySelector
 logger.info(
-    f"✅ Force generated {strategy_name}: score={score:.1f} "
+    f"Force generated {strategy_name}: score={score:.1f} "
     f"(below threshold but user requested)"
 )
 ```

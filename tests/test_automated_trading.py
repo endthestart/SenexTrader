@@ -22,8 +22,6 @@ class AutomatedDailyTradeCycleTest(TestCase):
     """Verify Celery task delegates to service layer appropriately."""
 
     def setUp(self):
-        from accounts.models import TradingAccountPreferences
-
         self.user = User.objects.create_user(
             email="test@example.com", username="testuser", password="secret123"
         )
@@ -34,10 +32,8 @@ class AutomatedDailyTradeCycleTest(TestCase):
             is_active=True,
             is_primary=True,
         )
-        TradingAccountPreferences.objects.create(
-            account=account,
-            is_automated_trading_enabled=True,
-        )
+        # Use the property setter to update via the model's mechanism
+        account.is_automated_trading_enabled = True
 
     @patch(
         "trading.services.automated_trading_service.AutomatedTradingService.a_process_account",
@@ -79,8 +75,8 @@ class AutomatedDailyTradeCycleTest(TestCase):
     )
     def test_disabled_account_not_processed(self, mock_process_account):
         account = TradingAccount.objects.get(user=self.user)
+        # The setter automatically saves to preferences
         account.is_automated_trading_enabled = False
-        account.save(update_fields=["is_automated_trading_enabled"])
 
         automated_daily_trade_cycle()
 
@@ -104,8 +100,6 @@ class TestAutomatedTradingService:
 
     @pytest.fixture(autouse=True)
     def default_user(self, django_user_model):
-        from accounts.models import TradingAccountPreferences
-
         self.user = django_user_model.objects.create_user(
             username="auto", email="auto@example.com", password="secret123"
         )
@@ -116,33 +110,35 @@ class TestAutomatedTradingService:
             is_active=True,
             is_primary=True,
         )
-        TradingAccountPreferences.objects.create(
-            account=self.account,
-            is_automated_trading_enabled=True,
-        )
-        StrategyConfiguration.objects.create(
+        # Use the property setter to update via the model's mechanism
+        self.account.is_automated_trading_enabled = True
+        # Refresh to pick up the preference
+        self.account.refresh_from_db()
+
+        StrategyConfiguration.objects.get_or_create(
             user=self.user,
             strategy_id="senex_trident",
-            is_active=True,
+            defaults={"is_active": True},
         )
 
     @pytest.mark.asyncio
     async def test_a_process_account_skips_existing_trade(self):
+        """Test that the service skips processing when a trade already exists.
+
+        We mock the Trade.objects.filter query to simulate an existing trade
+        because async DB access in tests can have transaction isolation issues.
+        """
         with (
             patch(
                 "trading.services.automated_trading_service.is_market_open_now",
                 return_value=True,
             ),
-            patch("trading.services.automated_trading_service.sync_to_async") as mock_sync_to_async,
+            patch(
+                "trading.services.automated_trading_service.Trade.objects.filter"
+            ) as mock_filter,
         ):
-            # Mock the _trade_exists_today check to return True
-            def mock_async_wrapper(func):
-                async def async_func():
-                    return True  # Simulating trade exists
-
-                return async_func
-
-            mock_sync_to_async.side_effect = mock_async_wrapper
+            # Make the filter chain return exists() = True
+            mock_filter.return_value.exclude.return_value.exists.return_value = True
 
             service = AutomatedTradingService()
             result = await service.a_process_account(self.account)
@@ -157,22 +153,12 @@ class TestAutomatedTradingService:
                 "trading.services.automated_trading_service.is_market_open_now",
                 return_value=True,
             ),
-            patch("trading.services.automated_trading_service.sync_to_async") as mock_sync_to_async,
             patch.object(
                 AutomatedTradingService,
                 "a_generate_suggestion",
                 AsyncMock(return_value=None),
             ),
         ):
-            # Mock the _trade_exists_today check to return False
-            def mock_async_wrapper(func):
-                async def async_func():
-                    return False  # Simulating no trade exists
-
-                return async_func
-
-            mock_sync_to_async.side_effect = mock_async_wrapper
-
             service = AutomatedTradingService()
             result = await service.a_process_account(self.account)
 
@@ -195,7 +181,6 @@ class TestAutomatedTradingService:
                 "trading.services.automated_trading_service.is_market_open_now",
                 return_value=True,
             ),
-            patch("trading.services.automated_trading_service.sync_to_async") as mock_sync_to_async,
             patch.object(
                 AutomatedTradingService,
                 "a_generate_suggestion",
@@ -213,14 +198,6 @@ class TestAutomatedTradingService:
                 AutomatedTradingService, "_calculate_automation_credit", return_value=None
             ),
         ):
-            # Mock the _trade_exists_today check to return False
-            def mock_async_wrapper(func):
-                async def async_func():
-                    return False  # Simulating no trade exists
-
-                return async_func
-
-            mock_sync_to_async.side_effect = mock_async_wrapper
             mock_order_service.return_value.execute_suggestion_async = AsyncMock(
                 return_value=mock_position
             )
@@ -247,7 +224,6 @@ class TestAutomatedTradingService:
                 "trading.services.automated_trading_service.is_market_open_now",
                 return_value=True,
             ),
-            patch("trading.services.automated_trading_service.sync_to_async") as mock_sync_to_async,
             patch.object(
                 AutomatedTradingService,
                 "a_generate_suggestion",
@@ -264,14 +240,6 @@ class TestAutomatedTradingService:
                 AutomatedTradingService, "_calculate_automation_credit", return_value=None
             ),
         ):
-            # Mock the _trade_exists_today check to return False
-            def mock_async_wrapper(func):
-                async def async_func():
-                    return False  # Simulating no trade exists
-
-                return async_func
-
-            mock_sync_to_async.side_effect = mock_async_wrapper
             mock_order_service.return_value.execute_suggestion_async = AsyncMock(return_value=None)
 
             service = AutomatedTradingService()
@@ -317,18 +285,7 @@ class TestAutomatedTradingService:
             patch(
                 "trading.services.automated_trading_service.SenexTridentStrategy"
             ) as mock_strategy,
-            patch("trading.services.automated_trading_service.sync_to_async") as mock_sync_to_async,
         ):
-            # Mock sync_to_async for the save operation
-            def mock_async_wrapper(func):
-                async def async_func(**kwargs):
-                    if callable(func):
-                        return func(**kwargs)
-                    return func
-
-                return async_func
-
-            mock_sync_to_async.side_effect = mock_async_wrapper
             # Make a_prepare_suggestion_context return an awaitable
             mock_strategy.return_value.a_prepare_suggestion_context = AsyncMock(
                 return_value=mock_context
@@ -351,7 +308,6 @@ class TestAutomatedTradingService:
                 "trading.services.automated_trading_service.is_market_open_now",
                 return_value=True,
             ),
-            patch("trading.services.automated_trading_service.sync_to_async") as mock_sync_to_async,
             patch.object(
                 AutomatedTradingService,
                 "a_generate_suggestion",
@@ -362,15 +318,6 @@ class TestAutomatedTradingService:
                 AsyncMock(return_value={"valid": False, "message": "Too risky"}),
             ),
         ):
-            # Mock the _trade_exists_today check to return False
-            def mock_async_wrapper(func):
-                async def async_func():
-                    return False  # Simulating no trade exists
-
-                return async_func
-
-            mock_sync_to_async.side_effect = mock_async_wrapper
-
             service = AutomatedTradingService()
             result = await service.a_process_account(self.account)
 

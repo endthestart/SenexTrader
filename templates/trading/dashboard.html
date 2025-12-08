@@ -390,13 +390,13 @@
         // Wait for global streamers to be ready
         function initializeStreaming() {
             if (window.streamersReady) {
-                console.log('Streamers already ready, setting up dashboard streaming...');
+                window.logStreamInfo('Streamers already ready, setting up dashboard streaming...');
                 setupDashboardStreaming();
             } else {
-                console.log('Waiting for streamers-ready event...');
+                window.logStreamInfo('Waiting for streamers-ready event...');
 
                 window.addEventListener('streamers-ready', function(e) {
-                    console.log('Dashboard: Streamers ready event received:', e.detail);
+                    window.logStreamInfo('Dashboard: Streamers ready event received:', e.detail);
                     setupDashboardStreaming();
                 }, { once: true });
 
@@ -416,7 +416,7 @@
                 return;
             }
 
-            console.log('Dashboard: Using global WebSocket for streaming data');
+            window.logStreamInfo('Dashboard: Using global WebSocket for streaming data');
 
             // Register dashboard page message handler
             function dashboardMessageHandler(data) {

@@ -256,8 +256,7 @@ class LongStraddleStrategy(BaseStrategy):
             ATM strike price (rounded to nearest standard strike)
         """
         # Round to nearest strike
-        strike = round_to_even_strike(current_price)
-        return strike
+        return round_to_even_strike(current_price)
 
     def _calculate_breakevens(
         self, strike: Decimal, total_debit: Decimal
@@ -380,7 +379,7 @@ class LongStraddleStrategy(BaseStrategy):
         from services.sdk.instruments import get_option_instruments_bulk
 
         # Get session
-        account = await get_primary_tastytrade_account(position.user)
+        await get_primary_tastytrade_account(position.user)
         session = await TastyTradeSessionService.get_session_for_user(position.user)
 
         strike = position.strikes["strike"]  # Same strike for both
@@ -484,7 +483,7 @@ class LongStraddleStrategy(BaseStrategy):
 
         if force_generation and score < 35:
             logger.warning(
-                f"⚠️ Force generating {self.strategy_name} despite low score ({score:.1f})"
+                f"Force generating {self.strategy_name} despite low score ({score:.1f})"
             )
 
         # Find ATM strike
@@ -548,7 +547,7 @@ class LongStraddleStrategy(BaseStrategy):
             "force_generation": force_generation,
         }
 
-        logger.info(f"User {self.user.id}: ✅ Context prepared for {self.strategy_name}")
+        logger.info(f"User {self.user.id}: Context prepared for {self.strategy_name}")
         return context
 
     async def a_request_suggestion_generation(
@@ -577,7 +576,7 @@ class LongStraddleStrategy(BaseStrategy):
         # Dispatch to stream manager
         await self.a_dispatch_to_stream_manager(context)
         logger.info(
-            f"User {self.user.id}: 🚀 Dispatched {self.strategy_name} request to stream manager"
+            f"User {self.user.id}: Dispatched {self.strategy_name} request to stream manager"
         )
 
     async def a_calculate_suggestion_from_cached_data(self, context: dict):
@@ -686,7 +685,7 @@ class LongStraddleStrategy(BaseStrategy):
         # Build generation notes if risk warning
         notes = ""
         if risk_warning:
-            notes = f"⚠️ RISK BUDGET EXCEEDED: {risk_warning}"
+            notes = f"RISK BUDGET EXCEEDED: {risk_warning}"
 
         suggestion = await TradingSuggestion.objects.acreate(
             user=self.user,
@@ -719,7 +718,7 @@ class LongStraddleStrategy(BaseStrategy):
         )
 
         logger.info(
-            f"User {self.user.id}: ✅ Long Straddle suggestion - "
+            f"User {self.user.id}: Long Straddle suggestion - "
             f"Debit: ${total_debit:.2f}, Strike: ${strike}"
         )
         return suggestion

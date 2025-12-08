@@ -1,35 +1,16 @@
 # Risk Management Documentation
 
-This folder contains domain documentation for risk management concepts, rules, and calculations used in Senex Trader.
+Risk management concepts, rules, and calculations.
 
-## Purpose
+## Contents
 
-Documents the risk management domain including:
-- Risk calculation methodologies
-- Position sizing rules
-- Portfolio risk limits
-- Risk validation logic
-- Safety mechanisms
-
-## File Count
-
-2 domain documentation files
+- `AUTOMATED_TRADING_RISK_ANALYSIS.md` - Risk analysis for automated trading
+- `RISK_MONITORING_IMPLEMENTATION.md` - Risk monitoring implementation details
 
 ## Usage
 
-Reference these documents to understand:
-- How risk is calculated in the system
-- Risk limit enforcement rules
+Reference to understand:
+- How risk is calculated
+- Risk limit enforcement
 - Position sizing algorithms
 - Portfolio-level risk management
-- Risk validation requirements
-
-## Related Documentation
-
-- Implementation: `/path/to/senextrader/services/risk_manager.py`
-- Product specs: `../product/`
-- Architecture: `../architecture/`
-
-## Note
-
-This is domain knowledge documentation. Code implementation is in the main project.

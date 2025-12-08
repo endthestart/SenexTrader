@@ -151,7 +151,7 @@ class TestOrderExecutionService(TestCase):
 
     def test_cached_order_calculates_fill_price_from_legs(self):
         """
-        Test that CachedOrder.price uses actual fill prices for filled orders.
+        Test that TastyTradeOrderHistory.price uses actual fill prices for filled orders.
 
         This validates Fix #3: OrderHistoryService.calculate_fill_price() correctly
         calculates net credit/debit from leg fills instead of using limit price.

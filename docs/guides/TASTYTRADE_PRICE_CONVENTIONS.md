@@ -25,7 +25,7 @@ TastyTrade SDK uses the **sign of the price** to determine whether an order is a
 Created 7 closing orders for call spread profit targets:
 
 ```python
-# ❌ WRONG CODE
+# WRONG CODE
 new_order = NewOrder(
     time_in_force=OrderTimeInForce.GTC,
     order_type=OrderType.LIMIT,
@@ -43,7 +43,7 @@ new_order = NewOrder(
 ### The Fix
 
 ```python
-# ✅ CORRECT CODE
+# CORRECT CODE
 new_order = NewOrder(
     time_in_force=OrderTimeInForce.GTC,
     order_type=OrderType.LIMIT,
@@ -132,13 +132,13 @@ new_order = NewOrder(
 
 Before submitting orders to TastyTrade:
 
-1. ✅ **Determine operation**: Opening or closing?
-2. ✅ **Determine cash flow**: Do you receive (credit) or pay (debit)?
-3. ✅ **Set price sign**:
+1. **Determine operation**: Opening or closing?
+2. **Determine cash flow**: Do you receive (credit) or pay (debit)?
+3. **Set price sign**:
    - Credit → Positive price
    - Debit → Negative price
-4. ✅ **Verify in logs**: Check submitted price before API call
-5. ✅ **Check order status**: Verify order wasn't rejected
+4. **Verify in logs**: Check submitted price before API call
+5. **Check order status**: Verify order wasn't rejected
 
 ---
 
@@ -147,7 +147,7 @@ Before submitting orders to TastyTrade:
 ### Mistake 1: Using `price_effect` Parameter
 
 ```python
-# ❌ WRONG: price_effect doesn't exist in NewOrder
+# WRONG: price_effect doesn't exist in NewOrder
 new_order = NewOrder(
     legs=legs,
     price=1.50,
@@ -158,7 +158,7 @@ new_order = NewOrder(
 ### Mistake 2: Using Positive Price for Debits
 
 ```python
-# ❌ WRONG: Closing (debit) but positive price
+# WRONG: Closing (debit) but positive price
 new_order = NewOrder(
     legs=[...],  # BUY_TO_CLOSE / SELL_TO_CLOSE
     price=1.06  # Positive = credit (WRONG!)
@@ -167,20 +167,20 @@ new_order = NewOrder(
 
 **Fix**: Use negative price
 ```python
-# ✅ CORRECT
+# CORRECT
 price=-1.06  # Negative = debit
 ```
 
 ### Mistake 3: Forgetting `abs()` with Negative Price
 
 ```python
-# ❌ WRONG: If target_price is negative, double negative = positive
+# WRONG: If target_price is negative, double negative = positive
 price = -float(target_price)  # If target_price = -1.06, price = 1.06!
 ```
 
 **Fix**: Always use `abs()`
 ```python
-# ✅ CORRECT
+# CORRECT
 price = -abs(float(target_price))  # Always negative for debit
 ```
 

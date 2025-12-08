@@ -96,15 +96,6 @@ extend-exclude = '''
 )/
 '''
 
-[tool.isort]
-# isort configuration (backup - ruff handles this)
-profile = "black"
-line_length = 100
-known_django = ["django"]
-known_first_party = ["senextrader", "trading", "accounts", "services", "streaming"]
-sections = ["FUTURE", "STDLIB", "DJANGO", "THIRDPARTY", "FIRSTPARTY", "LOCALFOLDER"]
-skip = [".venv", "venv", "migrations", "node_modules"]
-
 [tool.mypy]
 python_version = "3.12"
 warn_return_any = true
@@ -144,22 +135,29 @@ ignore_missing_imports = true
 django_settings_module = "senextrader.settings"
 
 [tool.pytest.ini_options]
-DJANGO_SETTINGS_MODULE = "senextrader.settings"
-python_files = ["test_*.py", "*_test.py"]
+DJANGO_SETTINGS_MODULE = "senextrader.settings.development"
+python_files = ["test_*.py", "*_test.py", "tests.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
 addopts = [
-    "--verbose",
     "--tb=short",
     "--strict-markers",
-    "--reuse-db",  # Faster test runs
+    "--cov=services",
+    "--cov=trading",
+    "--cov=accounts",
+    "--cov=streaming",
+    "--cov-report=term-missing",
+    "--cov-report=html",
+    "--cov-fail-under=0",
 ]
 markers = [
     "slow: marks tests as slow (deselect with '-m \"not slow\"')",
     "integration: marks tests as integration tests",
     "unit: marks tests as unit tests",
+    "asyncio: marks tests as async tests",
 ]
-testpaths = ["services/tests", "trading/tests", "accounts/tests"]
+testpaths = ["tests", "services/tests", "trading/tests", "accounts/tests", "streaming/tests"]
+pythonpath = ["."]
 
 [tool.bandit]
 exclude_dirs = [".venv", "tests", "migrations"]

@@ -472,12 +472,12 @@ class RiskDashboard:
 
 ## Summary
 
-This comprehensive risk management system provides:
+This risk management system includes:
 
 1. **Monte Carlo Simulations** for stress testing strategies
 2. **Position Sizing** using Kelly Criterion (conservative 1/4 Kelly)
 3. **Correlation Analysis** to avoid concentration risk
 4. **Real-time Risk Dashboard** with automated alerts
-5. **R-Multiple Tracking** for consistent performance measurement
+5. **R-Multiple Tracking** for performance measurement
 
-The system prioritizes capital preservation over optimization, with multiple safety checks and conservative position sizing to ensure long-term survival in automated trading.
+The system prioritizes capital preservation over optimization.

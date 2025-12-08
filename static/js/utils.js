@@ -4,6 +4,19 @@
  */
 
 /**
+ * Escape HTML special characters to prevent XSS attacks.
+ * Use this when inserting user-controlled or external data into innerHTML.
+ * @param {string} str - The string to escape
+ * @returns {string} The escaped string safe for HTML insertion
+ */
+function escapeHtml(str) {
+    if (str === null || str === undefined) return '';
+    const div = document.createElement('div');
+    div.textContent = str;
+    return div.innerHTML;
+}
+
+/**
  * Format a number as a localized currency string (e.g., $1,234.56).
  * Uses the Intl.NumberFormat API for proper localization and formatting.
  * @param {number|string} value - The value to format
@@ -287,6 +300,22 @@ function updateStreamingBadge(status, message) {
     badge.title = message || cfg.text;
 }
 
+
+if (typeof window.STREAMING_DEBUG === 'undefined') {
+    window.STREAMING_DEBUG = false;
+}
+
+window.logStreamDebug = function(...args) {
+    if (window.STREAMING_DEBUG) {
+        console.debug(...args);
+    }
+};
+
+window.logStreamInfo = function(...args) {
+    if (window.STREAMING_DEBUG) {
+        console.log(...args);
+    }
+};
 
 // Export functions for use in templates
 window.formatCurrency = formatCurrency;

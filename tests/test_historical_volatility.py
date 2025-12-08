@@ -196,12 +196,12 @@ class TestHVIVRatio:
 
     def test_hv_iv_ratio_with_high_iv(self):
         """Test ratio when IV is high relative to HV."""
-        # HV = 20%, IV = 30% (0.30) → ratio = 20/30 = 0.67 (< 0.8 = good for selling)
+        # HV = 20%, IV = 30% → ratio = 20/30 = 0.67 (< 0.8 = good for selling)
         report = MarketConditionReport(
             symbol="SPY",
             current_price=100.0,
             historical_volatility=20.0,
-            current_iv=0.30,  # 30%
+            current_iv=30.0,  # 30% in percentage format
         )
 
         assert report.hv_iv_ratio < 0.8
@@ -209,24 +209,24 @@ class TestHVIVRatio:
 
     def test_hv_iv_ratio_with_low_iv(self):
         """Test ratio when IV is low relative to HV."""
-        # HV = 30%, IV = 20% (0.20) → ratio = 30/20 = 1.5 (> 1.2 = bad for selling)
+        # HV = 30%, IV = 20% → ratio = 30/20 = 1.5 (> 1.2 = bad for selling)
         report = MarketConditionReport(
             symbol="SPY",
             current_price=100.0,
             historical_volatility=30.0,
-            current_iv=0.20,  # 20%
+            current_iv=20.0,  # 20% in percentage format
         )
 
         assert report.hv_iv_ratio > 1.2
 
     def test_hv_iv_ratio_balanced(self):
         """Test ratio when HV and IV are balanced."""
-        # HV = 25%, IV = 25% (0.25) → ratio = 1.0 (neutral)
+        # HV = 25%, IV = 25% → ratio = 1.0 (neutral)
         report = MarketConditionReport(
             symbol="SPY",
             current_price=100.0,
             historical_volatility=25.0,
-            current_iv=0.25,  # 25%
+            current_iv=25.0,  # 25% in percentage format
         )
 
         assert 0.95 < report.hv_iv_ratio < 1.05
@@ -248,7 +248,7 @@ class TestHVIVRatio:
             symbol="SPY",
             current_price=100.0,
             historical_volatility=0.0,
-            current_iv=0.25,
+            current_iv=25.0,  # 25% in percentage format
         )
 
         assert report.hv_iv_ratio == 1.0
@@ -260,7 +260,7 @@ class TestHVIVRatio:
             symbol="SPY",
             current_price=100.0,
             historical_volatility=15.0,
-            current_iv=0.25,  # 25% IV vs 15% HV
+            current_iv=25.0,  # 25% IV vs 15% HV
         )
 
         # Ratio should be < 0.8 (good for premium selling)
@@ -274,7 +274,7 @@ class TestHVIVRatio:
             symbol="SPY",
             current_price=100.0,
             historical_volatility=40.0,
-            current_iv=0.25,  # 25% IV vs 40% HV
+            current_iv=25.0,  # 25% IV vs 40% HV
         )
 
         # Ratio should be > 1.2 (poor for premium selling)

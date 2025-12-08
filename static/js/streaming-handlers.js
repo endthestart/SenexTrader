@@ -28,7 +28,7 @@ class StreamingHandlers {
         this.prevDayClose = this.loadPrevDayClose();  // Load from sessionStorage if available
         this.lastQQQPrice = null;
 
-        console.debug('StreamingHandlers initialized with prevDayClose:', this.prevDayClose);
+        window.logStreamDebug('StreamingHandlers initialized with prevDayClose:', this.prevDayClose);
     }
 
     /**
@@ -40,7 +40,7 @@ class StreamingHandlers {
             if (data.previous_close && !this.prevDayClose) {
                 this.prevDayClose = parseFloat(data.previous_close);
                 this.savePrevDayClose(this.prevDayClose);
-                console.log('📊 Got prevDayClose from quote:', this.prevDayClose);
+                window.logStreamDebug('Got prevDayClose from quote:', this.prevDayClose);
             }
 
             // Calculate mid price as current (accurate during all market conditions)
@@ -56,15 +56,6 @@ class StreamingHandlers {
                 // Update additional QQQ data elements
                 this.updateQQQDetails(data);
 
-                // Add debug logging
-                console.log('📊 QQQ Quote:', {
-                    bid: data.bid,
-                    ask: data.ask,
-                    last: data.last,
-                    midPrice: midPrice.toFixed(2),
-                    prevDayClose: this.prevDayClose
-                });
-
                 // Update timestamp
                 this.updateTimestamp(this.elements.balanceUpdateTime, data.timestamp);
             }
@@ -75,21 +66,10 @@ class StreamingHandlers {
      * Handle summary updates (for IV data)
      */
     handleSummaryUpdate(data) {
-        console.debug('📊 Summary update received:', {
-            symbol: data.symbol,
-            prev_day_close: data.prev_day_close,
-            volatility: data.volatility
-        });
-
         if (data.symbol === 'QQQ' && data.prev_day_close !== null && data.prev_day_close !== undefined) {
             const oldPrevDayClose = this.prevDayClose;
             this.prevDayClose = data.prev_day_close;
             this.savePrevDayClose(this.prevDayClose);  // Persist to sessionStorage
-            console.log('📊 QQQ Summary update received:', {
-                oldPrevDayClose: oldPrevDayClose,
-                newPrevDayClose: this.prevDayClose,
-                volatility: data.volatility
-            });
 
             // If we have a current price, update the daily change display
             const priceElement = document.getElementById(this.elements.qqqPrice);
@@ -97,18 +77,14 @@ class StreamingHandlers {
                 const currentPriceText = priceElement.textContent.replace('$', '');
                 const currentPrice = parseFloat(currentPriceText);
                 if (!isNaN(currentPrice)) {
-                    console.log('📊 Recalculating daily change with Summary data:', {
-                        currentPrice: currentPrice,
-                        prevDayClose: this.prevDayClose
-                    });
                     this.updateQQQPrice(currentPrice, this.lastQQQPrice);
                 }
             }
         } else {
             if (data.symbol !== 'QQQ') {
-                console.debug('📊 Summary update for non-QQQ symbol:', data.symbol);
+                window.logStreamDebug('Summary update for non-QQQ symbol:', data.symbol);
             } else if (data.prev_day_close === null || data.prev_day_close === undefined) {
-                console.warn('📊 QQQ Summary update received but prev_day_close is null/undefined');
+                console.warn('QQQ Summary update received but prev_day_close is null/undefined');
             }
         }
     }
@@ -117,7 +93,7 @@ class StreamingHandlers {
      * Handle error messages
      */
     handleError(data) {
-        console.error('❌ Streaming error:', data.message);
+        console.error('Streaming error:', data.message);
         this.updateStreamStatus('Error', 'danger');
     }
 
@@ -125,8 +101,7 @@ class StreamingHandlers {
      * Handle heartbeat pong responses
      */
     handlePong(data) {
-        console.debug('💓 Pong received:', data.timestamp);
-        // Could update latency display here if needed
+        // Left intentionally blank; status UI reflects heartbeat separately
     }
 
     /**
@@ -152,13 +127,6 @@ class StreamingHandlers {
 
                 changeElement.textContent = changeText;
                 changeElement.className = dailyChange >= 0 ? 'text-success' : 'text-danger';
-
-                console.log('📊 Daily change calculated:', {
-                    currentPrice: price.toFixed(2),
-                    prevDayClose: this.prevDayClose,
-                    dailyChange: dailyChange.toFixed(2),
-                    dailyChangePercent: dailyChangePercent.toFixed(2) + '%'
-                });
             } else if (changeElement) {
                 // Fallback to session change if prevDayClose not available yet
                 if (previousPrice !== null) {
@@ -166,15 +134,8 @@ class StreamingHandlers {
                     const changeText = (change >= 0 ? '+' : '') + change.toFixed(2) + ' (session)';
                     changeElement.textContent = changeText;
                     changeElement.className = change >= 0 ? 'text-success' : 'text-danger';
-
-                    console.log('📊 Session change calculated (fallback):', {
-                        currentPrice: price.toFixed(2),
-                        previousPrice: previousPrice,
-                        sessionChange: change.toFixed(2)
-                    });
                 } else {
                     changeElement.textContent = '';
-                    console.log('📊 No change calculated - missing both prevDayClose and previousPrice');
                 }
             }
         } else {
@@ -272,11 +233,9 @@ class StreamingHandlers {
             if (hasData) {
                 contentElement.style.display = 'block';
                 unavailableElement.style.display = 'none';
-                console.log(`✅ ${dataPrefix} data now available`);
             } else {
                 contentElement.style.display = 'none';
                 unavailableElement.style.display = 'block';
-                console.log(`❌ ${dataPrefix} data unavailable`);
             }
         } else {
             console.warn(`toggleDataDisplay: Missing elements for ${dataPrefix}`);
@@ -287,8 +246,6 @@ class StreamingHandlers {
      * Main message router - call this from WebSocket onmessage
      */
     handleMessage(data) {
-        console.debug('📨 Stream message:', data.type);
-
         switch (data.type) {
             case 'quote_update':
                 this.handleQuoteUpdate(data);
@@ -303,7 +260,7 @@ class StreamingHandlers {
                 this.handlePong(data);
                 break;
             default:
-                console.debug('Unhandled message type:', data.type);
+                window.logStreamDebug('Unhandled message type:', data.type);
         }
     }
 
@@ -322,10 +279,10 @@ class StreamingHandlers {
 
                 // Check if stored date matches today
                 if (!isNaN(value) && storedDate === today) {
-                    console.debug('📋 Loaded prevDayClose from sessionStorage:', value, 'date:', storedDate);
+                    window.logStreamDebug('Loaded prevDayClose from sessionStorage:', value, 'date:', storedDate);
                     return value;
                 } else if (storedDate !== today) {
-                    console.log('🗓️ Cached prevDayClose is stale (from', storedDate, '), waiting for fresh Summary data');
+                    window.logStreamDebug('🗓️ Cached prevDayClose is stale (from', storedDate, '), waiting for fresh Summary data');
                     // Clear stale data
                     sessionStorage.removeItem('qqq_prev_day_close');
                     sessionStorage.removeItem('qqq_prev_day_close_date');
@@ -346,7 +303,7 @@ class StreamingHandlers {
                 const today = new Date().toDateString();
                 sessionStorage.setItem('qqq_prev_day_close', value.toString());
                 sessionStorage.setItem('qqq_prev_day_close_date', today);
-                console.debug('💾 Saved prevDayClose to sessionStorage:', value, 'date:', today);
+                window.logStreamDebug('Saved prevDayClose to sessionStorage:', value, 'date:', today);
             }
         } catch (error) {
             console.error('Error saving prevDayClose to sessionStorage:', error);

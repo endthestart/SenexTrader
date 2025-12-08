@@ -52,9 +52,9 @@ class TestConcurrentProfitTargetFills(TransactionTestCase):
             is_active=True,
         )
 
-        TradingAccountPreferences.objects.create(
+        TradingAccountPreferences.objects.update_or_create(
             account=self.trading_account,
-            is_automated_trading_enabled=True,
+            defaults={"is_automated_trading_enabled": True},
         )
 
         # Create position with 3 profit targets
@@ -146,7 +146,7 @@ class TestConcurrentProfitTargetFills(TransactionTestCase):
         manager._broadcast = AsyncMock()
 
         # Mock notification service (imported inside the function)
-        with patch("services.notification_service.NotificationService") as mock_notif:
+        with patch("services.notifications.service.NotificationService") as mock_notif:
             mock_notif.return_value.send_notification = AsyncMock()
 
             # Create mock order fill events
@@ -199,7 +199,7 @@ class TestConcurrentProfitTargetFills(TransactionTestCase):
         manager = UserStreamManager(user_id=self.user.id)
         manager._broadcast = AsyncMock()
 
-        with patch("services.notification_service.NotificationService") as mock_notif:
+        with patch("services.notifications.service.NotificationService") as mock_notif:
             mock_notif.return_value.send_notification = AsyncMock()
 
             # Fill target 1
@@ -244,7 +244,7 @@ class TestConcurrentProfitTargetFills(TransactionTestCase):
         manager = UserStreamManager(user_id=self.user.id)
         manager._broadcast = AsyncMock()
 
-        with patch("services.notification_service.NotificationService") as mock_notif:
+        with patch("services.notifications.service.NotificationService") as mock_notif:
             mock_notif.return_value.send_notification = AsyncMock()
 
             order_1 = MockOrder(order_id="order_1", size=-1, price=1.45)
@@ -284,7 +284,7 @@ class TestConcurrentProfitTargetFills(TransactionTestCase):
         manager = UserStreamManager(user_id=self.user.id)
         manager._broadcast = AsyncMock()
 
-        with patch("services.notification_service.NotificationService") as mock_notif:
+        with patch("services.notifications.service.NotificationService") as mock_notif:
             mock_notif.return_value.send_notification = AsyncMock()
 
             # Both orders have negative size (buy-to-close)
@@ -318,7 +318,7 @@ class TestConcurrentProfitTargetFills(TransactionTestCase):
         manager = UserStreamManager(user_id=self.user.id)
         manager._broadcast = AsyncMock()
 
-        with patch("services.notification_service.NotificationService") as mock_notif:
+        with patch("services.notifications.service.NotificationService") as mock_notif:
             mock_notif.return_value.send_notification = AsyncMock()
 
             # Fill only target 1
@@ -361,7 +361,7 @@ class TestConcurrentProfitTargetFills(TransactionTestCase):
             ), f"profit_target_details missing from update_fields: {update_fields}"
             return await original_asave(self, *args, **kwargs)
 
-        with patch("services.notification_service.NotificationService") as mock_notif:
+        with patch("services.notifications.service.NotificationService") as mock_notif:
             mock_notif.return_value.send_notification = AsyncMock()
 
             with patch.object(Position, "asave", spy_asave):

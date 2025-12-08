@@ -47,10 +47,10 @@ Between Oct-Nov 2025, we encountered:
 - 15+ iterations to fix a simple script due to async confusion
 
 This consolidation ensures:
-- ✅ Single source of truth for async patterns
-- ✅ Prevents future async-related data corruption
-- ✅ Reduces development time (no more trial-and-error)
-- ✅ Preserves hard-won lessons for the team
+- Single source of truth for async patterns
+- Prevents future async-related data corruption
+- Reduces development time (no more trial-and-error)
+- Preserves hard-won lessons for the team
 
 ## For Future Developers
 

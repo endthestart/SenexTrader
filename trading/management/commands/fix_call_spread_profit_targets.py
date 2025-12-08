@@ -64,11 +64,11 @@ class Command(BaseCommand):
         skip_confirm = options.get("yes", False)
 
         self.stdout.write("\n" + "=" * 80)
-        self.stdout.write("🔧 CALL SPREAD PROFIT TARGET FIX")
+        self.stdout.write("CALL SPREAD PROFIT TARGET FIX")
         self.stdout.write("=" * 80)
 
         if dry_run:
-            self.stdout.write(self.style.WARNING("\n⚠️  DRY RUN MODE - No changes will be made\n"))
+            self.stdout.write(self.style.WARNING("\nDRY RUN MODE - No changes will be made\n"))
 
         # Find affected positions
         positions = self._find_affected_positions(position_id)
@@ -76,13 +76,13 @@ class Command(BaseCommand):
         if not positions:
             self.stdout.write(
                 self.style.SUCCESS(
-                    "\n✅ No positions found with incorrect call spread profit targets"
+                    "\nNo positions found with incorrect call spread profit targets"
                 )
             )
             return
 
         self.stdout.write(
-            f"\n📋 Found {len(positions)} position(s) with incorrect call spread profit targets:\n"
+            f"\nFound {len(positions)} position(s) with incorrect call spread profit targets:\n"
         )
 
         for pos in positions:
@@ -94,20 +94,20 @@ class Command(BaseCommand):
             )
 
         if dry_run:
-            self.stdout.write(self.style.WARNING("\n⚠️  DRY RUN - Exiting without making changes"))
+            self.stdout.write(self.style.WARNING("\nDRY RUN - Exiting without making changes"))
             return
 
         # Confirm before proceeding (unless --yes flag provided)
         if not skip_confirm:
             self.stdout.write(
                 self.style.WARNING(
-                    "\n⚠️  This will cancel and recreate profit target orders at TastyTrade"
+                    "\nThis will cancel and recreate profit target orders at TastyTrade"
                 )
             )
             confirm = input("Continue? (yes/no): ")
 
             if confirm.lower() != "yes":
-                self.stdout.write(self.style.WARNING("❌ Aborted by user"))
+                self.stdout.write(self.style.WARNING("Aborted by user"))
                 return
 
         # Process each position
@@ -122,7 +122,7 @@ class Command(BaseCommand):
                 else:
                     error_count += 1
             except Exception as e:
-                self.stdout.write(self.style.ERROR(f"❌ Error fixing position {position.id}: {e}"))
+                self.stdout.write(self.style.ERROR(f"Error fixing position {position.id}: {e}"))
                 error_count += 1
                 import traceback
 
@@ -130,11 +130,11 @@ class Command(BaseCommand):
 
         # Summary
         self.stdout.write("\n" + "=" * 80)
-        self.stdout.write("📊 SUMMARY")
+        self.stdout.write("SUMMARY")
         self.stdout.write("=" * 80)
-        self.stdout.write(f"✅ Successfully fixed: {success_count}")
-        self.stdout.write(f"❌ Errors: {error_count}")
-        self.stdout.write(f"📦 Total processed: {len(positions)}")
+        self.stdout.write(f"Successfully fixed: {success_count}")
+        self.stdout.write(f"Errors: {error_count}")
+        self.stdout.write(f"Total processed: {len(positions)}")
 
     def _find_affected_positions(self, position_id=None):
         """Find positions with incorrect call spread profit targets."""
@@ -175,13 +175,13 @@ class Command(BaseCommand):
 
     def _fix_position(self, position: Position) -> bool:
         """Fix a single position's call spread profit target."""
-        self.stdout.write(f"\n🔄 Processing Position {position.id} ({position.symbol})")
+        self.stdout.write(f"\nProcessing Position {position.id} ({position.symbol})")
 
         # Get opening trade
         opening_trade = Trade.objects.filter(position=position, trade_type="open").first()
 
         if not opening_trade:
-            self.stdout.write(self.style.ERROR("   ❌ No opening trade found"))
+            self.stdout.write(self.style.ERROR("   No opening trade found"))
             return False
 
         # Get current call spread details
@@ -189,7 +189,7 @@ class Command(BaseCommand):
         call_spread_info = details.get("call_spread")
 
         if not call_spread_info:
-            self.stdout.write(self.style.ERROR("   ❌ No call_spread in profit_target_details"))
+            self.stdout.write(self.style.ERROR("   No call_spread in profit_target_details"))
             return False
 
         old_order_id = call_spread_info.get("order_id")
@@ -205,16 +205,16 @@ class Command(BaseCommand):
         cancelled = self._cancel_order_sync(position.user, old_order_id)
 
         if cancelled:
-            self.stdout.write(self.style.SUCCESS(f"      ✅ Cancelled order {old_order_id}"))
+            self.stdout.write(self.style.SUCCESS(f"      Cancelled order {old_order_id}"))
         else:
             self.stdout.write(
                 self.style.WARNING(
-                    f"      ⚠️  Could not cancel order {old_order_id} (may already be filled/cancelled)"
+                    f"      Could not cancel order {old_order_id} (may already be filled/cancelled)"
                 )
             )
 
         # Step 2: Create new profit target with correct percentage
-        self.stdout.write("\n   🎯 Step 2: Creating new profit target...")
+        self.stdout.write("\n   Step 2: Creating new profit target...")
 
         # Try using service first (requires TradingSuggestion)
         service = OrderExecutionService(position.user)
@@ -229,7 +229,7 @@ class Command(BaseCommand):
         if not result or result.get("status") != "success":
             self.stdout.write(
                 self.style.WARNING(
-                    "      ⚠️  Service method failed, building order manually from position metadata"
+                    "      Service method failed, building order manually from position metadata"
                 )
             )
             result = self._create_call_spread_manually(position)
@@ -245,7 +245,7 @@ class Command(BaseCommand):
 
                 self.stdout.write(
                     self.style.SUCCESS(
-                        f"      ✅ Created new order: {new_percent}% profit @ ${new_price} (Order: {new_order_id})"
+                        f"      Created new order: {new_percent}% profit @ ${new_price} (Order: {new_order_id})"
                     )
                 )
 
@@ -259,15 +259,13 @@ class Command(BaseCommand):
                 opening_trade.save()
 
                 self.stdout.write(
-                    self.style.SUCCESS(f"\n   ✅ Position {position.id} fixed successfully")
+                    self.style.SUCCESS(f"\n   Position {position.id} fixed successfully")
                 )
                 return True
-            self.stdout.write(self.style.ERROR("      ❌ No call_spread in result"))
+            self.stdout.write(self.style.ERROR("      No call_spread in result"))
             return False
         error_msg = result.get("message", "Unknown error") if result else "No result"
-        self.stdout.write(
-            self.style.ERROR(f"      ❌ Failed to create profit target: {error_msg}")
-        )
+        self.stdout.write(self.style.ERROR(f"      Failed to create profit target: {error_msg}"))
         return False
 
     def _create_call_spread_manually(self, position: Position) -> dict:
@@ -279,8 +277,7 @@ class Command(BaseCommand):
         asyncio.set_event_loop(loop)
 
         try:
-            result = loop.run_until_complete(self._create_call_spread_async(position))
-            return result
+            return loop.run_until_complete(self._create_call_spread_async(position))
         finally:
             loop.close()
 
@@ -408,7 +405,7 @@ class Command(BaseCommand):
             account = loop.run_until_complete(get_primary_tastytrade_account(user))
 
             if not session or not account:
-                self.stdout.write("      ❌ Failed to get session/account")
+                self.stdout.write("      Failed to get session/account")
                 return False
 
             tt_account = loop.run_until_complete(Account.a_get(session, account.account_number))
@@ -420,10 +417,10 @@ class Command(BaseCommand):
             if "not found" in str(e).lower() or "404" in str(e):
                 # Already filled or cancelled
                 return True
-            self.stdout.write(f"      ❌ TastyTrade error: {e}")
+            self.stdout.write(f"      TastyTrade error: {e}")
             return False
         except Exception as e:
-            self.stdout.write(f"      ❌ Error: {e}")
+            self.stdout.write(f"      Error: {e}")
             return False
         finally:
             loop.close()

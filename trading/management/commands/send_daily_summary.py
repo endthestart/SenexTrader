@@ -74,7 +74,7 @@ class Command(BaseCommand):
 
             # Skip users with no activity
             if not (new_positions.exists() or profit_targets.exists() or cancelled.exists()):
-                self.stdout.write("  ⏭️  Skipping (no activity)")
+                self.stdout.write("  Skipping (no activity)")
                 continue
 
             users_with_activity += 1
@@ -84,7 +84,7 @@ class Command(BaseCommand):
 
             # New positions section with full details
             if new_positions.exists():
-                email_body += f"✅ NEW POSITIONS OPENED ({new_positions.count()})\n\n"
+                email_body += f"NEW POSITIONS OPENED ({new_positions.count()})\n\n"
                 for trade in new_positions:
                     pos = trade.position
                     credit = f"${trade.fill_price:.2f}" if trade.fill_price else "N/A"
@@ -135,7 +135,7 @@ class Command(BaseCommand):
 
             # Cancelled/rejected section
             if cancelled.exists():
-                email_body += f"⏭️  CANCELLED/REJECTED ({cancelled.count()})\n"
+                email_body += f"CANCELLED/REJECTED ({cancelled.count()})\n"
                 for trade in cancelled:
                     email_body += f"  • {trade.position.symbol} - {trade.status}\n"
                 email_body += "\n"
@@ -160,11 +160,11 @@ class Command(BaseCommand):
                 )
                 if success:
                     emails_sent += 1
-                    self.stdout.write(self.style.SUCCESS("  ✅ Email sent successfully!"))
+                    self.stdout.write(self.style.SUCCESS("  Email sent successfully!"))
                 else:
-                    self.stderr.write(self.style.ERROR("  ❌ Email send returned False"))
+                    self.stderr.write(self.style.ERROR("  Email send returned False"))
             except Exception as e:
-                self.stderr.write(self.style.ERROR(f"  ❌ Email send failed: {e}"))
+                self.stderr.write(self.style.ERROR(f"  Email send failed: {e}"))
                 import traceback
 
                 traceback.print_exc()
@@ -179,10 +179,10 @@ class Command(BaseCommand):
         if emails_sent > 0:
             self.stdout.write(
                 self.style.SUCCESS(
-                    f"\n✅ Successfully sent {emails_sent} email(s) for {target_date}"
+                    f"\nSuccessfully sent {emails_sent} email(s) for {target_date}"
                 )
             )
         else:
             self.stdout.write(
-                self.style.WARNING(f"\n⚠️  No emails sent (no users had activity on {target_date})")
+                self.style.WARNING(f"\nNo emails sent (no users had activity on {target_date})")
             )

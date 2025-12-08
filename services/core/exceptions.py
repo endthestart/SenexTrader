@@ -44,10 +44,6 @@ Usage:
 from decimal import Decimal
 from typing import Any
 
-# =============================================================================
-# Base Exception
-# =============================================================================
-
 
 class SenexTraderError(Exception):
     """Base exception for all Senex Trader custom exceptions.
@@ -57,11 +53,6 @@ class SenexTraderError(Exception):
     """
 
     pass
-
-
-# =============================================================================
-# Trading Exceptions
-# =============================================================================
 
 
 class TradingError(SenexTraderError):
@@ -237,11 +228,6 @@ class MarketClosedError(TradingError):
         )
 
 
-# =============================================================================
-# Risk Management Exceptions
-# =============================================================================
-
-
 class RiskError(SenexTraderError):
     """Base exception for risk management errors.
 
@@ -307,11 +293,6 @@ class AccountDataUnavailableError(RiskError):
             message += f"Reason: {reason}. "
         message += "Cannot approve position without account data."
         super().__init__(message)
-
-
-# =============================================================================
-# OAuth & Authentication Exceptions
-# =============================================================================
 
 
 class OAuthError(SenexTraderError):
@@ -381,11 +362,6 @@ class SessionCreationError(OAuthError):
         super().__init__(f"Unable to create TastyTrade session: {reason}")
 
 
-# =============================================================================
-# Data Exceptions
-# =============================================================================
-
-
 class DataError(SenexTraderError):
     """Base exception for data-related errors."""
 
@@ -440,11 +416,6 @@ class CacheMissError(DataError):
             f"Data not found in {cache_type} for key: {cache_key}. "
             f"Please refresh the data and try again."
         )
-
-
-# =============================================================================
-# Configuration Exceptions
-# =============================================================================
 
 
 class ConfigurationError(SenexTraderError):

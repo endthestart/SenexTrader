@@ -5,12 +5,22 @@ This configuration is optimized for local development with debugging enabled
 and relaxed security for easier development.
 """
 
+import contextlib
+import logging.config
 import os
 import sys
 
-from .base import *
+# Ensure encrypted fields work in local/test environments even if developers
+# forget to provision a FIELD_ENCRYPTION_KEY. Production/staging must still set
+# this explicitly via environment variables.
+if "FIELD_ENCRYPTION_KEY" not in os.environ:
+    DEFAULT_DEV_FIELD_ENCRYPTION_KEY = os.environ.get(
+        "DEFAULT_DEV_FIELD_ENCRYPTION_KEY",
+        "6mWFB6OGHm-9siUMz2CxRV-nWZnoki5qt7Ya0sTT82o=",
+    )
+    os.environ["FIELD_ENCRYPTION_KEY"] = DEFAULT_DEV_FIELD_ENCRYPTION_KEY
 
-# Environment variables are loaded in manage.py before Django settings
+from .base import *  # noqa: F403
 
 # ================================================================================
 # DEVELOPMENT SETTINGS
@@ -90,8 +100,8 @@ CHANNEL_LAYERS = {
         "BACKEND": "channels_redis.core.RedisChannelLayer",
         "CONFIG": {
             "hosts": [REDIS_URL],
-            "capacity": 1500,  # Increased from 300 to prevent overflow
-            "expiry": 10,  # Reduced from 60 for faster cleanup
+            "capacity": 1500,
+            "expiry": 10,
         },
     },
 }
@@ -100,11 +110,7 @@ CHANNEL_LAYERS = {
 # DEVELOPMENT LOGGING
 # ================================================================================
 
-# Import and configure structured logging for development
-import contextlib
-import logging.config
-
-from services.core.logging import get_development_logging
+from services.core.logging import get_development_logging  # noqa: E402
 
 LOGGING = get_development_logging()
 logging.config.dictConfig(LOGGING)
@@ -189,8 +195,8 @@ WS_ALLOWED_ORIGINS = os.environ.get("WS_ALLOWED_ORIGINS", "localhost:8000,127.0.
 
 # Print settings info only when running the actual server process, not the reloader
 if ("runserver" in sys.argv or "test" in sys.argv) and os.environ.get("RUN_MAIN") == "true":
-    print("🔧 Development settings loaded")
-    print(f"🗄️  Database: SQLite at {DATABASES['default']['NAME']}")
-    print(f"🔄 Redis: {REDIS_URL}")
-    print(f"🐛 Debug mode: {DEBUG}")
-    print(f"🌐 Allowed hosts: {', '.join(ALLOWED_HOSTS)}")
+    print("Development settings loaded")
+    print(f"Database: SQLite at {DATABASES['default']['NAME']}")
+    print(f"Redis: {REDIS_URL}")
+    print(f"Debug mode: {DEBUG}")
+    print(f"Allowed hosts: {', '.join(ALLOWED_HOSTS)}")

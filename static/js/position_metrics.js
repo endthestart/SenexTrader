@@ -30,7 +30,7 @@ class PositionMetricsUpdater extends RealtimeUpdaterBase {
         // Initialize and register with global WebSocket
         this.init();
 
-        console.log('[PositionMetrics] Initialized - listening for unified metrics updates');
+        window.logStreamInfo('[PositionMetrics] Initialized - listening for unified metrics updates');
     }
 
     handleMetricsUpdate(data) {
@@ -136,7 +136,7 @@ class PositionMetricsUpdater extends RealtimeUpdaterBase {
             return;
         }
 
-        console.log(`[PositionMetrics] Legacy P&L update: ${positions.length} positions`);
+        window.logStreamInfo(`[PositionMetrics] Legacy P&L update: ${positions.length} positions`);
 
         positions.forEach(pos => {
             this.updatePositionRow(pos.position_id, pos.unrealized_pnl, null);

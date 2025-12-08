@@ -107,7 +107,7 @@ class RiskValidationService:
             if new_utilization > high_threshold:
                 remaining_pct = 100 - new_utilization
                 warning = (
-                    f"⚠️ WARNING: This trade will push risk utilization to "
+                    f"WARNING: This trade will push risk utilization to "
                     f"{new_utilization:.1f}% ({remaining_pct:.1f}% remaining)."
                 )
             elif new_utilization > medium_threshold:

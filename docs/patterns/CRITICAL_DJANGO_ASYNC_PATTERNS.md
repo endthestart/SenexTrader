@@ -1,6 +1,6 @@
 # CRITICAL: Django Async Patterns - Management Commands & ORM
 
-**⚠️ CRITICAL DOCUMENTATION - READ BEFORE IMPLEMENTING ASYNC IN DJANGO**
+**CRITICAL DOCUMENTATION - READ BEFORE IMPLEMENTING ASYNC IN DJANGO**
 
 ## Executive Summary
 
@@ -13,7 +13,7 @@ Django management commands encounter **critical async/sync boundary issues** whe
 When implementing the `create_profit_targets` management command, we initially tried:
 
 ```python
-# ❌ FAILED APPROACH
+# FAILED APPROACH
 class Command(BaseCommand):
     def handle(self, *args, **options):
         asyncio.run(self._async_handle(options))
@@ -43,7 +43,7 @@ This occurs when Django detects you're in an async context but trying to perform
 ### Working Pattern for Management Commands
 
 ```python
-# ✅ CORRECT APPROACH
+# CORRECT APPROACH
 class Command(BaseCommand):
     def handle(self, *args, **options):
         """Handle the command execution synchronously."""
@@ -110,34 +110,34 @@ def main():
 
 ### Pitfall 1: Mixing Sync/Async in Management Commands
 ```python
-# ❌ WRONG - Causes "cannot call from async context"
+# WRONG - Causes "cannot call from async context"
 def handle(self):
     asyncio.run(self.async_method())
 
-# ✅ CORRECT - Pure synchronous
+# CORRECT - Pure synchronous
 def handle(self):
     self.sync_method()
 ```
 
 ### Pitfall 2: Using sync_to_async with Complex Queries
 ```python
-# ❌ UNRELIABLE - Complex queries may fail
+# UNRELIABLE - Complex queries may fail
 positions = await sync_to_async(
     lambda: Position.objects.filter(user=user).select_related('trade_set')
 )()
 
-# ✅ RELIABLE - Simple queries or sync execution
+# RELIABLE - Simple queries or sync execution
 positions = Position.objects.filter(user=user).select_related('trade_set')
 ```
 
 ### Pitfall 3: Database Updates in Async Context
 ```python
-# ❌ WRONG - Database writes in async context
+# WRONG - Database writes in async context
 async def update_position():
     position.lifecycle_state = 'closed'
     await sync_to_async(position.save)()  # May fail
 
-# ✅ CORRECT - Synchronous database updates
+# CORRECT - Synchronous database updates
 def update_position():
     position.lifecycle_state = 'closed'
     position.save()  # Reliable

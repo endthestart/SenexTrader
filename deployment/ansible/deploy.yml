@@ -172,7 +172,7 @@
 
     - name: Fail if Podman version is too old for Quadlet
       fail:
-        msg: "Podman {{ podman_version.stdout }} is too old. Quadlet requires Podman 4.4+. Please run debian-upgrade.yml first."
+        msg: "Podman {{ podman_version.stdout }} is too old. Quadlet requires Podman 4.4+. Please upgrade the OS / Podman to a supported version."
       when: podman_version.stdout is version('4.4', '<')
 
     # =========================================================================
@@ -278,6 +278,8 @@
         - docker-compose.prod.yml
         - docker-compose.yml.backup
         - podman-compose.yml
+      tags:
+        - legacy_cleanup
 
     - name: Remove legacy docker-compose files
       file:
@@ -287,6 +289,8 @@
       loop: "{{ compose_files.results }}"
       loop_control:
         label: "{{ item.item }}"
+      tags:
+        - legacy_cleanup
 
     - name: Stop any legacy podman-compose containers
       shell: |
@@ -302,6 +306,8 @@
       become_user: "{{ app_user }}"
       register: legacy_cleanup
       changed_when: "'Stopping legacy containers' in legacy_cleanup.stdout"
+      tags:
+        - legacy_cleanup
 
     # =========================================================================
     # 5. Copy Quadlet Configuration Files

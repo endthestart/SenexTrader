@@ -1,4 +1,4 @@
-# Byte-compiled / optimized / DLL files
+# Python
 __pycache__/
 *.py[cod]
 *$py.class
@@ -6,22 +6,10 @@ __pycache__/
 *.pyd
 .Python
 
-# Environments
+# Virtual Environments
 .venv/
 venv/
 env/
-ENV/
-.env/
-
-# Clutter (old symlink pattern - docs now version controlled)
-# docs/ is now a real directory in the monorepo
-
-# Private configuration (not version controlled - monorepo structure)
-config/
-.claude
-AI.md
-AGENTS.md
-CLAUDE.md
 
 # Django
 db.sqlite3
@@ -29,15 +17,32 @@ db.sqlite3-journal
 local_settings.py
 media/
 staticfiles/
-*.sqlite
-*.sqlite3
+
+# Environment & Secrets
+.env
+keys/
+*.key
+*.pem
+
+# Private Configuration (not version controlled)
+config/
+.senextrader.json
+!.senextrader.json.example
+
+# AI Assistant Files (symlinks to external location)
+.claude
+AI.md
+AGENTS.md
+CLAUDE.md
+
+# Machine Learning Data (large files)
+ml/
 
 # Logs
 *.log
 logs/
-*.log.*
 
-# Unit test / coverage
+# Testing & Coverage
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
@@ -45,84 +50,47 @@ logs/
 .coverage.*
 coverage.xml
 htmlcov/
-.tox/
-.nox/
 selenium_failures/
 
-# Packaging / build
+# Build & Packaging
 build/
 dist/
 *.egg-info/
-pip-wheel-metadata/
 
-# IDE/editor
+# IDE
 .idea/
 .vscode/
 
-# AI Assistant Configuration (now version controlled in monorepo)
-# AI files are now part of the main repo, not symlinks
-
-# OS files
+# OS Files
 .DS_Store
 Thumbs.db
 *~
 *.swp
 *.swo
-*.swn
-.*.swp
-.*.swo
-.*.swn
-
-# Env files
-.env
-
-# Encryption keys (do NOT commit)
-keys/
-*.key
-*.pem
-
-# Reference Application
-ref_app
 
 # Redis
 dump.rdb
-redis.log
 
-# Temporary files
+# Celery
+celerybeat*
+
+# Temporary
 tmp/
 temp/
 *.tmp
-*.temp
 *.bak
-*.backup
-*.old
 
-# Celery beat schedule files
-celerybeat*
-*.pidoptions_strategy_trader/
-
-# Docker / Podman / Container files
-.env.production
-.env.local
-.env.*.local
+# Docker Data Volumes
 postgres_data/
 redis_data/
 
-# Deployment / Ansible
-# Deployment secrets and personal configs
+# Deployment Secrets
 deployment/ansible/inventory/*-vault.yml
 !deployment/ansible/inventory/*-vault.yml.example
 deployment/ansible/inventory/hosts.yml
 !deployment/ansible/inventory/hosts.yml.example
 .vault_pass*
 
-# Build configuration symlinks (from senextrader_config)
-build.py
-deployment/ansible/inventory/production-vault.yml
-deployment/ansible/inventory/staging-vault.yml
-deployment/quadlet/*.container
-
-# Developer-specific build configuration
-.senextrader.json
-!.senextrader.json.example
+# Misc
 *.pdf
+ref_app/

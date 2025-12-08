@@ -58,15 +58,15 @@ class TestStrategySelectorIntegration:
         # Mock validator and stream manager
         with (
             patch.object(
-                selector.validator, "a_analyze_market_conditions", return_value=ideal_bullish_report
+                selector.analyzer, "a_analyze_market_conditions", return_value=ideal_bullish_report
             ),
             patch.object(GlobalStreamManager, "get_user_manager", return_value=mock_manager),
         ):
             strategy_name, suggestion, explanation = await selector.a_select_and_generate("SPY")
 
-            # Should select a strategy (likely bull put in bullish conditions)
+            # Should select a strategy (any bullish-favoring credit strategy)
             assert strategy_name is not None
-            assert strategy_name in ["bull_put_spread", "bear_call_spread"]
+            assert strategy_name in selector.strategies
 
             # Should have actual suggestion data
             assert suggestion is not None
@@ -87,24 +87,24 @@ class TestStrategySelectorIntegration:
         mock_manager = await self._mock_stream_manager()
 
         # Mock strategy preparation
-        bull_put_strategy = selector.strategies["bull_put_spread"]
+        bull_put_strategy = selector.strategies["short_put_vertical"]
         bull_put_strategy.a_prepare_suggestion_context = AsyncMock(
-            return_value={"symbol": "SPY", "strategy": "bull_put_spread"}
+            return_value={"symbol": "SPY", "strategy": "short_put_vertical"}
         )
 
         # Mock validator and stream manager
         with (
             patch.object(
-                selector.validator, "a_analyze_market_conditions", return_value=ideal_bullish_report
+                selector.analyzer, "a_analyze_market_conditions", return_value=ideal_bullish_report
             ),
             patch.object(GlobalStreamManager, "get_user_manager", return_value=mock_manager),
         ):
             strategy_name, suggestion, explanation = await selector.a_select_and_generate(
-                "SPY", forced_strategy="bull_put_spread"
+                "SPY", forced_strategy="short_put_vertical"
             )
 
             # Should generate bull put spread
-            assert strategy_name == "bull_put_spread"
+            assert strategy_name == "short_put_vertical"
 
             # Should have actual suggestion data
             assert suggestion is not None
@@ -112,7 +112,7 @@ class TestStrategySelectorIntegration:
             # Should have forced mode explanation
             assert isinstance(explanation, dict)
             assert explanation["type"] == "forced"
-            assert "Bull Put Spread" in explanation["title"]
+            assert "Short Put Vertical" in explanation["title"]
 
     @pytest.mark.asyncio
     async def test_auto_mode_with_low_score_no_suggestion(self, mock_user, mock_config):
@@ -121,6 +121,7 @@ class TestStrategySelectorIntegration:
         # Note: Even in terrible conditions, Senex Trident may score above 30 threshold
         # due to its neutral market bias, so selector will attempt generation
         low_score_report = MarketConditionReport(
+            symbol="SPY",
             current_price=450.0,
             open_price=450.0,
             rsi=50.0,
@@ -142,7 +143,7 @@ class TestStrategySelectorIntegration:
         selector = StrategySelector(mock_user)
 
         with patch.object(
-            selector.validator, "a_analyze_market_conditions", return_value=low_score_report
+            selector.analyzer, "a_analyze_market_conditions", return_value=low_score_report
         ):
             strategy_name, suggestion, explanation = await selector.a_select_and_generate("SPY")
 
@@ -168,7 +169,7 @@ class TestStrategySelectorIntegration:
             )
 
         with patch.object(
-            selector.validator, "a_analyze_market_conditions", return_value=ideal_bullish_report
+            selector.analyzer, "a_analyze_market_conditions", return_value=ideal_bullish_report
         ):
             strategy_name, suggestion, explanation = await selector.a_select_and_generate("SPY")
 
@@ -179,10 +180,10 @@ class TestStrategySelectorIntegration:
             assert "warnings" in explanation or "title" in explanation
 
     @pytest.mark.asyncio
-    async def test_strike_calculation_in_bull_put_spread(self, mock_user, mock_config):
+    async def test_strike_calculation_in_short_put_vertical(self, mock_user, mock_config):
         """Test that bull put spread generates suggestion correctly."""
         selector = StrategySelector(mock_user)
-        bull_put = selector.strategies["bull_put_spread"]
+        bull_put = selector.strategies["short_put_vertical"]
         ideal_bullish_report = create_ideal_bullish_report()
 
         from streaming.services.stream_manager import GlobalStreamManager
@@ -191,27 +192,27 @@ class TestStrategySelectorIntegration:
 
         # Mock strategy preparation
         bull_put.a_prepare_suggestion_context = AsyncMock(
-            return_value={"symbol": "SPY", "strategy": "bull_put_spread"}
+            return_value={"symbol": "SPY", "strategy": "short_put_vertical"}
         )
 
         with (
             patch.object(
-                selector.validator, "a_analyze_market_conditions", return_value=ideal_bullish_report
+                selector.analyzer, "a_analyze_market_conditions", return_value=ideal_bullish_report
             ),
             patch.object(GlobalStreamManager, "get_user_manager", return_value=mock_manager),
         ):
             _, suggestion, _ = await selector.a_select_and_generate(
-                "SPY", forced_strategy="bull_put_spread"
+                "SPY", forced_strategy="short_put_vertical"
             )
 
         # Should generate a suggestion
         assert suggestion is not None
 
     @pytest.mark.asyncio
-    async def test_strike_calculation_in_bear_call_spread(self, mock_user, mock_config):
+    async def test_strike_calculation_in_short_call_vertical(self, mock_user, mock_config):
         """Test that bear call spread generates suggestion correctly."""
         selector = StrategySelector(mock_user)
-        bear_call = selector.strategies["bear_call_spread"]
+        bear_call = selector.strategies["short_call_vertical"]
         ideal_bearish_report = create_ideal_bearish_report()
 
         from streaming.services.stream_manager import GlobalStreamManager
@@ -220,17 +221,17 @@ class TestStrategySelectorIntegration:
 
         # Mock strategy preparation
         bear_call.a_prepare_suggestion_context = AsyncMock(
-            return_value={"symbol": "SPY", "strategy": "bear_call_spread"}
+            return_value={"symbol": "SPY", "strategy": "short_call_vertical"}
         )
 
         with (
             patch.object(
-                selector.validator, "a_analyze_market_conditions", return_value=ideal_bearish_report
+                selector.analyzer, "a_analyze_market_conditions", return_value=ideal_bearish_report
             ),
             patch.object(GlobalStreamManager, "get_user_manager", return_value=mock_manager),
         ):
             _, suggestion, _ = await selector.a_select_and_generate(
-                "SPY", forced_strategy="bear_call_spread"
+                "SPY", forced_strategy="short_call_vertical"
             )
 
         # Should generate a suggestion
@@ -254,19 +255,19 @@ class TestStrategySelectorIntegration:
 
         with (
             patch.object(
-                selector.validator, "a_analyze_market_conditions", return_value=ideal_bullish_report
+                selector.analyzer, "a_analyze_market_conditions", return_value=ideal_bullish_report
             ),
             patch.object(GlobalStreamManager, "get_user_manager", return_value=mock_manager),
         ):
             _, _, explanation = await selector.a_select_and_generate("SPY")
 
-        # Should mention both credit spread strategies in scores list
+        # Should include all registered strategies in scores list
         assert isinstance(explanation, dict)
         assert "scores" in explanation
         strategy_keys = [s["strategy_key"] for s in explanation["scores"]]
-        assert "bull_put_spread" in strategy_keys
-        assert "bear_call_spread" in strategy_keys
-        assert len(strategy_keys) == 2  # Only 2 strategies now (Senex removed)
+        assert "short_put_vertical" in strategy_keys
+        assert "short_call_vertical" in strategy_keys
+        assert len(strategy_keys) == len(selector.strategies)  # All registered strategies
 
         # Should have scores for each
         for score_item in explanation["scores"]:

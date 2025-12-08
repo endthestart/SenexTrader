@@ -138,7 +138,7 @@ class Command(AsyncCommand):
         self.stdout.write("\n" + "=" * 80)
         self.stdout.write(
             self.style.WARNING(
-                f"🔌 Starting streaming infrastructure for {len(symbols)} symbols..."
+                f"Starting streaming infrastructure for {len(symbols)} symbols..."
             )
         )
         self.stdout.write("=" * 80)
@@ -150,7 +150,7 @@ class Command(AsyncCommand):
             if not streaming_ready:
                 self.stdout.write(
                     self.style.ERROR(
-                        "\n❌ Failed to start streaming - cannot run tests without real-time data\n"
+                        "\nFailed to start streaming - cannot run tests without real-time data\n"
                         "   Possible causes:\n"
                         "   - Invalid TastyTrade OAuth credentials\n"
                         "   - Network connectivity issues\n"
@@ -161,11 +161,11 @@ class Command(AsyncCommand):
 
             self.stdout.write(
                 self.style.SUCCESS(
-                    "✅ Streaming infrastructure ready - using real-time market data"
+                    "Streaming infrastructure ready - using real-time market data"
                 )
             )
         except Exception as e:
-            self.stdout.write(self.style.ERROR(f"\n❌ Failed to initialize streaming: {e}\n"))
+            self.stdout.write(self.style.ERROR(f"\nFailed to initialize streaming: {e}\n"))
             return
 
         try:
@@ -199,7 +199,7 @@ class Command(AsyncCommand):
                 try:
                     await self._process_symbol(user, symbol, idx, len(symbols), stats)
                 except Exception as e:
-                    self.stdout.write(self.style.ERROR(f"\n✗ Failed to process {symbol}: {e}"))
+                    self.stdout.write(self.style.ERROR(f"\n[FAIL] Failed to process {symbol}: {e}"))
                     stats["errors"].append(f"{symbol}: {e}")
 
             # Print summary
@@ -209,12 +209,12 @@ class Command(AsyncCommand):
         finally:
             # Cleanup - stop streamer
             self.stdout.write("\n" + "=" * 80)
-            self.stdout.write(self.style.WARNING("🔌 Stopping streaming infrastructure..."))
+            self.stdout.write(self.style.WARNING("Stopping streaming infrastructure..."))
             try:
                 await stream_manager.stop_streaming()
-                self.stdout.write(self.style.SUCCESS("✅ Streaming stopped successfully"))
+                self.stdout.write(self.style.SUCCESS("Streaming stopped successfully"))
             except Exception as e:
-                self.stdout.write(self.style.WARNING(f"⚠️  Error stopping streaming: {e}"))
+                self.stdout.write(self.style.WARNING(f"Error stopping streaming: {e}"))
             self.stdout.write("=" * 80 + "\n")
 
     async def _process_symbol(self, user, symbol: str, idx: int, total: int, stats: dict):
@@ -553,7 +553,7 @@ class Command(AsyncCommand):
             cached_quote = cache.get(quote_key)
 
             self.stdout.write(
-                self.style.WARNING("⚠️  WARNING: No current price data in streaming cache")
+                self.style.WARNING("WARNING: No current price data in streaming cache")
             )
             if cached_quote:
                 self.stdout.write(
@@ -623,7 +623,7 @@ class Command(AsyncCommand):
             display_name = name.replace("_", " ").title()
 
             # Viable indicator
-            viable = "✓ VIABLE" if score >= threshold else "✗ BELOW THRESHOLD"
+            viable = "[OK] VIABLE" if score >= threshold else "[FAIL] BELOW THRESHOLD"
             style = self.style.SUCCESS if score >= threshold else self.style.WARNING
 
             # Print ranking line
@@ -640,7 +640,7 @@ class Command(AsyncCommand):
     def _print_suggestion(self, strategy_name: str, suggestion, score: float):
         """Print generated suggestion details."""
         display_name = strategy_name.replace("_", " ").title()
-        self.stdout.write(self.style.SUCCESS(f"\n✓ {display_name} (Score: {score:.1f})"))
+        self.stdout.write(self.style.SUCCESS(f"\n[OK] {display_name} (Score: {score:.1f})"))
 
         # Calculate DTE
         from django.utils import timezone
@@ -690,7 +690,7 @@ class Command(AsyncCommand):
         display_name = strategy_name.replace("_", " ").title()
         self.stdout.write(
             self.style.WARNING(
-                f"\n✗ {display_name} - Not generated (score {score:.1f} < {threshold})"
+                f"\n[FAIL] {display_name} - Not generated (score {score:.1f} < {threshold})"
             )
         )
 
@@ -699,7 +699,7 @@ class Command(AsyncCommand):
         display_name = strategy_name.replace("_", " ").title()
         message = error_detail.get("message", "Unknown error")
 
-        self.stdout.write(self.style.ERROR(f"\n✗ {display_name} - {message}"))
+        self.stdout.write(self.style.ERROR(f"\n[FAIL] {display_name} - {message}"))
 
         # Print additional details
         if "details" in error_detail:
@@ -764,7 +764,7 @@ class Command(AsyncCommand):
                 failures = failure_patterns.get(pattern_key, [])
                 if failures:
                     # Count unique symbols (not strategy instances)
-                    unique_symbols = set(f.split(":")[0] for f in failures)
+                    unique_symbols = {f.split(":")[0] for f in failures}
                     self.stdout.write(
                         f"{pattern_label:<30} {len(unique_symbols)} equities, {len(failures)} strategies"
                     )

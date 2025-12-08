@@ -238,7 +238,7 @@ class TestConfigureCommandLogging:
         """Test that verbose=True enables DEBUG logging."""
         from services.management.utils import configure_command_logging
 
-        configure_command_logging(verbose=True)
+        configure_command_logging({"verbose": True})
 
         # Root logger should be at DEBUG level
         assert logging.getLogger().level == logging.DEBUG
@@ -247,7 +247,7 @@ class TestConfigureCommandLogging:
         """Test that default suppressions are applied when verbose=False."""
         from services.management.utils import configure_command_logging
 
-        configure_command_logging(verbose=False)
+        configure_command_logging({"verbose": False})
 
         # Check default suppressions
         assert logging.getLogger("services").level == logging.WARNING
@@ -265,7 +265,7 @@ class TestConfigureCommandLogging:
             "services": logging.INFO,
             "custom_logger": logging.DEBUG,
         }
-        configure_command_logging(custom_suppressions=custom)
+        configure_command_logging({}, custom_suppressions=custom)
 
         # Custom suppressions should be applied
         assert logging.getLogger("services").level == logging.INFO

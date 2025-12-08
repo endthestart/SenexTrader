@@ -3,6 +3,8 @@ Trading Tasks - Celery background tasks for order monitoring and management
 Phase 6: Trading Execution Implementation
 """
 
+import time
+
 from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.utils import timezone
@@ -12,6 +14,7 @@ from celery import shared_task
 from channels.layers import get_channel_layer
 
 from accounts.models import TradingAccount
+from services.core.cache import CacheManager
 from services.core.logging import get_logger
 from services.core.utils.async_utils import run_async
 from services.execution.order_service import OrderExecutionService
@@ -22,11 +25,6 @@ from trading.models import Position, Trade, TradingSuggestion
 
 User = get_user_model()
 logger = get_logger(__name__)
-
-
-# ============================================================================
-# BATCHED TASKS - Multiple operations sharing connection pool
-# ============================================================================
 
 
 @shared_task(
@@ -40,80 +38,63 @@ logger = get_logger(__name__)
 @monitor_task
 def batch_sync_data_task(self):
     """
-    Batched task that runs multiple sync operations sequentially.
+    Unified reconciliation task that syncs and reconciles all position/order data.
 
-    This reduces API session overhead by running related operations together,
-    allowing HTTP connection pooling to reuse TCP connections.
+    Uses ReconciliationOrchestrator to run the following phases:
+    1. sync_order_history - Fetch recent orders from TastyTrade → TastyTradeOrderHistory
+    2. sync_positions - Update Position model from TastyTrade
+    3. reconcile_trades - Fix trade/position state mismatches
+    4. fix_profit_targets - Validate/recreate profit target orders
 
-    Combines:
-    - sync_positions_task (sync positions from TastyTrade)
-    - sync_order_history_task (sync order history)
-    - reconcile_trades_with_tastytrade (reconcile trades & fix stuck positions)
+    This is the same code used by the `reconcile` management command,
+    ensuring consistent behavior between scheduled and manual reconciliation.
 
-    Runs every 30 minutes (matching the longest interval of component tasks).
+    Runs every 30 minutes via Celery Beat.
     """
-    logger.info("=== Starting batched data sync task ===")
-
-    results = {
-        "batch_status": "success",
-        "tasks_completed": [],
-        "tasks_failed": [],
-        "total_duration_seconds": 0,
-    }
-
-    import time
-
-    start_time = time.time()
-
-    # Task 1: Sync positions
-    try:
-        logger.info("Batch Task 1/3: Syncing positions...")
-        pos_result = run_async(_async_sync_positions())
-        results["positions"] = pos_result
-        results["tasks_completed"].append("sync_positions")
-        logger.info(f"✅ Positions synced: {pos_result.get('users_processed', 0)} users")
-    except Exception as e:
-        logger.error(f"❌ Position sync failed in batch: {e}", exc_info=True)
-        results["tasks_failed"].append({"task": "sync_positions", "error": str(e)})
-        results["positions"] = {"status": "failed", "error": str(e)}
-
-    # Task 2: Sync order history
-    try:
-        logger.info("Batch Task 2/3: Syncing order history...")
-        order_result = run_async(_async_sync_order_history())
-        results["order_history"] = order_result
-        results["tasks_completed"].append("sync_order_history")
-        logger.info(
-            f"✅ Order history synced: {order_result.get('accounts_processed', 0)} accounts"
-        )
-    except Exception as e:
-        logger.error(f"❌ Order history sync failed in batch: {e}", exc_info=True)
-        results["tasks_failed"].append({"task": "sync_order_history", "error": str(e)})
-        results["order_history"] = {"status": "failed", "error": str(e)}
-
-    # Task 3: Reconcile trades
-    try:
-        logger.info("Batch Task 3/3: Reconciling trades...")
-        reconcile_result = run_async(_async_reconcile_trades())
-        results["reconcile_trades"] = reconcile_result
-        results["tasks_completed"].append("reconcile_trades")
-        logger.info(f"✅ Trades reconciled: {reconcile_result.get('users_processed', 0)} users")
-    except Exception as e:
-        logger.error(f"❌ Trade reconciliation failed in batch: {e}", exc_info=True)
-        results["tasks_failed"].append({"task": "reconcile_trades", "error": str(e)})
-        results["reconcile_trades"] = {"status": "failed", "error": str(e)}
-
-    results["total_duration_seconds"] = round(time.time() - start_time, 2)
-
-    if results["tasks_failed"]:
-        results["batch_status"] = "partial_success"
-
-    logger.info(
-        f"=== Batched data sync complete: {len(results['tasks_completed'])}/3 tasks succeeded, "
-        f"{len(results['tasks_failed'])} failed, {results['total_duration_seconds']}s ==="
+    from services.reconciliation.orchestrator import (
+        ReconciliationOptions,
+        run_reconciliation_sync,
     )
 
-    return results
+    logger.info("=== Starting unified reconciliation task ===")
+
+    try:
+        # Run full reconciliation for all users
+        options = ReconciliationOptions(
+            sync_order_history=True,
+            sync_positions=True,
+            reconcile_trades=True,
+            fix_profit_targets=True,
+        )
+
+        result = run_reconciliation_sync(options)
+
+        phases_completed = len(result.get("phases_completed", []))
+        phase_results = len(result.get("phase_results", {}))
+        duration = result.get("total_duration_seconds", 0)
+
+        logger.info(
+            f"=== Reconciliation complete: {phases_completed}/{phase_results} "
+            f"phases succeeded in {duration}s ==="
+        )
+
+        return result
+
+    except Exception as e:
+        logger.error(f"Fatal error in batch_sync_data_task: {e}", exc_info=True)
+
+        # Retry with exponential backoff
+        if self.request.retries < self.max_retries:
+            countdown = 120 * (2**self.request.retries)  # 2min, 4min, 8min
+            logger.info(f"Retrying batch_sync_data_task in {countdown}s")
+            raise self.retry(countdown=countdown)
+
+        return {
+            "success": False,
+            "error": str(e),
+            "phases_completed": [],
+            "phases_failed": ["all"],
+        }
 
 
 @shared_task(
@@ -300,11 +281,19 @@ async def _send_order_update(
     fill_price,
     commission,
 ):
+    """
+    Send order status updates via WebSocket.
+
+    Uses the same group (data_{user_id}) and message types (order_status, order_fill)
+    as AlertStreamer for consistency. This task serves as a polling fallback when
+    the user is disconnected from real-time streaming.
+    """
     try:
+        # Use data_{user_id} group to match AlertStreamer's broadcast path
         await channel_layer.group_send(
-            f"order_status_{user_id}",
+            f"data_{user_id}",
             {
-                "type": "order_status_update",
+                "type": "order_status",  # Matches AlertStreamer message type
                 "trade_id": trade_id,
                 "status": status,
                 "filled_at": filled_at.isoformat() if filled_at else None,
@@ -315,9 +304,9 @@ async def _send_order_update(
 
         if status == "filled" and fill_price:
             await channel_layer.group_send(
-                f"order_status_{user_id}",
+                f"data_{user_id}",
                 {
-                    "type": "order_fill_update",
+                    "type": "order_fill",  # Matches AlertStreamer message type
                     "trade_id": trade_id,
                     "fill_price": float(fill_price),
                     "quantity": 1,
@@ -335,17 +324,14 @@ async def _handle_order_fill(trade: Trade, order_service: OrderExecutionService,
     """
     try:
         logger.info(
-            f"🎯 _handle_order_fill called for trade {trade.id}: "
+            f"_handle_order_fill called for trade {trade.id}: "
             f"trade_type={trade.trade_type}, parent_order_id={trade.parent_order_id}"
         )
 
-        # Check if this is an opening trade (not a profit target)
         if not trade.parent_order_id:
-            # Get the position that was created (async accessor to avoid sync ORM in async context)
             position = await trade.position_async
 
             if position and not position.profit_targets_created:
-                # Leverage synchronous strategy dispatcher inside a thread via sync_to_async
                 result = await sync_to_async(order_service.create_profit_targets_sync)(
                     position, trade.broker_order_id
                 )
@@ -353,7 +339,6 @@ async def _handle_order_fill(trade: Trade, order_service: OrderExecutionService,
                 if result and result.get("order_ids"):
                     order_ids = result["order_ids"]
 
-                    # Update trade with profit target order IDs asynchronously
                     await Trade.objects.filter(id=trade.id).aupdate(child_order_ids=order_ids)
 
                     num_orders = len(order_ids)
@@ -366,10 +351,10 @@ async def _handle_order_fill(trade: Trade, order_service: OrderExecutionService,
                         )
                         logger.info(f"Updated position {position.id} to open_full")
 
-                    # Send profit target notifications
+                    # Send profit target notifications via data_{user_id} group
                     for target in result.get("targets", []):
                         await channel_layer.group_send(
-                            f"order_status_{trade.user_id}",
+                            f"data_{trade.user_id}",
                             {
                                 "type": "profit_target_update",
                                 "parent_trade_id": trade.id,
@@ -414,7 +399,7 @@ def cleanup_old_records_task():
         model=TradingSuggestion,
         days=30,
         statuses=["executed", "rejected", "expired"],
-        date_field="created_at",
+        date_field="generated_at",
         record_type="suggestions",
     )
 
@@ -514,7 +499,7 @@ def clear_expired_option_chains():
         }
 
         if total_deleted > 0:
-            logger.info(f"✅ Cache cleanup complete: {total_deleted} keys deleted from {yesterday}")
+            logger.info(f"Cache cleanup complete: {total_deleted} keys deleted from {yesterday}")
         else:
             logger.debug(f"Cache cleanup complete: no keys found for {yesterday}")
 
@@ -573,7 +558,7 @@ def generate_trading_summary():
 
             # New positions section
             if new_positions.exists():
-                email_body += f"✅ NEW POSITIONS OPENED ({new_positions.count()})\n\n"
+                email_body += f"NEW POSITIONS OPENED ({new_positions.count()})\n\n"
                 for trade in new_positions:
                     pos = trade.position
                     credit = trade.fill_price or "N/A"
@@ -633,7 +618,7 @@ def generate_trading_summary():
 
             # Profit targets section
             if profit_targets.exists():
-                email_body += f"💰 PROFIT TARGETS FILLED ({profit_targets.count()})\n\n"
+                email_body += f"PROFIT TARGETS FILLED ({profit_targets.count()})\n\n"
                 for trade in profit_targets:
                     pos = trade.position
                     profit = trade.fill_price or "N/A"
@@ -650,7 +635,7 @@ def generate_trading_summary():
 
             # Cancelled/rejected section
             if cancelled.exists():
-                email_body += f"⏭️  CANCELLED/REJECTED ({cancelled.count()})\n\n"
+                email_body += f"CANCELLED/REJECTED ({cancelled.count()})\n\n"
                 for trade in cancelled:
                     pos = trade.position
                     strategy_display = pos.strategy_type.replace("_", " ").title()
@@ -716,13 +701,14 @@ async def _async_generate_and_email_daily_suggestions():
 
     email_service = EmailService()
 
-    logger.info("🤖 Starting daily trade suggestion email generation...")
+    logger.info("Starting daily trade suggestion email generation...")
 
     # Query users who want daily suggestions (and have email enabled)
+    # Note: email_daily_trade_suggestion is on UserPreferences, not User directly
     eligible_users = await sync_to_async(list)(
-        User.objects.filter(is_active=True, email_daily_trade_suggestion=True).exclude(
-            email_preference="none"
-        )
+        User.objects.filter(
+            is_active=True, preferences__email_daily_trade_suggestion=True
+        ).exclude(preferences__email_preference="none")
     )
 
     logger.info(f"Found {len(eligible_users)} users opted-in for daily trade suggestions")
@@ -733,7 +719,7 @@ async def _async_generate_and_email_daily_suggestions():
     email_builder = SuggestionEmailBuilder(base_url=settings.APP_BASE_URL)
 
     for user in eligible_users:
-        logger.info(f"📧 Generating suggestion for: {user.email}")
+        logger.info(f"Generating suggestion for: {user.email}")
 
         try:
             # Get user's watchlist symbols (default to SPY if empty)
@@ -781,7 +767,7 @@ async def _async_generate_and_email_daily_suggestions():
             if not watchlist_items:
                 # Case 1: Empty watchlist → Default to SPY (backward compatibility)
                 symbol = "SPY"
-                logger.info(f"📧 User {user.email} has empty watchlist, defaulting to SPY")
+                logger.info(f"User {user.email} has empty watchlist, defaulting to SPY")
 
                 # Single-symbol flow (all strategies, Senex excluded)
                 suggestions_list, global_context = await selector.a_select_top_suggestions(
@@ -795,7 +781,7 @@ async def _async_generate_and_email_daily_suggestions():
             elif len(watchlist_items) == 1:
                 # Case 2: Single symbol → Use original single-symbol flow
                 symbol = watchlist_items[0].symbol
-                logger.info(f"📧 User {user.email} watchlist: single symbol {symbol}")
+                logger.info(f"User {user.email} watchlist: single symbol {symbol}")
 
                 suggestions_list, global_context = await selector.a_select_top_suggestions(
                     symbol=symbol, count=2, suggestion_mode=True  # Top 2 strategies
@@ -809,7 +795,7 @@ async def _async_generate_and_email_daily_suggestions():
                 # Case 3: Multiple symbols → Use multi-symbol parallel flow
                 symbols = [item.symbol for item in watchlist_items]
                 logger.info(
-                    f"📧 User {user.email} watchlist: {len(symbols)} symbols "
+                    f"User {user.email} watchlist: {len(symbols)} symbols "
                     f"({', '.join(symbols[:5])}{'...' if len(symbols) > 5 else ''})"
                 )
 
@@ -836,14 +822,14 @@ async def _async_generate_and_email_daily_suggestions():
 
             if success:
                 results["emails_sent"] += 1
-                logger.info(f"✅ Sent daily suggestion email to {user.email}")
+                logger.info(f"Sent daily suggestion email to {user.email}")
 
             # Clean up streaming (matching automated cycle pattern)
             await manager.stop_streaming()
             logger.info(f"User {user.id}: Streaming stopped after email generation")
 
         except Exception as exc:
-            logger.error(f"❌ Failed to send suggestion to {user.email}: {exc}", exc_info=True)
+            logger.error(f"Failed to send suggestion to {user.email}: {exc}", exc_info=True)
             results["failed"] += 1
             # Ensure streaming is stopped even on error
             try:
@@ -854,7 +840,7 @@ async def _async_generate_and_email_daily_suggestions():
             continue
 
     logger.info(
-        f"📧 Daily suggestions complete. Sent: {results['emails_sent']}, "
+        f"Daily suggestions complete. Sent: {results['emails_sent']}, "
         f"Failed: {results['failed']}, Skipped: {results['skipped']}"
     )
 
@@ -897,7 +883,7 @@ async def _process_symbols_parallel(selector, symbols: list[str]) -> list[dict]:
         async with semaphore:
             return await selector.a_select_top_suggestions(symbol, count=1, suggestion_mode=True)
 
-    logger.info(f"📊 Processing {len(symbols)} symbols (max 5 concurrent)...")
+    logger.info(f"Processing {len(symbols)} symbols (max 5 concurrent)...")
 
     # Process all symbols with rate limiting (semaphore limits actual concurrency)
     tasks = [process_with_limit(symbol) for symbol in symbols]
@@ -909,9 +895,9 @@ async def _process_symbols_parallel(selector, symbols: list[str]) -> list[dict]:
     all_candidates = []
     failed_symbols = []  # Track symbols with no trades for diagnostics
 
-    for symbol, result in zip(symbols, results):
+    for symbol, result in zip(symbols, results, strict=False):
         if isinstance(result, Exception):
-            logger.error(f"❌ Failed to process {symbol}: {result}")
+            logger.error(f"Failed to process {symbol}: {result}")
             failed_symbols.append({"symbol": symbol, "reason": "exception", "details": str(result)})
             continue
 
@@ -942,7 +928,7 @@ async def _process_symbols_parallel(selector, symbols: list[str]) -> list[dict]:
                 }
             )
 
-            logger.info(f"⏭️  {symbol}: No suitable trades")
+            logger.info(f"{symbol}: No suitable trades")
             continue
 
         # Extract the top strategy for this symbol
@@ -961,13 +947,13 @@ async def _process_symbols_parallel(selector, symbols: list[str]) -> list[dict]:
             }
         )
 
-        logger.info(f"✅ {symbol}: {strategy_name} (score: {score:.1f})")
+        logger.info(f"{symbol}: {strategy_name} (score: {score:.1f})")
 
     # Sort by score descending (highest scores first)
     all_candidates.sort(key=lambda x: x["score"], reverse=True)
 
     logger.info(
-        f"📊 Parallel processing complete: {len(all_candidates)}/{len(symbols)} symbols "
+        f"Parallel processing complete: {len(all_candidates)}/{len(symbols)} symbols "
         f"have suitable trades"
     )
 
@@ -990,13 +976,15 @@ async def _async_automated_daily_trade_cycle():
     """Async implementation of automated daily trade cycle."""
     from trading.services.automated_trading_service import AutomatedTradingService
 
-    logger.info("🤖 Starting automated daily trade cycle...")
+    logger.info("Starting automated daily trade cycle...")
 
     # Query database synchronously to get list
     eligible_accounts = await sync_to_async(list)(
         TradingAccount.objects.filter(
-            is_active=True, is_automated_trading_enabled=True, is_token_valid=True
-        ).select_related("user")
+            is_active=True,
+            trading_preferences__is_automated_trading_enabled=True,
+            is_token_valid=True,
+        ).select_related("user", "trading_preferences")
     )
 
     logger.info(f"Found {len(eligible_accounts)} eligible accounts with valid tokens")
@@ -1006,13 +994,13 @@ async def _async_automated_daily_trade_cycle():
 
     for account in eligible_accounts:
         user = account.user
-        logger.info(f"🤖 Processing automated trade for: {user.email}")
+        logger.info(f"Processing automated trade for: {user.email}")
 
         try:
             # Use async version to stay in same event loop
             result = await service.a_process_account(account)
         except Exception as exc:  # pragma: no cover - defensive logging
-            logger.error(f"❌ Failed for {user.email}: {exc}", exc_info=True)
+            logger.error(f"Failed for {user.email}: {exc}", exc_info=True)
             results["failed"] += 1
             continue
 
@@ -1026,7 +1014,7 @@ async def _async_automated_daily_trade_cycle():
             results["failed"] += 1
 
     logger.info(
-        f"🤖 Automated cycle complete. "
+        f"Automated cycle complete. "
         f"Processed: {results['processed']}, "
         f"Succeeded: {results['succeeded']}, "
         f"Failed: {results['failed']}, "
@@ -1063,7 +1051,9 @@ def monitor_positions_for_dte_closure(self):
 async def _async_monitor_positions_for_dte():
     positions = [
         position
-        async for position in Position.objects.select_related("user", "trading_account")
+        async for position in Position.objects.select_related(
+            "user", "trading_account", "trading_account__trading_preferences"
+        )
         .filter(lifecycle_state__in=OPEN_STATES)
         .order_by("trading_account__id")
     ]
@@ -1095,7 +1085,9 @@ async def _async_monitor_positions_for_dte():
         if current_dte > threshold and current_dte >= 0:
             continue
 
-        if not account.is_automated_trading_enabled:
+        # DTE management applies to app-managed positions with profit targets,
+        # regardless of whether automated trading is enabled for new entries
+        if not position.is_app_managed or not position.profit_targets_created:
             await manager.notify_manual_action(position, current_dte)
             notified += 1
             continue
@@ -1138,12 +1130,54 @@ def reconcile_trades_with_tastytrade(self):
     """
     Reconcile local trade data with TastyTrade for all active users.
 
-    P1.2: Long-running task with 10min/15min timeout (processes multiple users)
+    DEPRECATED: This task is now part of batch_sync_data_task which uses
+    ReconciliationOrchestrator. This standalone task is kept for backwards
+    compatibility but should not be scheduled separately.
+
+    Use batch_sync_data_task instead, or the `reconcile` management command.
     """
+    from services.reconciliation.orchestrator import (
+        ReconciliationOptions,
+        run_reconciliation_sync,
+    )
+
+    logger.warning(
+        "reconcile_trades_with_tastytrade is deprecated. " "Use batch_sync_data_task instead."
+    )
+
     try:
-        return run_async(_async_reconcile_trades())
+        # Run only the trade reconciliation phases
+        options = ReconciliationOptions(
+            sync_order_history=False,
+            sync_positions=False,
+            reconcile_trades=True,
+            fix_profit_targets=True,
+        )
+
+        result = run_reconciliation_sync(options)
+
+        # Convert to legacy format for backwards compatibility
+        return {
+            "status": "success" if result.get("success") else "failed",
+            "users_processed": result.get("summary", {}).get("users_processed", 0),
+            "users_failed": 0,
+            "total_trades_updated": (
+                result.get("phase_results", {}).get("reconcile_trades", {}).get("items_updated", 0)
+            ),
+            "total_positions_updated": (
+                result.get("phase_results", {})
+                .get("reconcile_trades", {})
+                .get("details", {})
+                .get("stuck_positions_fixed", 0)
+            ),
+            "errors": [],
+        }
+
     except Exception as e:
-        logger.error(f"Fatal error in reconcile_trades_with_tastytrade task: {e}", exc_info=True)
+        logger.error(
+            f"Fatal error in reconcile_trades_with_tastytrade: {e}",
+            exc_info=True,
+        )
         if self.request.retries < self.max_retries:
             countdown = 60 * (2**self.request.retries)
             logger.info(f"Retrying reconcile_trades_with_tastytrade in {countdown}s")
@@ -1209,7 +1243,7 @@ async def _async_reconcile_trades():
                 )
 
             # SELF-CORRECTION: Fix stuck positions (state machine reconciliation)
-            # Uses CachedOrder as source of truth to detect and fix positions stuck in pending_entry
+            # Uses TastyTradeOrderHistory as source of truth to detect and fix positions stuck in pending_entry
             try:
                 fix_report = await service.fix_stuck_positions()
                 if fix_report.get("positions_fixed", 0) > 0:
@@ -1282,12 +1316,44 @@ async def _async_reconcile_trades():
 def sync_order_history_task(self):
     """
     Periodic task to refresh order history cache.
-    Runs every 15 minutes during market hours.
 
-    P1.2: Medium-duration task with 5min/10min timeout
+    DEPRECATED: This task is now part of batch_sync_data_task which uses
+    ReconciliationOrchestrator. This standalone task is kept for backwards
+    compatibility but should not be scheduled separately.
+
+    Use batch_sync_data_task instead, or the `reconcile` management command.
     """
+    from services.reconciliation.orchestrator import (
+        ReconciliationOptions,
+        run_reconciliation_sync,
+    )
+
+    logger.warning("sync_order_history_task is deprecated. " "Use batch_sync_data_task instead.")
+
     try:
-        return run_async(_async_sync_order_history())
+        # Run only the order history sync phase
+        options = ReconciliationOptions(
+            sync_order_history=True,
+            sync_positions=False,
+            reconcile_trades=False,
+            fix_profit_targets=False,
+        )
+
+        result = run_reconciliation_sync(options)
+        phase_result = result.get("phase_results", {}).get("sync_order_history", {})
+
+        # Convert to legacy format for backwards compatibility
+        return {
+            "status": "success" if result.get("success") else "failed",
+            "accounts_processed": phase_result.get("items_processed", 0),
+            "accounts_failed": len(phase_result.get("errors", [])),
+            "total_orders_synced": (
+                phase_result.get("items_created", 0) + phase_result.get("items_updated", 0)
+            ),
+            "total_new_orders": phase_result.get("items_created", 0),
+            "errors": phase_result.get("errors", []),
+        }
+
     except Exception as e:
         logger.error(f"Fatal error in sync_order_history_task: {e}", exc_info=True)
         if self.request.retries < self.max_retries:
@@ -1323,8 +1389,10 @@ async def _async_sync_order_history():
     # Get all active accounts with automated trading enabled and valid tokens
     accounts = await sync_to_async(list)(
         TradingAccount.objects.filter(
-            is_active=True, is_automated_trading_enabled=True, is_token_valid=True
-        ).select_related("user")
+            is_active=True,
+            trading_preferences__is_automated_trading_enabled=True,
+            is_token_valid=True,
+        ).select_related("user", "trading_preferences")
     )
 
     logger.info(f"Syncing order history for {len(accounts)} active accounts with valid tokens")
@@ -1384,15 +1452,173 @@ async def _async_sync_order_history():
     reject_on_worker_lost=True,
 )
 @monitor_task
+def sync_transactions_task(self):
+    """
+    Periodic task to sync transactions from TastyTrade.
+
+    Imports transaction history (fills, assignments, exercises, expirations)
+    and links them to Position objects using opening_order_id.
+
+    This is part of the order-aware position tracking system.
+    """
+    try:
+        return run_async(_async_sync_transactions())
+    except Exception as e:
+        logger.error(f"Transaction sync task failed: {e}", exc_info=True)
+        if self.request.retries < self.max_retries:
+            countdown = 60 * (2**self.request.retries)
+            logger.info(f"Retrying sync_transactions_task in {countdown}s")
+            raise self.retry(countdown=countdown)
+        return {
+            "status": "failed",
+            "accounts_processed": 0,
+            "accounts_failed": 0,
+            "transactions_imported": 0,
+            "transactions_linked": 0,
+            "errors": [],
+            "fatal_error": str(e),
+        }
+
+
+async def _async_sync_transactions():
+    """Async implementation of transaction sync task."""
+    from datetime import date, timedelta
+
+    from services.orders.transactions import TransactionImporter
+
+    logger.info("Starting transaction sync task")
+
+    summary = {
+        "status": "success",
+        "accounts_processed": 0,
+        "accounts_failed": 0,
+        "transactions_imported": 0,
+        "transactions_linked": 0,
+        "errors": [],
+    }
+
+    # Get all active accounts with automated trading enabled and valid tokens
+    accounts = await sync_to_async(list)(
+        TradingAccount.objects.filter(
+            is_active=True,
+            trading_preferences__is_automated_trading_enabled=True,
+            is_token_valid=True,
+        ).select_related("user", "trading_preferences")
+    )
+
+    num_accounts = len(accounts)
+    logger.info(f"Syncing transactions for {num_accounts} active accounts")
+
+    importer = TransactionImporter()
+
+    for account in accounts:
+        try:
+            user = account.user
+            acct_num = account.account_number
+            logger.info(f"Syncing transactions for account {acct_num}")
+
+            import_result = await importer.import_transactions(
+                user=user,
+                account=account,
+                start_date=date.today() - timedelta(days=7),
+            )
+
+            if import_result.get("errors"):
+                logger.warning(
+                    f"Transaction import for {acct_num} "
+                    f"had {len(import_result['errors'])} errors"
+                )
+
+            # Link transactions to positions
+            link_result = await importer.link_transactions_to_positions(
+                user=user,
+                account=account,
+            )
+
+            summary["accounts_processed"] += 1
+            summary["transactions_imported"] += import_result.get("imported", 0)
+            summary["transactions_linked"] += link_result.get("linked", 0)
+
+            logger.info(
+                f"Synced transactions for account {acct_num}: "
+                f"{import_result.get('imported', 0)} imported, "
+                f"{link_result.get('linked', 0)} linked to positions"
+            )
+
+        except Exception as e:
+            logger.error(
+                f"Error syncing transactions for account {account.account_number}: {e}",
+                exc_info=True,
+            )
+            summary["accounts_failed"] += 1
+            summary["errors"].append(
+                {
+                    "account_number": account.account_number,
+                    "error": str(e),
+                }
+            )
+            # Continue with next account instead of failing entire task
+
+    accts_proc = summary["accounts_processed"]
+    accts_fail = summary["accounts_failed"]
+    txns_imp = summary["transactions_imported"]
+    txns_link = summary["transactions_linked"]
+    logger.info(
+        f"Transaction sync complete: {accts_proc} accounts processed, "
+        f"{accts_fail} failed, {txns_imp} imported, {txns_link} linked"
+    )
+
+    return summary
+
+
+@shared_task(
+    bind=True,
+    max_retries=3,
+    soft_time_limit=600,  # 10 minutes
+    time_limit=900,  # 15 minutes hard limit
+    acks_late=True,
+    reject_on_worker_lost=True,
+)
+@monitor_task
 def sync_positions_task(self):
     """
     Periodic task to sync positions from TastyTrade.
-    Runs every 10 minutes to keep position data fresh.
 
-    P1.2: Long-running task with 10min/15min timeout (processes multiple users)
+    DEPRECATED: This task is now part of batch_sync_data_task which uses
+    ReconciliationOrchestrator. This standalone task is kept for backwards
+    compatibility but should not be scheduled separately.
+
+    Use batch_sync_data_task instead, or the `reconcile` management command.
     """
+    from services.reconciliation.orchestrator import (
+        ReconciliationOptions,
+        run_reconciliation_sync,
+    )
+
+    logger.warning("sync_positions_task is deprecated. " "Use batch_sync_data_task instead.")
+
     try:
-        return run_async(_async_sync_positions())
+        # Run only the position sync phase
+        options = ReconciliationOptions(
+            sync_order_history=False,
+            sync_positions=True,
+            reconcile_trades=False,
+            fix_profit_targets=False,
+        )
+
+        result = run_reconciliation_sync(options)
+        phase_result = result.get("phase_results", {}).get("sync_positions", {})
+
+        # Convert to legacy format for backwards compatibility
+        return {
+            "status": "success" if result.get("success") else "failed",
+            "users_processed": result.get("summary", {}).get("users_processed", 0),
+            "users_failed": len(phase_result.get("errors", [])),
+            "total_positions_synced": phase_result.get("items_processed", 0),
+            "total_positions_updated": phase_result.get("items_updated", 0),
+            "errors": phase_result.get("errors", []),
+        }
+
     except Exception as e:
         logger.error(f"Fatal error in sync_positions_task: {e}", exc_info=True)
         if self.request.retries < self.max_retries:
@@ -1521,7 +1747,9 @@ def ensure_historical_data(self):
         all_symbols = set(Watchlist.objects.values_list("symbol", flat=True).distinct())
 
         # Also include DEFAULT_WATCHLIST_SYMBOLS to ensure defaults are covered
-        default_symbols = getattr(settings, "DEFAULT_WATCHLIST_SYMBOLS", [])
+        # Extract symbols from (symbol, description) tuples
+        default_list = getattr(settings, "DEFAULT_WATCHLIST_SYMBOLS", [])
+        default_symbols = [s[0] for s in default_list]
         all_symbols.update(default_symbols)
 
         logger.info(
@@ -1542,13 +1770,16 @@ def ensure_historical_data(self):
                 success = provider.ensure_minimum_data(symbol, min_days=min_days)
                 if success:
                     results["symbols_updated"] += 1
-                    logger.info(f"✓ {symbol}: Historical data validated/updated")
+                    logger.info(f"[OK] {symbol}: Historical data validated/updated")
                 else:
                     results["symbols_failed"] += 1
                     results["errors"].append(
                         {"symbol": symbol, "error": "Failed to fetch/validate historical data"}
                     )
-                    logger.warning(f"✗ {symbol}: Failed to ensure historical data")
+                    logger.warning(f"[FAIL] {symbol}: Failed to ensure historical data")
+
+                # Rate limit: be nice to Stooq API (1 second between requests)
+                time.sleep(1)
 
             except Exception as e:
                 results["symbols_failed"] += 1
@@ -1659,8 +1890,7 @@ async def _async_persist_greeks_from_cache():
         for option_symbol in option_symbols:
             try:
                 # Try to get Greeks from cache (set by StreamManager)
-                cache_key = f"greeks:{option_symbol}"
-                greeks_data = cache.get(cache_key)
+                greeks_data = cache.get(CacheManager.dxfeed_greeks(option_symbol))
 
                 if not greeks_data:
                     # Try streamer format as fallback
@@ -1668,8 +1898,7 @@ async def _async_persist_greeks_from_cache():
 
                     try:
                         streamer_symbol = Option.occ_to_streamer_symbol(option_symbol)
-                        cache_key_alt = f"greeks:{streamer_symbol}"
-                        greeks_data = cache.get(cache_key_alt)
+                        greeks_data = cache.get(CacheManager.dxfeed_greeks(streamer_symbol))
                     except Exception:
                         pass
 
@@ -1694,7 +1923,7 @@ async def _async_persist_greeks_from_cache():
                                 str(greeks_data.get("implied_volatility", 0))
                             ),
                             "strike": parsed["strike"],
-                            "expiration_date": parsed["expiration_date"],
+                            "expiration_date": parsed["expiration"],
                             "option_type": parsed["option_type"],
                         },
                     )

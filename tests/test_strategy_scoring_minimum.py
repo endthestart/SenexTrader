@@ -234,7 +234,7 @@ async def test_all_strategies_with_hard_stop(
     with patch.object(
         covered_call_strategy.stock_detector, "has_sufficient_shares", return_value=True
     ):
-        score, explanation = await covered_call_strategy.a_score_market_conditions(report)
+        score, _explanation = await covered_call_strategy.a_score_market_conditions(report)
         assert score >= 0.0, "CoveredCallStrategy returned negative score with hard stop"
         assert score <= 100.0
 
@@ -254,7 +254,7 @@ async def test_bear_put_spread_edge_case_boundary(bear_put_strategy):
     report.iv_rank = 15.0
     report.market_stress_level = 25.0
 
-    score, explanation = await bear_put_strategy.a_score_market_conditions(report)
+    score, _explanation = await bear_put_strategy.a_score_market_conditions(report)
 
     assert score >= 0.0
     assert score <= 100.0
@@ -279,7 +279,7 @@ async def test_covered_call_without_position_low_iv(covered_call_strategy):
     with patch.object(
         covered_call_strategy.stock_detector, "has_sufficient_shares", return_value=False
     ):
-        score, explanation = await covered_call_strategy.a_score_market_conditions(report)
+        score, _explanation = await covered_call_strategy.a_score_market_conditions(report)
 
     assert score >= 0.0
     assert score <= 100.0

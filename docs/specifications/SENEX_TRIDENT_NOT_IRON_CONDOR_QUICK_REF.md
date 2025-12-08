@@ -1,4 +1,4 @@
-# ⚠️ IMPORTANT: Senex Trident Strategy Clarification
+# IMPORTANT: Senex Trident Strategy Clarification
 
 ## READ THIS FIRST
 
@@ -28,13 +28,13 @@ This is the most common source of confusion for AI assistants working on this co
 
 ## What to Say
 
-✅ **CORRECT**:
+**CORRECT**:
 - "Senex Trident (2 put spreads + 1 call spread)"
 - "6-leg Senex Trident strategy"
 - "Senex Trident with three independent profit targets"
 - "Asymmetric credit spread strategy"
 
-❌ **WRONG**:
+**WRONG**:
 - "Senex Trident (iron condor)"
 - "4-leg iron condor"
 - "Iron condor variant called Senex Trident"

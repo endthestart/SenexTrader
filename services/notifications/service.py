@@ -78,9 +78,9 @@ class NotificationService:
             # Send immediate email
             subject_prefix = {
                 "info": "Notification",
-                "warning": "⚠️ Warning",
-                "error": "❌ Error",
-                "success": "✅ Success",
+                "warning": "Warning",
+                "error": "Error",
+                "success": "Success",
             }.get(notification_type, "Notification")
 
             symbol = details.get("symbol", "")

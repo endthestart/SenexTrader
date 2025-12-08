@@ -146,6 +146,8 @@ class DTEManager:
             "dte": current_dte,
             "cancelled_targets": cancelled_targets,  # Track what we cancelled
         }
+        snapshot["limit_price"] = str(limit_price)
+        snapshot["order_type"] = order_type
 
         # Create the Trade record with trade_type="close" BEFORE submitting
         trade = await Trade.objects.acreate(
@@ -159,7 +161,6 @@ class DTEManager:
             status="pending",
             lifecycle_event="dte_close",
             lifecycle_snapshot=snapshot,
-            limit_price=limit_price,
             order_type=order_type,
         )
 
@@ -203,8 +204,8 @@ class DTEManager:
 
             # Update Trade record with error
             trade.status = "rejected"
-            trade.error_message = error_msg
-            await trade.asave(update_fields=["status", "error_message"])
+            trade.metadata["error_message"] = error_msg
+            await trade.asave(update_fields=["status", "metadata"])
 
             dte_state.update(
                 {
@@ -228,7 +229,9 @@ class DTEManager:
         dte_state.update(
             {
                 "last_processed_dte": current_dte,
+                "dte": current_dte,
                 "current_order_id": order_id,
+                "order_id": order_id,
                 "current_limit_price": str(limit_price),
                 "order_placed_at": timezone.now().isoformat(),
                 "retry_count": 0,  # Reset on success
@@ -244,7 +247,7 @@ class DTEManager:
         await position.asave(update_fields=["lifecycle_state", "metadata"])
 
         logger.info(
-            f"✅ Position {position.id}: DTE close order placed - "
+            f"Position {position.id}: DTE close order placed - "
             f"order_id={order_id}, DTE={current_dte}, limit=${limit_price}"
         )
         return True
@@ -416,65 +419,89 @@ class DTEManager:
         else:
             max_value_per_spread = spread_width
 
-        # DTE ≤ 3: URGENT - Get out at any price
-        if current_dte <= 3:
-            logger.info(f"Position {position.id}: DTE={current_dte} URGENT - using MARKET order")
-            return Decimal("0"), "MARKET", self._price_effect_for_close(position)
-
         # DTE 4-7: Progressive Escalation to Eliminate Risk
         # Rationale: Assignment risk increases exponentially as DTE → 0.
         # We prefer controlled losses over assignment complications.
-        if is_credit_position:
-            # Credit spread: We sold for entry_price, now paying to close
-            # Progressive escalation from 70% → 130% of max loss
-            # Example: Sold $1.00 on $3 spread → max loss $2.00
-            #   DTE 7: Willing to pay $1.40 (70% of $2.00)
-            #   DTE 6: Willing to pay $1.80 (90% of $2.00)
-            #   DTE 5: Willing to pay $2.20 (110% - accepting small loss)
-            #   DTE 4: Willing to pay $2.60 (130% - accepting moderate loss)
-            if current_dte == 4:
-                # VERY AGGRESSIVE: pay up to 130% of max loss (accept moderate loss)
-                max_acceptable = max_loss_per_spread * Decimal("1.30")
-            elif current_dte == 5:
-                # AGGRESSIVE: pay up to 110% of max loss (accept small loss)
-                max_acceptable = max_loss_per_spread * Decimal("1.10")
-            elif current_dte == 6:
-                # MODERATE: pay up to 90% of max loss
-                max_acceptable = max_loss_per_spread * Decimal("0.90")
-            else:  # DTE 7+
-                # STARTING POINT: pay up to 70% of max loss
-                max_acceptable = max_loss_per_spread * Decimal("0.70")
+        #
+        # For CREDIT spreads, close price = entry_price + (% of max_loss)
+        # Example: $3 wide spread, $1.50 credit, max_loss = $1.50
+        #   DTE 7: Pay $1.50 (breakeven - entry price)
+        #   DTE 6: Pay $1.50 + 70% × $1.50 = $2.55 (accept 70% of max loss)
+        #   DTE 5: Pay $1.50 + 80% × $1.50 = $2.70 (accept 80% of max loss)
+        #   DTE 4: Pay $1.50 + 90% × $1.50 = $2.85 (accept 90% of max loss)
+        #   DTE 3: Pay $3.00 (full spread width - accept max loss to guarantee exit)
+        #
+        # For DEBIT spreads, close price = entry_price - (% of entry)
+        # Example: $3 wide spread, $2.00 debit paid
+        #   DTE 7: Accept $2.00 (breakeven - entry price)
+        #   DTE 6: Accept $1.40 (70% of entry - accept 30% loss)
+        #   DTE 5: Accept $1.00 (50% of entry - accept 50% loss)
+        #   DTE 4: Accept $0.40 (20% of entry - accept 80% loss)
+        #   DTE 3: Accept $0.05 (near worthless - accept total loss)
 
-            limit_price = max(max_acceptable, Decimal("0.10"))  # Min $0.10
+        if is_credit_position:
+            # Credit spread: We sold for entry_price, now paying debit to close
+            if current_dte <= 3:
+                # URGENT: Pay full spread width to guarantee exit
+                limit_price = spread_width
+                logger.info(
+                    f"Position {position.id}: DTE={current_dte} URGENT - "
+                    f"paying full spread width ${spread_width} to guarantee exit"
+                )
+            elif current_dte == 4:
+                # Accept 90% of max loss
+                limit_price = entry_price + max_loss_per_spread * Decimal("0.90")
+            elif current_dte == 5:
+                # Accept 80% of max loss
+                limit_price = entry_price + max_loss_per_spread * Decimal("0.80")
+            elif current_dte == 6:
+                # Accept 70% of max loss
+                limit_price = entry_price + max_loss_per_spread * Decimal("0.70")
+            else:  # DTE 7+
+                # Breakeven - pay back what we received
+                limit_price = entry_price
+
+            limit_price = max(limit_price, Decimal("0.10"))  # Min $0.10
 
         else:
-            # Debit spread: We paid entry_price, now selling to close
-            # Progressive escalation: accept less as DTE decreases
-            # Example: Paid $2.00 on $3 spread → max value $3.00
-            #   DTE 7: Accept $0.90 (30% of $3.00)
-            #   DTE 6: Accept $0.60 (20% of $3.00)
-            #   DTE 5: Accept $0.30 (10% of $3.00)
-            #   DTE 4: Accept $0.15 (5% of $3.00)
-            if current_dte == 4:
-                # VERY AGGRESSIVE: accept only 5% of max value
-                min_acceptable = max_value_per_spread * Decimal("0.05")
-            elif current_dte == 5:
-                # AGGRESSIVE: accept 10% of max value
-                min_acceptable = max_value_per_spread * Decimal("0.10")
-            elif current_dte == 6:
-                # MODERATE: accept 20% of max value
-                min_acceptable = max_value_per_spread * Decimal("0.20")
-            else:  # DTE 7+
-                # STARTING POINT: accept 30% of max value
-                min_acceptable = max_value_per_spread * Decimal("0.30")
+            # Debit spread: We paid entry_price, now selling to close (receiving credit)
+            # Max loss = entry_price (lose entire debit paid)
+            # Formula: sell_price = entry_price - (% × max_loss)
+            # Example: $3 wide spread, $1.50 debit paid, max_loss = $1.50
+            #   DTE 7: Sell for $1.50 (breakeven)
+            #   DTE 6: Sell for $1.50 - (0.70 × $1.50) = $0.45 (accept 70% of max loss)
+            #   DTE 5: Sell for $1.50 - (0.80 × $1.50) = $0.30 (accept 80% of max loss)
+            #   DTE 4: Sell for $1.50 - (0.90 × $1.50) = $0.15 (accept 90% of max loss)
+            #   DTE ≤3: Sell for $0.00 (accept 100% loss - let expire or close for nothing)
+            max_loss_debit = entry_price  # Max loss is the debit paid
 
-            limit_price = max(min_acceptable, Decimal("0.05"))  # Min $0.05
+            if current_dte <= 3:
+                # URGENT: Accept total loss to guarantee exit
+                limit_price = Decimal("0.00")
+                logger.info(
+                    f"Position {position.id}: DTE={current_dte} URGENT - "
+                    f"accepting $0 to guarantee exit (total loss)"
+                )
+            elif current_dte == 4:
+                # Accept 90% of max loss
+                limit_price = entry_price - max_loss_debit * Decimal("0.90")
+            elif current_dte == 5:
+                # Accept 80% of max loss
+                limit_price = entry_price - max_loss_debit * Decimal("0.80")
+            elif current_dte == 6:
+                # Accept 70% of max loss
+                limit_price = entry_price - max_loss_debit * Decimal("0.70")
+            else:  # DTE 7+
+                # Breakeven - get back what we paid
+                limit_price = entry_price
+
+            limit_price = max(limit_price, Decimal("0.00"))  # Can go to $0 for debit spreads
 
         # VALIDATION: Ensure closing price is higher than cancelled profit targets
         # This prevents us from closing at a price lower than what we were targeting
         if cancelled_targets and is_credit_position:
             max_target_price = Decimal("0")
-            for spread_type, target_info in cancelled_targets.items():
+            for _spread_type, target_info in cancelled_targets.items():
                 target_price = Decimal(str(target_info.get("original_target_price", 0)))
                 max_target_price = max(max_target_price, target_price)
 
@@ -525,14 +552,14 @@ class DTEManager:
         try:
             tt_account = await Account.a_get(session, account.account_number)
             await tt_account.a_delete_order(session, order_id)
-            logger.info(f"✅ Cancelled profit target order {order_id}")
+            logger.info(f"Cancelled profit target order {order_id}")
             return True
         except TastytradeError as e:
             if "not found" in str(e).lower() or "404" in str(e):
                 # Already filled or cancelled
                 logger.info(f"Order {order_id} not found at broker (already filled/cancelled)")
                 return True
-            logger.error(f"❌ Failed to cancel order {order_id}: {e}")
+            logger.error(f"Failed to cancel order {order_id}: {e}")
             return False
 
     async def _update_profit_target_status(
@@ -541,7 +568,7 @@ class DTEManager:
         """Update profit_target_details with cancelled status"""
         details = position.profit_target_details or {}
 
-        for spread_type, target_info in details.items():
+        for _spread_type, target_info in details.items():
             if target_info.get("order_id") == order_id:
                 target_info["status"] = status
                 target_info["cancelled_at"] = timezone.now().isoformat()
@@ -568,12 +595,11 @@ class DTEManager:
 
             tt_account = await Account.a_get(session, account.account_number)
             order = await tt_account.a_get_order(session, order_id)
-            status = (
+            return (
                 order.status.value.lower()
                 if hasattr(order.status, "value")
                 else str(order.status).lower()
             )
-            return status
         except Exception as e:
             if "not found" in str(e).lower() or "404" in str(e):
                 return "not_found"
@@ -597,7 +623,7 @@ class DTEManager:
                 "error": error_message,
                 "action_required": "Manual intervention required - check position and close manually if needed",
             },
-            level="error",
+            notification_type="error",
         )
 
     async def notify_manual_action(self, position: Position, current_dte: int) -> None:

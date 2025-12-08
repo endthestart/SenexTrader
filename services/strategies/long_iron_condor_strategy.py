@@ -606,7 +606,7 @@ class LongIronCondorStrategy(BaseStrategy):
         """
         # Entry logging
         logger.info(
-            f"🔍 Long Iron Condor generation STARTED for {symbol} "
+            f"Long Iron Condor generation STARTED for {symbol} "
             f"(force_generation={force_generation}, suggestion_mode={suggestion_mode})"
         )
 
@@ -623,20 +623,20 @@ class LongIronCondorStrategy(BaseStrategy):
         # Score conditions
         score, explanation = await self.a_score_market_conditions(report)
         logger.info(
-            f"📊 {self.strategy_name} score for {symbol}: {score:.1f} "
+            f"{self.strategy_name} score for {symbol}: {score:.1f} "
             f"(threshold=35, force_generation={force_generation})"
         )
 
         # Check threshold (allow bypass in force mode)
         if score < 35 and not force_generation:
             logger.info(
-                f"❌ EARLY EXIT: Score too low ({score:.1f}) - not generating {self.strategy_name}"
+                f"EARLY EXIT: Score too low ({score:.1f}) - not generating {self.strategy_name}"
             )
             return None
 
         if force_generation and score < 35:
             logger.warning(
-                f"⚠️ Force generating {self.strategy_name} despite low score ({score:.1f})"
+                f"Force generating {self.strategy_name} despite low score ({score:.1f})"
             )
 
         # Calculate 4 strikes using fixed-width wings
@@ -655,7 +655,7 @@ class LongIronCondorStrategy(BaseStrategy):
 
         # Log calculated strikes
         logger.info(
-            f"🎯 Calculated strikes for {symbol} @ ${current_price}: "
+            f"Calculated strikes for {symbol} @ ${current_price}: "
             f"Long Put={long_put}, Short Put={short_put}, "
             f"Short Call={short_call}, Long Call={long_call} "
             f"(OTM={otm_pct * 100}%, Wing Width={self.WING_WIDTH})"
@@ -686,7 +686,7 @@ class LongIronCondorStrategy(BaseStrategy):
 
         if not result:
             logger.warning(
-                f"❌ FAILURE POINT #1: No expiration with all 4 long iron condor strikes for {symbol}. "
+                f"FAILURE POINT #1: No expiration with all 4 long iron condor strikes for {symbol}. "
                 f"Searched for strikes: LP={long_put}, SP={short_put}, SC={short_call}, LC={long_call} "
                 f"in DTE range {self.MIN_DTE}-{self.MAX_DTE}"
             )
@@ -694,7 +694,7 @@ class LongIronCondorStrategy(BaseStrategy):
 
         expiration, strikes, _validated_chain = result
         logger.info(
-            f"✅ Found expiration {expiration} with Long IC strikes: "
+            f"Found expiration {expiration} with Long IC strikes: "
             f"put {strikes.get('long_put')}/{strikes.get('short_put')}, "
             f"call {strikes.get('short_call')}/{strikes.get('long_call')}"
         )
@@ -704,12 +704,12 @@ class LongIronCondorStrategy(BaseStrategy):
         occ_bundle = await self.options_service.build_occ_bundle(symbol, expiration, strikes)
         if not occ_bundle:
             logger.warning(
-                f"❌ FAILURE POINT #2: Failed to build OCC bundle for user {self.user.id}. "
+                f"FAILURE POINT #2: Failed to build OCC bundle for user {self.user.id}. "
                 f"Symbol={symbol}, Expiration={expiration}, Strikes={strikes}"
             )
             return None
 
-        logger.info("✅ OCC bundle built successfully")
+        logger.info("OCC bundle built successfully")
 
         # Prepare serializable market data
         serializable_report = {
@@ -742,7 +742,7 @@ class LongIronCondorStrategy(BaseStrategy):
         }
 
         logger.info(
-            f"✅ SUCCESS: Long Iron Condor context prepared for {symbol} "
+            f"SUCCESS: Long Iron Condor context prepared for {symbol} "
             f"(user {self.user.id}, expiration {expiration})"
         )
         return context
@@ -773,7 +773,7 @@ class LongIronCondorStrategy(BaseStrategy):
         # Dispatch to stream manager
         await self.a_dispatch_to_stream_manager(context)
         logger.info(
-            f"User {self.user.id}: 🚀 Dispatched {self.strategy_name} request to stream manager"
+            f"User {self.user.id}: Dispatched {self.strategy_name} request to stream manager"
         )
 
     async def a_calculate_suggestion_from_cached_data(self, context: dict):
@@ -891,7 +891,7 @@ class LongIronCondorStrategy(BaseStrategy):
         # Build generation notes if risk warning
         notes = ""
         if risk_warning:
-            notes = f"⚠️ RISK BUDGET EXCEEDED: {risk_warning}"
+            notes = f"RISK BUDGET EXCEEDED: {risk_warning}"
 
         suggestion = await TradingSuggestion.objects.acreate(
             user=self.user,
@@ -926,7 +926,7 @@ class LongIronCondorStrategy(BaseStrategy):
         )
 
         logger.info(
-            f"User {self.user.id}: ✅ Long Iron Condor suggestion - "
+            f"User {self.user.id}: Long Iron Condor suggestion - "
             f"Debit: ${total_debit:.2f}, Max Profit: ${max_profit_total:.2f}"
         )
         return suggestion
