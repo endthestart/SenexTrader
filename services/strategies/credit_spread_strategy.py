@@ -16,7 +16,6 @@ When to Use:
 - Bearish: Bearish/neutral conditions with moderate to high IV
 - Price away from support (bullish) or resistance (bearish)
 
-Epic 29 Phase 2:
 This strategy consolidates ~240 duplicate lines from separate Bull Put/Bear Call classes.
 """
 
@@ -24,8 +23,8 @@ from decimal import Decimal
 
 from services.core.logging import get_logger
 from services.market_data.analysis import MarketConditionReport, RegimeType
-from services.strategies.credit_spread_base import BaseCreditSpreadStrategy, SpreadDirection
-from services.strategies.registry import register_strategy
+from services.strategies.core.types import Direction
+from services.strategies.credit_spread_base import BaseCreditSpreadStrategy
 
 logger = get_logger(__name__)
 
@@ -41,20 +40,20 @@ class CreditSpreadStrategy(BaseCreditSpreadStrategy):
     SUPPORT_BUFFER_PCT = 2.0
     RESISTANCE_BUFFER_PCT = 2.0
 
-    def __init__(self, user, direction: str | SpreadDirection, strategy_name: str):
+    def __init__(self, user, direction: str | Direction, strategy_name: str):
         super().__init__(user)
         if isinstance(direction, str):
             self._direction = (
-                SpreadDirection.BULLISH
+                Direction.BULLISH
                 if direction.lower() == "bullish"
-                else SpreadDirection.BEARISH
+                else Direction.BEARISH
             )
         else:
             self._direction = direction
         self._strategy_name = strategy_name
 
     @property
-    def spread_direction(self) -> SpreadDirection:
+    def spread_direction(self) -> Direction:
         return self._direction
 
     @property
@@ -77,7 +76,7 @@ class CreditSpreadStrategy(BaseCreditSpreadStrategy):
         score_adjustment = 0.0
         reasons = []
 
-        is_bullish = self._direction == SpreadDirection.BULLISH
+        is_bullish = self._direction == Direction.BULLISH
 
         if report.regime_primary == RegimeType.BULL:
             if is_bullish:
@@ -183,7 +182,7 @@ class CreditSpreadStrategy(BaseCreditSpreadStrategy):
         - Bull Put: ~3% OTM (below current price, above support)
         - Bear Call: ~3% OTM (above current price, below resistance)
         """
-        if self._direction == SpreadDirection.BULLISH:
+        if self._direction == Direction.BULLISH:
             return {
                 "spread_type": "bull_put",
                 "otm_pct": 0.03,
@@ -211,7 +210,7 @@ class CreditSpreadStrategy(BaseCreditSpreadStrategy):
 
         Returns dict with TradingSuggestion field names as keys and strike values.
         """
-        if self._direction == SpreadDirection.BULLISH:
+        if self._direction == Direction.BULLISH:
             # Bull Put Spread: uses put strikes
             return {
                 "short_put_strike": strikes["short_put"],
@@ -233,25 +232,25 @@ class CreditSpreadStrategy(BaseCreditSpreadStrategy):
         """
         Validate strike relationship based on direction.
         """
-        if self._direction == SpreadDirection.BULLISH:
+        if self._direction == Direction.BULLISH:
             return short_strike < current_price and long_strike < short_strike
         return short_strike > current_price and long_strike > short_strike
 
     def _extract_pricing_from_data(self, pricing_data):
         """Extract credit values from pricing data based on direction."""
-        if self._direction == SpreadDirection.BULLISH:
+        if self._direction == Direction.BULLISH:
             return (pricing_data.put_credit, pricing_data.put_mid_credit)
         return (pricing_data.call_credit, pricing_data.call_mid_credit)
 
     def _get_occ_bundle_strikes(self, strikes: dict) -> dict:
         """Get strikes for OCC bundle creation based on direction."""
-        if self._direction == SpreadDirection.BULLISH:
+        if self._direction == Direction.BULLISH:
             return {"short_put": strikes["short_put"], "long_put": strikes["long_put"]}
         return {"short_call": strikes["short_call"], "long_call": strikes["long_call"]}
 
     def _get_credit_field_mapping(self, credit: Decimal, mid_credit: Decimal) -> dict:
         """Map credit values to TradingSuggestion fields based on direction."""
-        if self._direction == SpreadDirection.BULLISH:
+        if self._direction == Direction.BULLISH:
             return {
                 "put_spread_credit": credit,
                 "put_spread_mid_credit": mid_credit,
@@ -267,7 +266,7 @@ class CreditSpreadStrategy(BaseCreditSpreadStrategy):
 
     def _get_spread_quantity_fields(self) -> dict:
         """Get quantity fields based on direction."""
-        if self._direction == SpreadDirection.BULLISH:
+        if self._direction == Direction.BULLISH:
             return {
                 "put_spread_quantity": 1,
                 "call_spread_quantity": 0,
@@ -281,7 +280,7 @@ class CreditSpreadStrategy(BaseCreditSpreadStrategy):
         """Build opening legs for credit spread based on direction."""
         from services.orders.utils.order_builder_utils import build_opening_spread_legs
 
-        spread_type = "put_spread" if self._direction == SpreadDirection.BULLISH else "call_spread"
+        spread_type = "put_spread" if self._direction == Direction.BULLISH else "call_spread"
 
         return await build_opening_spread_legs(
             session=context["session"],
@@ -310,11 +309,11 @@ class CreditSpreadStrategy(BaseCreditSpreadStrategy):
             position.user, account.account_number
         )
 
-        option_type = "P" if self._direction == SpreadDirection.BULLISH else "C"
+        option_type = "P" if self._direction == Direction.BULLISH else "C"
         short_strike_key = (
-            "short_put" if self._direction == SpreadDirection.BULLISH else "short_call"
+            "short_put" if self._direction == Direction.BULLISH else "short_call"
         )
-        long_strike_key = "long_put" if self._direction == SpreadDirection.BULLISH else "long_call"
+        long_strike_key = "long_put" if self._direction == Direction.BULLISH else "long_call"
 
         specs = [
             {
@@ -347,23 +346,3 @@ class CreditSpreadStrategy(BaseCreditSpreadStrategy):
                 quantity=quantity,
             ),
         ]
-
-
-@register_strategy("short_put_vertical")
-class ShortPutVerticalStrategy(CreditSpreadStrategy):
-    """Short Put Vertical - registered as 'short_put_vertical'."""
-
-    def __init__(self, user):
-        super().__init__(
-            user, direction=SpreadDirection.BULLISH, strategy_name="short_put_vertical"
-        )
-
-
-@register_strategy("short_call_vertical")
-class ShortCallVerticalStrategy(CreditSpreadStrategy):
-    """Short Call Vertical - registered as 'short_call_vertical'."""
-
-    def __init__(self, user):
-        super().__init__(
-            user, direction=SpreadDirection.BEARISH, strategy_name="short_call_vertical"
-        )

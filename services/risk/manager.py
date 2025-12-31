@@ -258,16 +258,20 @@ class EnhancedRiskManager:
                 )
             except StrategyConfiguration.DoesNotExist:
                 # No broker connected yet - use default spread width calculation
-
-                # Use default spread width based on tradeable capital
-                if tradeable_capital < 25000:
+                # Formula: nearest_odd(sqrt(capital / 1000)), minimum 3
+                # Thresholds: 3→16k, 5→36k, 7→64k, 9→100k, 11→144k
+                if tradeable_capital < 16000:
                     spread_width = 3
-                elif tradeable_capital < 50000:
+                elif tradeable_capital < 36000:
                     spread_width = 5
-                elif tradeable_capital < 75000:
+                elif tradeable_capital < 64000:
                     spread_width = 7
-                else:
+                elif tradeable_capital < 100000:
                     spread_width = 9
+                elif tradeable_capital < 144000:
+                    spread_width = 11
+                else:
+                    spread_width = 13
             else:
                 spread_width = config.get_spread_width(tradeable_capital)
             max_spreads = self.calculate_max_spreads(strategy_power, spread_width)

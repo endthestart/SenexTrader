@@ -66,7 +66,10 @@ class Command(BaseCommand):
                 )
 
                 positions = Position.objects.filter(
-                    user=user, status="open", is_app_managed=True, profit_targets_created=False
+                    user=user,
+                    lifecycle_state__in=["open_full", "open_partial"],
+                    is_app_managed=True,
+                    profit_targets_created=False,
                 )
 
                 if not positions.exists():

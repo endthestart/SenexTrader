@@ -139,16 +139,10 @@ class TradingAccount(models.Model):
     account_number = models.CharField(max_length=50)
     account_nickname = models.CharField(max_length=100, blank=True)
 
-    # TODO: access_token field is unused and can be removed.
-    # We always use the TastyTrade SDK which takes refresh_token and internally
-    # calls /oauth/token to get a fresh access_token (which it renames to session_token).
-    # We never make direct API calls - the SDK handles everything.
-    # The only reason we store access_token is historical; is_configured checks it
-    # but should check refresh_token instead. See: 2025-12-03 security review.
+    # OAuth tokens from TastyTrade. Both are stored for potential future direct API calls.
+    # Currently the SDK uses refresh_token to get fresh session tokens automatically.
     access_token = EncryptedTextField(blank=True)
     refresh_token = EncryptedTextField(blank=True)
-    # NOTE: token_type removed - always "Bearer" in OAuth 2.0
-    # NOTE: scope removed - never used
     token_expires_at = models.DateTimeField(null=True, blank=True)
     metadata = models.JSONField(default=dict, encoder=DjangoJSONEncoder)
 
@@ -168,8 +162,6 @@ class TradingAccount(models.Model):
     )
 
     last_authenticated = models.DateTimeField(null=True, blank=True)
-    # NOTE: token_refresh_count removed - unused telemetry
-    # NOTE: last_token_rotation removed - unused telemetry
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -198,7 +190,7 @@ class TradingAccount(models.Model):
 
     @property
     def is_configured(self) -> bool:
-        return bool(self.account_number and self.access_token)
+        return bool(self.account_number and self.refresh_token)
 
     @property
     def is_automated_trading_enabled(self):

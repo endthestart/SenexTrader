@@ -267,3 +267,14 @@ class TestMarketConditionValidator:
 
         assert quality["is_stale"] is True
         assert quality["last_update"] is None
+
+    def test_check_data_quality_fresh_updated_at(self, validator):
+        """Test data quality check with fresh data using updated_at (streaming format)"""
+        from django.utils import timezone
+
+        fresh_quote = {"bid": 450.0, "updated_at": timezone.now().isoformat()}
+
+        quality = validator._check_data_quality(fresh_quote)
+
+        assert quality["is_stale"] is False
+        assert quality["last_update"] is not None

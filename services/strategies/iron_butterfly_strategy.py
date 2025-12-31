@@ -39,7 +39,6 @@ from typing import TYPE_CHECKING
 from services.core.logging import get_logger
 from services.market_data.analysis import MarketConditionReport
 from services.strategies.base import BaseStrategy
-from services.strategies.registry import register_strategy
 from services.strategies.utils.strike_utils import round_to_even_strike
 
 if TYPE_CHECKING:
@@ -50,7 +49,6 @@ if TYPE_CHECKING:
 logger = get_logger(__name__)
 
 
-@register_strategy("iron_butterfly")
 class IronButterflyStrategy(BaseStrategy):
     """
     Iron Butterfly - Sell ATM straddle + buy OTM wings for extreme range-bound conditions.
@@ -235,7 +233,7 @@ class IronButterflyStrategy(BaseStrategy):
                 f"HV/IV ratio {report.hv_iv_ratio:.2f} > 1.0 - IV cheap, don't sell butterfly"
             )
 
-        # Market direction consideration (Epic 22, Task 024)
+        # Market direction consideration
         # Butterfly has tighter profit zone than iron condor
         if report.macd_signal == "neutral":
             score += 20

@@ -12,7 +12,6 @@ from services.orders.utils.order_builder_utils import build_closing_spread_legs
 from services.positions.risk_calculator import PositionRiskCalculator
 from services.sdk.trading_utils import PriceEffect
 from services.strategies.base import BaseStrategy
-from services.strategies.registry import register_strategy
 from services.strategies.utils.strike_utils import (
     calculate_max_profit_credit_spread,
     round_to_even_strike,
@@ -22,7 +21,6 @@ from trading.models import StrategyConfiguration, TradingSuggestion
 logger = get_logger(__name__)
 
 
-@register_strategy("senex_trident")
 class SenexTridentStrategy(BaseStrategy):
     """
     Senex Trident strategy implementation with streaming data integration.
@@ -123,7 +121,7 @@ class SenexTridentStrategy(BaseStrategy):
             score -= penalty
             reasons.append(f"IV rank {report.iv_rank:.1f}% below minimum ({self.MIN_IV_RANK}%)")
 
-        # ADX trend strength scoring (Epic 05, Task 001)
+        # ADX trend strength scoring
         # Senex Trident prefers range-bound markets (weak trends) like credit spreads
         if report.adx is not None:
             if report.adx > 30:
@@ -139,7 +137,7 @@ class SenexTridentStrategy(BaseStrategy):
             else:
                 reasons.append(f"Moderate trend (ADX {report.adx:.1f}) - acceptable but not ideal")
 
-        # HV/IV ratio scoring (Epic 05, Task 003)
+        # HV/IV ratio scoring
         # Premium selling strategies prefer high IV relative to realized volatility
         if report.hv_iv_ratio < 0.8:
             score += 15
@@ -154,7 +152,7 @@ class SenexTridentStrategy(BaseStrategy):
                 "poor premium collection"
             )
 
-        # Neutral market preference (credit spreads benefit from sideways) - Epic 22, Task 024
+        # Neutral market preference (credit spreads benefit from sideways)
         # Senex Trident has slight bearish tilt (2 put spreads + 1 call spread)
         if report.macd_signal == "neutral":
             score += 15
@@ -200,7 +198,7 @@ class SenexTridentStrategy(BaseStrategy):
                 f"Price at extreme ({report.bollinger_position}) - potential reversal risk"
             )
 
-        # RSI extremes (Epic 22 Enhancement - increased mean reversion risk for neutral strategy)
+        # RSI extremes
         if report.rsi is not None:
             if report.rsi > 70 or report.rsi < 30:
                 score -= 15
@@ -339,7 +337,7 @@ class SenexTridentStrategy(BaseStrategy):
             self.user.id,
             symbol,
             params.get("min_dte", 30),
-            params.get("max_dte", 45),
+            params.get("max_dte", 50),
         )
         from services.market_data.utils.expiration_utils import find_expiration_with_exact_strikes
 
@@ -348,7 +346,7 @@ class SenexTridentStrategy(BaseStrategy):
             symbol,
             strikes,
             min_dte=params.get("min_dte", 30),
-            max_dte=params.get("max_dte", 45),
+            max_dte=params.get("max_dte", 50),
             strict_matching=True,  # Senex Trident requires exact even/odd strikes
         )
         if not result:
@@ -358,7 +356,7 @@ class SenexTridentStrategy(BaseStrategy):
                 symbol,
                 strikes,
                 params.get("min_dte", 30),
-                params.get("max_dte", 45),
+                params.get("max_dte", 50),
             )
             return None
 
@@ -480,7 +478,7 @@ class SenexTridentStrategy(BaseStrategy):
             total_mid_credit, quantity=(2 + call_quantity)  # 2 put spreads + call spread(s)
         )
 
-        # CRITICAL FIX: Honor suggestion_mode flag (Epic 24 Task 006)
+        # CRITICAL FIX: Honor suggestion_mode flag
         if not suggestion_mode:
             # Only check risk budget when EXECUTING (not suggesting)
             can_open, reason = await self.risk_manager.a_can_open_position(
@@ -577,7 +575,7 @@ class SenexTridentStrategy(BaseStrategy):
         today = timezone.now().date()
         target_dte = params.get("target_dte", 45)
         min_dte = params.get("min_dte", 30)
-        max_dte = params.get("max_dte", 45)  # User specified 30-45 day window
+        max_dte = params.get("max_dte", 50)  # User specified 30-50 day window
 
         # Filter for dates within the allowed DTE range
         valid_expirations = []
@@ -974,7 +972,6 @@ class SenexTridentStrategy(BaseStrategy):
         """
         Build 6 opening legs for Senex Trident: 2 put spreads + 1 call spread.
 
-        Epic 22 Task 026: Strategy-owned order building.
 
         Senex Trident structure:
         - 2 contracts of put spread (sell 2 short puts, buy 2 long puts)
@@ -1059,7 +1056,6 @@ class SenexTridentStrategy(BaseStrategy):
         """
         Build 6 closing legs for Senex Trident.
 
-        Epic 22 Task 026: Strategy-owned order building.
         """
         from tastytrade.order import InstrumentType, Leg, OrderAction
 

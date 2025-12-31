@@ -7,7 +7,7 @@ Tests position discovery from unlinked transactions, ensuring:
 3. Transactions are properly linked to positions
 """
 
-from datetime import date, datetime, timedelta
+from datetime import date
 from decimal import Decimal
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -88,45 +88,43 @@ class TestDiscoverUnmanagedPositions:
         with patch(
             "services.positions.position_discovery.sync_to_async",
             side_effect=mock_sync_factory,
-        ) as mock_sync:
+        ) as mock_sync, patch(
+            "services.positions.position_discovery.Position.objects"
+        ) as mock_position_objects:
+            # No existing position
+            mock_position_objects.filter.return_value.afirst = AsyncMock(
+                return_value=None
+            )
 
             with patch(
-                "services.positions.position_discovery.Position.objects"
-            ) as mock_position_objects:
-                # No existing position
-                mock_position_objects.filter.return_value.afirst = AsyncMock(
-                    return_value=None
+                "services.positions.position_discovery."
+                "TastyTradeOrderHistory.objects"
+            ) as mock_order_history:
+                # Mock order lookup
+                mock_order = MagicMock()
+                mock_order.underlying_symbol = "QQQ"
+                mock_order.price_effect = "Credit"
+                mock_order.order_data = {
+                    "legs": [
+                        {"symbol": "QQQ   251219P00616000"},
+                        {"symbol": "QQQ   251219P00613000"},
+                    ]
+                }
+                mock_order_history.filter.return_value.afirst = AsyncMock(
+                    return_value=mock_order
                 )
 
-                with patch(
-                    "services.positions.position_discovery."
-                    "TastyTradeOrderHistory.objects"
-                ) as mock_order_history:
-                    # Mock order lookup
-                    mock_order = MagicMock()
-                    mock_order.underlying_symbol = "QQQ"
-                    mock_order.price_effect = "Credit"
-                    mock_order.order_data = {
-                        "legs": [
-                            {"symbol": "QQQ   251219P00616000"},
-                            {"symbol": "QQQ   251219P00613000"},
-                        ]
-                    }
-                    mock_order_history.filter.return_value.afirst = AsyncMock(
-                        return_value=mock_order
-                    )
+                # Mock position creation
+                mock_created_position = MagicMock()
+                mock_created_position.id = 100
+                mock_position_objects.acreate = AsyncMock(
+                    return_value=mock_created_position
+                )
 
-                    # Mock position creation
-                    mock_created_position = MagicMock()
-                    mock_created_position.id = 100
-                    mock_position_objects.acreate = AsyncMock(
-                        return_value=mock_created_position
-                    )
-
-                    result = await discovery_service.discover_unmanaged_positions(
-                        user=mock_user,
-                        account=mock_account,
-                    )
+                result = await discovery_service.discover_unmanaged_positions(
+                    user=mock_user,
+                    account=mock_account,
+                )
 
         # Verify position was created
         assert result["positions_created"] >= 0  # May be 0 if mocking incomplete
@@ -224,22 +222,22 @@ class TestDetectStrategyType:
         assert result == "senex_trident"
 
     def test_put_spread_2_legs(self, discovery_service):
-        """Test 2 put legs detected as bull_put_spread."""
+        """Test 2 put legs detected as short_put_vertical."""
         legs = [
             {"instrument_type": "Put"},
             {"instrument_type": "Put"},
         ]
         result = discovery_service._detect_strategy_type(legs)
-        assert result == "bull_put_spread"
+        assert result == "short_put_vertical"
 
     def test_call_spread_2_legs(self, discovery_service):
-        """Test 2 call legs detected as bear_call_spread."""
+        """Test 2 call legs detected as short_call_vertical."""
         legs = [
             {"instrument_type": "Call"},
             {"instrument_type": "Call"},
         ]
         result = discovery_service._detect_strategy_type(legs)
-        assert result == "bear_call_spread"
+        assert result == "short_call_vertical"
 
     def test_unknown_leg_count(self, discovery_service):
         """Test unknown leg count returns None."""

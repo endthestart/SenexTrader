@@ -12,8 +12,8 @@ all:
     production:
       hosts:
         production-server:
-          ansible_host: senextrader.com  # Your production server hostname or IP
-          ansible_user: root              # SSH user (typically root)
+          ansible_host: your-domain.example.com  # Your production server hostname or IP
+          ansible_user: root                      # SSH user (typically root)
           ansible_python_interpreter: /usr/bin/python3
 
       vars:
@@ -26,10 +26,10 @@ all:
         image_tag: v1.0.0                      # Version tag (update for each deployment)
 
         # Domain Configuration
-        domain_name: senextrader.com
-        allowed_hosts: "senextrader.com,www.senextrader.com"
-        app_base_url: https://senextrader.com
-        ws_allowed_origins: "https://senextrader.com,https://www.senextrader.com"
+        domain_name: your-domain.example.com
+        allowed_hosts: "your-domain.example.com,www.your-domain.example.com"
+        app_base_url: https://your-domain.example.com
+        ws_allowed_origins: "https://your-domain.example.com,https://www.your-domain.example.com"
 
         # Application User & Directory
         app_user: senex                     # User to run containers (use 'root' for rootful Podman)

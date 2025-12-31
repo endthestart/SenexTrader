@@ -487,16 +487,8 @@ class PositionClosureService:
         """
         Calculate P&L from transactions.
 
-        Formula:
-            opening_value = sum(
-                +tx.net_value if tx.action == "Sell to Open" else -tx.net_value
-                for tx in opening_txns
-            )
-            closing_value = sum(
-                -tx.net_value if tx.action == "Buy to Close" else +tx.net_value
-                for tx in closing_txns
-            )
-            pnl = opening_value + closing_value
+        Delegates to PnLCalculator.calculate_from_transactions for
+        consistent P&L calculation across all closure pathways.
 
         Args:
             opening_txns: Opening transactions
@@ -505,31 +497,9 @@ class PositionClosureService:
         Returns:
             Realized P&L
         """
-        # Calculate opening value (credits positive, debits negative)
-        opening_value = Decimal("0")
-        for tx in opening_txns:
-            if tx.net_value is None:
-                continue
-            if tx.action == "Sell to Open":
-                opening_value += tx.net_value  # Credit received
-            elif tx.action == "Buy to Open":
-                opening_value -= abs(tx.net_value)  # Debit paid
+        from services.positions.lifecycle.pnl_calculator import PnLCalculator
 
-        # Calculate closing value (opposite signs)
-        closing_value = Decimal("0")
-        for tx in closing_txns:
-            if tx.net_value is None:
-                continue
-            if tx.action == "Buy to Close":
-                closing_value -= abs(tx.net_value)  # Debit paid to close
-            elif tx.action == "Sell to Close":
-                closing_value += tx.net_value  # Credit received to close
-            else:
-                # Assignment/exercise - use net_value as-is
-                # Assignments typically show as negative (you paid)
-                closing_value += tx.net_value
-
-        return opening_value + closing_value
+        return PnLCalculator.calculate_from_transactions(opening_txns, closing_txns)
 
     async def _handle_assignment(
         self,

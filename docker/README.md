@@ -58,8 +58,8 @@ make build TAG=v1.0.0
 
 ```json
 {
-  "registry": "gitea.andermic.net",
-  "owner": "endthestart",
+  "registry": "your-registry.example.com",
+  "owner": "your-username",
   "image_name": "senex-trader",
   "project_dir": null,
   "default_no_push": false
@@ -165,7 +165,7 @@ docker-compose -f docker/docker-compose.dev.yml down
 podman run -p 8000:8000 \
   -e SECRET_KEY=test \
   -e DB_HOST=localhost \
-  gitea.andermic.net/endthestart/senex-trader:test
+  your-registry.example.com/your-username/senex-trader:test
 
 # Check health
 curl http://localhost:8000/health/
@@ -183,13 +183,13 @@ curl http://localhost:8000/health/
 # Prompts for credentials if not authenticated
 
 # Manual login
-podman login gitea.andermic.net
+podman login your-registry.example.com
 # Enter username and token
 ```
 
 ### Creating Access Token
 
-1. Navigate to https://gitea.andermic.net/user/settings/applications
+1. Navigate to your container registry's settings/applications page
 2. Generate new token with `write:packages` permission
 3. Save token securely (needed for registry push)
 
@@ -255,7 +255,7 @@ podman system prune
 
 ```bash
 # Check authentication
-podman login gitea.andermic.net
+podman login your-registry.example.com
 
 # Verify credentials
 cat ~/.docker/auth.json

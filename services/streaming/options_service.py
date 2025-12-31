@@ -73,7 +73,6 @@ class StreamingOptionsDataService:
         """
         Read Greeks data for an option symbol.
 
-        Epic 28 Task 008: Greeks reading for strategy risk analysis.
 
         Args:
             occ_symbol: OCC option symbol (e.g., "SPY  250117C00450000")
@@ -158,7 +157,6 @@ class StreamingOptionsDataService:
             logger.warning(f"User {self.user.id}: Strike validation failed for {strikes}")
             return None
 
-        # Epic 28 Task 010: Use chain-provided OCC symbols (no fallback)
         symbols = {}
         strikes_list = chain.get("strikes", [])
 

@@ -1,7 +1,6 @@
 """
 Management command to set up initial strategy configurations for users.
 
-Epic 22 Update: Now creates configurations for ALL registered strategies,
 not just Senex Trident. Ensures all strategies can generate suggestions.
 """
 
@@ -9,7 +8,7 @@ from django.contrib.auth import get_user_model
 from django.core.management.base import BaseCommand
 
 from services.management.utils import add_user_arguments, get_user_from_options
-from services.strategies.registry import list_registered_strategies
+from services.strategies.factory import list_strategies
 from trading.models import SENEX_TRIDENT_DEFAULTS, StrategyConfiguration
 
 User = get_user_model()
@@ -40,7 +39,7 @@ class Command(BaseCommand):
         parser.add_argument(
             "--strategy",
             type=str,
-            help="Only set up this specific strategy (e.g., bull_put_spread)",
+            help="Only set up this specific strategy (e.g., short_put_vertical)",
         )
 
     def handle(self, *args, **options):
@@ -60,7 +59,7 @@ class Command(BaseCommand):
             strategies = [specific_strategy]
             self.stdout.write(f"Setting up configuration for strategy: {specific_strategy}")
         else:
-            strategies = list_registered_strategies()
+            strategies = list_strategies()
             self.stdout.write(f"Setting up configurations for {len(strategies)} strategies")
 
         # Get users to process

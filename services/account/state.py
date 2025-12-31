@@ -14,7 +14,7 @@ logger = get_logger(__name__)
 
 
 class AccountStateService:
-    """Simple account state service with fallback strategy for Phase 3"""
+    """Account state service with caching and fallback strategy."""
 
     def __init__(self):
         # Configurable TTL and thresholds

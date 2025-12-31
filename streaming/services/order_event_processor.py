@@ -114,6 +114,14 @@ class OrderEventProcessor:
                                 f"from order.price or leg fills"
                             )
 
+                    # Look up commission from transactions (may be null if not yet synced)
+                    commission = await self._get_commission_for_order(str(order.id))
+                    if commission:
+                        trade.commission = commission
+                        logger.info(
+                            f"User {self.user_id}: Trade {trade.id} commission=${commission}"
+                        )
+
                     if trade.trade_type == "open":
                         position.lifecycle_state = "open_full"
                         await position.asave(update_fields=["lifecycle_state"])
@@ -203,10 +211,10 @@ class OrderEventProcessor:
         """
         Handle profit target fill by updating position state and recording P&L.
 
-        IMPORTANT: Does NOT cancel other profit targets. Per Phase 3 design,
-        all profit targets stay active until either:
+        IMPORTANT: Does NOT cancel other profit targets. All profit targets stay
+        active until either:
         - They individually fill (handled by this method), OR
-        - DTE threshold triggers full position closure (handled by DTEManager in Phase 2)
+        - DTE threshold triggers full position closure (handled by DTEManager)
 
         This allows multiple profit targets to fill independently at different times,
         maximizing realized P&L opportunities. For a Senex Trident with 3 targets:
@@ -291,6 +299,8 @@ class OrderEventProcessor:
         Returns:
             dict: Update data containing realized_pnl, profit_target_details, new_lifecycle_state, metadata
         """
+        from decimal import Decimal
+
         from services.positions.lifecycle.profit_calculator import ProfitCalculator
 
         filled_quantity = fill_data["filled_quantity"]
@@ -305,26 +315,58 @@ class OrderEventProcessor:
 
         original_quantity = position.metadata["original_quantity"]
 
-        # Calculate P&L BEFORE updating position (need current state)
-        calculator = ProfitCalculator()
-        realized_pnl = calculator.calculate_profit_target_pnl(position, fill_price, filled_quantity)
-
         # Prepare updated metadata
         updated_metadata = position.metadata.copy()
 
-        # Prepare updated profit target details
+        # Find the matching profit target and extract spread-specific original_credit
+        # This is critical for multi-spread positions like Senex Trident
         updated_profit_target_details = position.profit_target_details.copy()
+        original_credit = None
+        matched_pt_key = None
+
         for pt_key, pt_details in updated_profit_target_details.items():
             if pt_details.get("order_id") == order.id:
-                pt_details["status"] = "filled"
-                pt_details["filled_at"] = filled_at.isoformat()
-                pt_details["fill_price"] = float(fill_price) if fill_price else None
-                pt_details["realized_pnl"] = float(realized_pnl)
-                logger.info(
-                    f"User {self.user_id}: Marking profit target {pt_key} as filled "
-                    f"(P&L: ${realized_pnl})"
-                )
+                matched_pt_key = pt_key
+                # Extract spread-specific original_credit for accurate P&L calculation
+                if "original_credit" in pt_details and pt_details["original_credit"] is not None:
+                    original_credit = Decimal(str(pt_details["original_credit"]))
+                    logger.debug(
+                        f"User {self.user_id}: Using spread-specific original_credit "
+                        f"${original_credit} for {pt_key}"
+                    )
                 break
+
+        # Calculate P&L using spread-specific original_credit if available
+        # This ensures multi-spread positions (Senex Trident) have accurate per-spread P&L
+        calculator = ProfitCalculator()
+        realized_pnl = calculator.calculate_profit_target_pnl(
+            position, fill_price, filled_quantity, opening_price=original_credit
+        )
+
+        # Update the matched profit target details
+        if matched_pt_key:
+            pt_details = updated_profit_target_details[matched_pt_key]
+            pt_details["status"] = "filled"
+            pt_details["filled_at"] = filled_at.isoformat()
+            pt_details["fill_price"] = float(fill_price) if fill_price else None
+            pt_details["realized_pnl"] = float(realized_pnl)
+
+            # Look up submission timestamp from order history for time-to-fill analytics
+            try:
+                from trading.models import TastyTradeOrderHistory
+
+                order_history = await TastyTradeOrderHistory.objects.filter(
+                    broker_order_id=str(order.id)
+                ).afirst()
+                if order_history and order_history.received_at:
+                    pt_details["submitted_at"] = order_history.received_at.isoformat()
+            except Exception as e:
+                logger.debug(f"User {self.user_id}: Could not look up submitted_at: {e}")
+
+            logger.info(
+                f"User {self.user_id}: Marking profit target {matched_pt_key} as filled "
+                f"(P&L: ${realized_pnl}, original_credit: ${original_credit or position.avg_price})"
+            )
 
         # Calculate new lifecycle state based on remaining quantity
         new_quantity = position.quantity - filled_quantity
@@ -391,6 +433,7 @@ class OrderEventProcessor:
         )
 
         # Create a new Trade record for the profit target fill with actual fill data
+        # NOTE: realized_pnl is tracked on Position.total_realized_pnl, not on Trade
         new_trade = await Trade.objects.acreate(
             user=trade.user,
             position=position,
@@ -404,11 +447,11 @@ class OrderEventProcessor:
             filled_at=filled_at,
             fill_price=fill_price,
             lifecycle_event="profit_target_fill",
-            realized_pnl=realized_pnl,
             lifecycle_snapshot={
                 "fill_price": float(fill_price) if fill_price else None,
                 "filled_quantity": filled_quantity,
                 "remaining_quantity": position.quantity,
+                "realized_pnl": float(realized_pnl) if realized_pnl else None,
             },
         )
         logger.info(
@@ -480,32 +523,121 @@ class OrderEventProcessor:
         Create profit targets when opening order fills using strategy-specific logic.
 
         This method:
-        1. Checks if auto profit targets are enabled (except for Senex Trident)
-        2. Identifies the strategy type from the position
-        3. Gets strategy-specific profit target specifications
-        4. Executes each profit target order
-        5. Updates position and trade with profit target details
+        1. Acquires a database lock on the trade to prevent race conditions
+        2. Re-checks if profit targets already exist or are in progress
+        3. Marks position as "creating" (in metadata) while submitting orders
+        4. Submits profit target orders to the broker
+        5. Updates position with actual order IDs on success
+        6. Cleans up "creating" flag on completion (success or failure)
+
+        RACE CONDITION PREVENTION:
+        Multiple processes (web container, celery worker) may receive the same
+        order fill event via WebSocket and call this method simultaneously.
+        We use select_for_update() and a metadata flag to ensure only one
+        process can create profit targets for a given trade.
+
+        FAILURE RECOVERY:
+        If order submission fails partway through, profit_targets_created stays False
+        and the "creating" metadata flag is cleared after a timeout. This allows
+        the reconciliation process to retry on the next run.
 
         Args:
             trade: Trade object for the filled opening order
         """
         try:
+            from datetime import timedelta
+
+            from django.db import transaction
+            from django.utils import timezone
+
             from services.execution.order_service import OrderExecutionService
-            from services.strategies.credit_spread_strategy import (
-                ShortCallVerticalStrategy,
-                ShortPutVerticalStrategy,
-            )
-            from services.strategies.debit_spread_strategy import (
-                LongCallVerticalStrategy,
-                LongPutVerticalStrategy,
-            )
-            from services.strategies.senex_trident_strategy import SenexTridentStrategy
+            from services.strategies.factory import get_strategy, is_strategy_registered
             from trading.models import StrategyConfiguration
 
             user = await trade.user_async
 
-            # CRITICAL: Only create profit targets for app-managed positions
-            position = await trade.position_async
+            # CRITICAL: Acquire lock, check state, and mark as in-progress atomically
+            # This prevents race conditions where multiple processes try to create
+            # profit targets for the same trade simultaneously
+            @sync_to_async
+            def acquire_lock_and_mark_in_progress():
+                """
+                Acquire DB lock on trade/position, check if profit targets exist or
+                are being created, and mark as in-progress if OK to proceed.
+
+                Uses metadata["profit_targets_creating"] with a timestamp to track
+                in-progress state. This flag is cleared on success OR after a timeout
+                (to handle crashes).
+
+                Returns (trade, position, skip_reason) - skip_reason is None if OK to proceed.
+                """
+                with transaction.atomic():
+                    # Lock the trade row - other processes will wait here
+                    locked_trade = Trade.objects.select_for_update(nowait=False).get(
+                        pk=trade.pk
+                    )
+                    # Re-check after acquiring lock
+                    if locked_trade.child_order_ids:
+                        return None, None, "already_has_child_orders"
+
+                    # Also lock position
+                    locked_position = Position.objects.select_for_update(nowait=False).get(
+                        pk=locked_trade.position_id
+                    )
+                    if locked_position.profit_targets_created:
+                        return None, None, "profit_targets_already_created"
+
+                    # Check if another process is already creating profit targets
+                    metadata = locked_position.metadata or {}
+                    creating_info = metadata.get("profit_targets_creating")
+                    if creating_info:
+                        # Check if the creating process has timed out (> 5 minutes)
+                        creating_at = creating_info.get("started_at")
+                        if creating_at:
+                            try:
+                                from datetime import datetime
+
+                                started = datetime.fromisoformat(creating_at)
+                                if timezone.is_naive(started):
+                                    started = timezone.make_aware(started)
+                                elapsed = timezone.now() - started
+                                if elapsed < timedelta(minutes=5):
+                                    return None, None, f"creation_in_progress_by_{creating_info.get('process_id', 'unknown')}"
+                                logger.warning(
+                                    f"Position {locked_position.id}: Previous profit target creation "
+                                    f"timed out (started {elapsed} ago), taking over"
+                                )
+                            except (ValueError, TypeError) as e:
+                                logger.warning(f"Error parsing creating_at timestamp: {e}")
+
+                    # Mark as in-progress with our process ID and timestamp
+                    import os
+                    import uuid
+
+                    process_id = f"{os.getpid()}_{uuid.uuid4().hex[:8]}"
+                    if not locked_position.metadata:
+                        locked_position.metadata = {}
+                    locked_position.metadata["profit_targets_creating"] = {
+                        "started_at": timezone.now().isoformat(),
+                        "process_id": process_id,
+                        "trade_id": locked_trade.id,
+                    }
+                    locked_position.save(update_fields=["metadata"])
+
+                    return locked_trade, locked_position, None
+
+            locked_trade, locked_position, skip_reason = await acquire_lock_and_mark_in_progress()
+
+            if skip_reason:
+                logger.info(
+                    f"User {self.user_id}: Skipping profit target creation for trade {trade.id} "
+                    f"- {skip_reason} (likely handled by another process)"
+                )
+                return
+
+            # Use locked objects for the rest of the method
+            trade = locked_trade
+            position = locked_position
             strategy_type = position.strategy_type
 
             if strategy_type == "external":
@@ -513,6 +645,8 @@ class OrderEventProcessor:
                     f"User {self.user_id}: Skipping profit targets for "
                     f"external position {position.id}"
                 )
+                # Clear the creating flag
+                await self._clear_creating_flag(position)
                 return
 
             # Get trading account and check preferences
@@ -538,24 +672,15 @@ class OrderEventProcessor:
                     )
                     return
 
-            # Strategy factory map with proper strategy classes
-            strategy_map = {
-                "senex_trident": SenexTridentStrategy,
-                "short_put_vertical": ShortPutVerticalStrategy,
-                "short_call_vertical": ShortCallVerticalStrategy,
-                "long_call_vertical": LongCallVerticalStrategy,
-                "long_put_vertical": LongPutVerticalStrategy,
-            }
-
-            strategy_factory = strategy_map.get(strategy_type)
-            if not strategy_factory:
+            # Use the unified strategy factory
+            if not is_strategy_registered(strategy_type):
                 logger.warning(
                     f"User {self.user_id}: Unknown strategy type {strategy_type} "
                     f"for position {position.id}"
                 )
                 return
 
-            strategy = strategy_factory(user)
+            strategy = get_strategy(strategy_type, user)
 
             # Get user-configured profit target percentage for spread strategies
             target_pct = None
@@ -572,15 +697,14 @@ class OrderEventProcessor:
                 profit_target_specs = await strategy.a_get_profit_target_specifications(
                     position, trade
                 )
+            elif target_pct is not None:
+                profit_target_specs = await strategy.a_get_profit_target_specifications(
+                    position, target_pct=target_pct
+                )
             else:
-                if target_pct is not None:
-                    profit_target_specs = await strategy.a_get_profit_target_specifications(
-                        position, target_pct=target_pct
-                    )
-                else:
-                    profit_target_specs = await strategy.a_get_profit_target_specifications(
-                        position
-                    )
+                profit_target_specs = await strategy.a_get_profit_target_specifications(
+                    position
+                )
 
             if not profit_target_specs:
                 logger.warning(
@@ -610,28 +734,34 @@ class OrderEventProcessor:
             # Test mode is automatically detected from the account via _get_test_mode()
             service = OrderExecutionService(user)
             order_ids = []
+            all_succeeded = True
 
             for spec in profit_target_specs:
-                order_id = await service.execute_order_spec(spec.order_spec)
-                if order_id:
-                    order_ids.append(order_id)
-                    logger.info(
-                        f"User {self.user_id}: Created {spec.spread_type} "
-                        f"profit target ({spec.profit_percentage}%): {order_id}"
-                    )
-                else:
+                try:
+                    order_id = await service.execute_order_spec(spec.order_spec)
+                    if order_id:
+                        order_ids.append(order_id)
+                        logger.info(
+                            f"User {self.user_id}: Created {spec.spread_type} "
+                            f"profit target ({spec.profit_percentage}%): {order_id}"
+                        )
+                    else:
+                        logger.error(
+                            f"User {self.user_id}: Failed to create {spec.spread_type} profit target"
+                        )
+                        all_succeeded = False
+                except Exception as order_error:
                     logger.error(
-                        f"User {self.user_id}: Failed to create {spec.spread_type} profit target"
+                        f"User {self.user_id}: Exception creating {spec.spread_type} profit target: {order_error}"
                     )
+                    all_succeeded = False
 
-            # Update trade with profit target order IDs
-            # Use update_fields to prevent race conditions with concurrent sync processes
+            # Update trade with profit target order IDs (even partial)
             trade.child_order_ids = order_ids
             await trade.asave(update_fields=["child_order_ids"])
 
             # Update position with profit target details
-            # Use update_fields to prevent concurrent sync from overwriting these fields
-            position.profit_targets_created = True
+            # Build details for ALL specs, using actual order_ids where we have them
             position.profit_target_details = {
                 spec.spread_type: {
                     "order_id": order_ids[i] if i < len(order_ids) else None,
@@ -641,11 +771,24 @@ class OrderEventProcessor:
                 }
                 for i, spec in enumerate(profit_target_specs)
             }
-            await position.asave(update_fields=["profit_targets_created", "profit_target_details"])
 
-            logger.info(
-                f"User {self.user_id}: Created {len(order_ids)} profit targets: {order_ids}"
-            )
+            # CRITICAL: Only set profit_targets_created=True if ALL orders succeeded
+            # If any failed, leave it False so reconciliation can retry
+            if all_succeeded and len(order_ids) == len(profit_target_specs):
+                position.profit_targets_created = True
+                await position.asave(update_fields=["profit_targets_created", "profit_target_details"])
+                logger.info(
+                    f"User {self.user_id}: Successfully created all {len(order_ids)} profit targets: {order_ids}"
+                )
+            else:
+                await position.asave(update_fields=["profit_target_details"])
+                logger.warning(
+                    f"User {self.user_id}: Partial profit target creation - {len(order_ids)}/{len(profit_target_specs)} "
+                    f"succeeded. profit_targets_created=False, reconciliation will retry missing ones."
+                )
+
+            # Clear the creating flag now that we're done
+            await self._clear_creating_flag(position)
 
             # Broadcast is non-critical - don't let failures affect the save
             try:
@@ -665,8 +808,36 @@ class OrderEventProcessor:
 
         except Exception as e:
             logger.error(
-                f"User {self.user_id}: Failed to create profit targets for trade {trade.id}: {e}"
+                f"User {self.user_id}: Failed to create profit targets for trade {trade.id}: {e}",
+                exc_info=True,
             )
+            # Try to clear the creating flag so reconciliation can retry
+            try:
+                if "position" in locals() and position:
+                    await self._clear_creating_flag(position)
+            except Exception as cleanup_error:
+                logger.warning(
+                    f"User {self.user_id}: Failed to clear creating flag after error: {cleanup_error}"
+                )
+
+    async def _clear_creating_flag(self, position) -> None:
+        """Clear the profit_targets_creating metadata flag."""
+        from django.db import transaction
+
+        @sync_to_async
+        def _clear():
+            with transaction.atomic():
+                from trading.models import Position as PositionModel
+
+                fresh = PositionModel.objects.select_for_update().get(pk=position.id)
+                if fresh.metadata and "profit_targets_creating" in fresh.metadata:
+                    del fresh.metadata["profit_targets_creating"]
+                    fresh.save(update_fields=["metadata"])
+
+        try:
+            await _clear()
+        except Exception as e:
+            logger.warning(f"Position {position.id}: Failed to clear creating flag: {e}")
 
     def _calculate_fill_price_from_legs(self, order: PlacedOrder) -> Decimal | None:
         """
@@ -841,11 +1012,10 @@ class OrderEventProcessor:
                 "metadata",
             ]
 
-            # Update is_open status
+            # Update closed_at when position is fully closed
             if position.quantity <= 0:
-                position.is_open = False
                 position.closed_at = datetime.now(UTC)
-                fields_to_save.extend(["is_open", "closed_at"])
+                fields_to_save.append("closed_at")
 
             position.save(update_fields=fields_to_save)
             logger.info(
@@ -869,3 +1039,43 @@ class OrderEventProcessor:
             return account.trading_preferences
         except TradingAccountPreferences.DoesNotExist:
             return None
+
+    @sync_to_async
+    def _get_commission_for_order(self, broker_order_id: str) -> "Decimal | None":
+        """
+        Get total commission (including fees) for an order from transactions.
+
+        Looks up TastyTradeTransaction records linked to this order_id and sums:
+        - commission
+        - clearing_fees
+        - regulatory_fees
+
+        Args:
+            broker_order_id: The TastyTrade order ID
+
+        Returns:
+            Total commission as Decimal, or None if no transactions found
+        """
+        from decimal import Decimal
+
+        from django.db.models import Sum
+
+        from trading.models import TastyTradeTransaction
+
+        try:
+            order_id_int = int(broker_order_id)
+        except (ValueError, TypeError):
+            return None
+
+        result = TastyTradeTransaction.objects.filter(order_id=order_id_int).aggregate(
+            total_commission=Sum("commission"),
+            total_clearing=Sum("clearing_fees"),
+            total_regulatory=Sum("regulatory_fees"),
+        )
+
+        commission = result.get("total_commission") or Decimal("0")
+        clearing = result.get("total_clearing") or Decimal("0")
+        regulatory = result.get("total_regulatory") or Decimal("0")
+
+        total = commission + clearing + regulatory
+        return total if total != Decimal("0") else None

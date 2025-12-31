@@ -52,10 +52,10 @@ def load_developer_config(project_dir: Path | None = None) -> dict:
         print(f"   Expected location: {config_path}")
         print()
         print("Setup instructions:")
-        print(f"   1. Copy the example config:")
+        print("   1. Copy the example config:")
         print(f"      cp {project_dir}/.senextrader.json.example {config_path}")
         print(f"   2. Edit {config_path} with your settings")
-        print(f"   3. Run build.py again")
+        print("   3. Run build.py again")
         print()
         sys.exit(1)
 
@@ -74,8 +74,8 @@ class PodmanBuilder:
 
     def __init__(
         self,
-        registry: str = "gitea.andermic.net",
-        owner: str = "endthestart",
+        registry: str = "",
+        owner: str = "",
         image_name: str = "senex-trader",
         project_dir: str | None = None,
     ):

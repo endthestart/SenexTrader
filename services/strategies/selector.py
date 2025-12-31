@@ -24,7 +24,7 @@ class StrategySelector:
     """
     Intelligent strategy selection orchestrator for ALL options strategies.
 
-    Dynamically loads all registered strategies from StrategyRegistry (Epic 22).
+    Dynamically loads all registered strategies from StrategyRegistry.
     Handles auto-selection (score all strategies, pick best) and forced-mode
     (generate specific strategy with confidence warning).
 
@@ -35,9 +35,6 @@ class StrategySelector:
     Note: Senex Trident is handled separately as a trading algorithm.
     See SenexTridentStrategy and trading/views.py (senex_trident_view).
 
-    Epic 22: Uses registry pattern to automatically include all registered
-    strategies without code modification. New strategies auto-register via
-    @register_strategy decorator.
     """
 
     # Minimum score threshold for auto mode (credit spreads)
@@ -47,7 +44,7 @@ class StrategySelector:
         """
         Initialize strategy selector with all registered strategies.
 
-        Dynamically loads strategies from StrategyRegistry (Epic 22).
+        Dynamically loads strategies from StrategyRegistry.
         Senex Trident is excluded (handled separately as an algorithm).
 
         Args:
@@ -58,13 +55,13 @@ class StrategySelector:
         self.analyzer = MarketAnalyzer(user)
         self._streamer = streamer
 
-        # Dynamic strategy loading from registry (Epic 22)
+        # Dynamic strategy loading from factory
         # All strategies except Senex Trident (handled separately)
-        from services.strategies.registry import get_strategy, list_registered_strategies
+        from services.strategies.factory import get_strategy, list_strategies
 
         self.strategies = {
             name: get_strategy(name, user)
-            for name in list_registered_strategies()
+            for name in list_strategies()
             if name != "senex_trident"  # Senex has dedicated page
         }
 
@@ -186,7 +183,8 @@ class StrategySelector:
             "iron_butterfly",
             # Advanced Multi-Leg (complex, special requirements)
             "long_call_ratio_backspread",
-            "long_call_calendar",
+            "call_calendar",
+            "put_calendar",
             "covered_call",
         ]
 
@@ -636,7 +634,8 @@ class StrategySelector:
             "iron_butterfly",
             # Advanced Multi-Leg (complex, special requirements)
             "long_call_ratio_backspread",
-            "long_call_calendar",
+            "call_calendar",
+            "put_calendar",
             "covered_call",
         ]
         sorted_strategies = sorted(

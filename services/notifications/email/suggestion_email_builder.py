@@ -12,7 +12,7 @@ class SuggestionEmailBuilder:
 
     Provides methods to build formatted text emails for:
     - Single-symbol suggestions (original flow)
-    - Multi-symbol watchlist suggestions (Epic 22)
+    - Multi-symbol watchlist suggestions
     - No-trade-today notifications
 
     Example:
@@ -59,10 +59,10 @@ class SuggestionEmailBuilder:
         Convert strategy_id to display name.
 
         Args:
-            strategy_id: Internal strategy ID (e.g., "bull_put_spread")
+            strategy_id: Internal strategy ID (e.g., "short_put_vertical")
 
         Returns:
-            Display name (e.g., "Bull Put Spread")
+            Display name (e.g., "Short Put Vertical")
         """
         return strategy_id.replace("_", " ").title()
 

@@ -18,7 +18,6 @@ When to Use:
 - HV/IV ratio > 1.0 (options fairly priced)
 - Strong ADX for directional momentum
 
-Epic 29 Phase 3:
 This strategy consolidates duplicate lines from separate Bull Call/Bear Put classes.
 """
 
@@ -26,8 +25,8 @@ from decimal import Decimal
 
 from services.core.logging import get_logger
 from services.market_data.analysis import MarketConditionReport
-from services.strategies.debit_spread_base import BaseDebitSpreadStrategy, SpreadDirection
-from services.strategies.registry import register_strategy
+from services.strategies.core.types import Direction
+from services.strategies.debit_spread_base import BaseDebitSpreadStrategy
 from services.strategies.utils.strike_utils import round_to_even_strike
 from trading.models import Position
 
@@ -47,25 +46,25 @@ class DebitSpreadStrategy(BaseDebitSpreadStrategy):
     MIN_DTE = 30
     MAX_DTE = 45
 
-    def __init__(self, user, direction: str | SpreadDirection, strategy_name: str):
+    def __init__(self, user, direction: str | Direction, strategy_name: str):
         super().__init__(user)
         if isinstance(direction, str):
             self._direction = (
-                SpreadDirection.BULLISH
+                Direction.BULLISH
                 if direction.lower() == "bullish"
-                else SpreadDirection.BEARISH
+                else Direction.BEARISH
             )
         else:
             self._direction = direction
         self._strategy_name = strategy_name
 
-        if self._direction == SpreadDirection.BULLISH:
+        if self._direction == Direction.BULLISH:
             self.LONG_OTM_PCT = Decimal("0.05")
         else:
             self.LONG_OTM_PCT = Decimal("0.03")
 
     @property
-    def spread_direction(self) -> SpreadDirection:
+    def spread_direction(self) -> Direction:
         return self._direction
 
     @property
@@ -88,7 +87,7 @@ class DebitSpreadStrategy(BaseDebitSpreadStrategy):
         score_adjustment = 0.0
         reasons = []
 
-        is_bullish = self._direction == SpreadDirection.BULLISH
+        is_bullish = self._direction == Direction.BULLISH
 
         if is_bullish:
             if report.macd_signal == "strong_bullish":
@@ -247,7 +246,7 @@ class DebitSpreadStrategy(BaseDebitSpreadStrategy):
         Returns:
             Dict with optimization criteria for finding optimal strikes
         """
-        if self._direction == SpreadDirection.BULLISH:
+        if self._direction == Direction.BULLISH:
             return {
                 "spread_type": "bull_call",
                 "otm_pct": 0.05,
@@ -269,19 +268,19 @@ class DebitSpreadStrategy(BaseDebitSpreadStrategy):
 
     def _get_occ_bundle_strikes(self, strikes: dict) -> dict:
         """Get strikes for OCC bundle creation (direction-based)."""
-        if self._direction == SpreadDirection.BULLISH:
+        if self._direction == Direction.BULLISH:
             return {"long_call": strikes["long_call"], "short_call": strikes["short_call"]}
         return {"long_put": strikes["long_put"], "short_put": strikes["short_put"]}
 
     def _extract_pricing_from_data(self, pricing_data):
         """Extract debit values from pricing data (direction-based)."""
-        if self._direction == SpreadDirection.BULLISH:
+        if self._direction == Direction.BULLISH:
             return (abs(pricing_data.call_credit), abs(pricing_data.call_mid_credit))
         return (abs(pricing_data.put_credit), abs(pricing_data.put_mid_credit))
 
     def _get_strike_field_mapping(self, strikes: dict) -> dict:
         """Map strikes to TradingSuggestion fields (direction-based)."""
-        if self._direction == SpreadDirection.BULLISH:
+        if self._direction == Direction.BULLISH:
             return {
                 "long_call_strike": strikes["long_call"],
                 "short_call_strike": strikes["short_call"],
@@ -297,7 +296,7 @@ class DebitSpreadStrategy(BaseDebitSpreadStrategy):
 
     def _get_debit_field_mapping(self, debit: Decimal, mid_debit: Decimal) -> dict:
         """Map debit values to TradingSuggestion fields (negative credit)."""
-        if self._direction == SpreadDirection.BULLISH:
+        if self._direction == Direction.BULLISH:
             return {
                 "call_spread_credit": -debit,
                 "call_spread_mid_credit": -mid_debit,
@@ -313,7 +312,7 @@ class DebitSpreadStrategy(BaseDebitSpreadStrategy):
 
     def _get_spread_quantity_fields(self) -> dict:
         """Get quantity fields for appropriate spread type."""
-        if self._direction == SpreadDirection.BULLISH:
+        if self._direction == Direction.BULLISH:
             return {
                 "call_spread_quantity": 1,
                 "put_spread_quantity": 0,
@@ -338,7 +337,7 @@ class DebitSpreadStrategy(BaseDebitSpreadStrategy):
         """
         current_price = report.current_price
 
-        if self._direction == SpreadDirection.BULLISH:
+        if self._direction == Direction.BULLISH:
             long_strike_target = Decimal(str(current_price)) * (Decimal("1") + self.LONG_OTM_PCT)
             long_strike = round_to_even_strike(long_strike_target)
             short_strike = long_strike + Decimal(str(spread_width))
@@ -376,7 +375,7 @@ class DebitSpreadStrategy(BaseDebitSpreadStrategy):
         """Build opening legs for debit spread based on direction."""
         from services.orders.utils.order_builder_utils import build_opening_spread_legs
 
-        spread_type = "call_spread" if self._direction == SpreadDirection.BULLISH else "put_spread"
+        spread_type = "call_spread" if self._direction == Direction.BULLISH else "put_spread"
 
         return await build_opening_spread_legs(
             session=context["session"],
@@ -414,7 +413,7 @@ class DebitSpreadStrategy(BaseDebitSpreadStrategy):
 
         session = session_result["session"]
 
-        if self._direction == SpreadDirection.BULLISH:
+        if self._direction == Direction.BULLISH:
             long_strike = D(str(metadata.get("long_call_strike")))
             short_strike = D(str(metadata.get("short_call_strike")))
 
@@ -486,7 +485,7 @@ class DebitSpreadStrategy(BaseDebitSpreadStrategy):
 
     def calculate_greeks_requirements(self) -> dict[str, tuple[float, float]]:
         """Define Greeks requirements for debit spread."""
-        if self._direction == SpreadDirection.BULLISH:
+        if self._direction == Direction.BULLISH:
             return {
                 "long_delta": (0.40, 0.60),
                 "net_theta": (-5.0, -0.5),
@@ -542,7 +541,7 @@ class DebitSpreadStrategy(BaseDebitSpreadStrategy):
 
         spread_type = (
             "long_call_vertical"
-            if self._direction == SpreadDirection.BULLISH
+            if self._direction == Direction.BULLISH
             else "long_put_vertical"
         )
 
@@ -554,19 +553,3 @@ class DebitSpreadStrategy(BaseDebitSpreadStrategy):
                 "original_debit": debit_paid,
             }
         ]
-
-
-@register_strategy("long_call_vertical")
-class LongCallVerticalStrategy(DebitSpreadStrategy):
-    """Long Call Vertical - Debit spread for bullish outlook."""
-
-    def __init__(self, user):
-        super().__init__(user, SpreadDirection.BULLISH, "long_call_vertical")
-
-
-@register_strategy("long_put_vertical")
-class LongPutVerticalStrategy(DebitSpreadStrategy):
-    """Long Put Vertical - Debit spread for bearish outlook."""
-
-    def __init__(self, user):
-        super().__init__(user, SpreadDirection.BEARISH, "long_put_vertical")

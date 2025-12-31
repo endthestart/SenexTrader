@@ -1,16 +1,13 @@
 """
 Stream Subscription Manager - Manages symbol subscriptions and lifecycle.
 
-This helper encapsulates subscription state management and streamer interactions,
-following the stateless helper pattern from Phase 5.1a (OrderEventProcessor).
-
 Responsibility:
 - Manage subscribed symbols set and timestamps
 - Handle subscription cleanup and lifecycle
 - Enforce subscription limits
 - Coordinate with DXLinkStreamer for subscriptions
 
-Design Principles (from phase-5-boundary-validation.md):
+Design Principles:
 - Encapsulates subscription state
 - No circular dependencies (receives streamer as parameter)
 - Clear separation of concerns (state vs. streaming logic)

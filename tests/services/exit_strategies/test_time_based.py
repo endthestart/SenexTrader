@@ -2,12 +2,21 @@
 
 from datetime import timedelta
 from unittest.mock import Mock
+from zoneinfo import ZoneInfo
 
 from django.utils import timezone
 
 import pytest
 
 from services.exit_strategies.time_based import TimeBasedExit
+
+# Use the same timezone as the implementation to avoid date boundary issues
+ET_TIMEZONE = ZoneInfo("America/New_York")
+
+
+def get_today_et():
+    """Get today's date in ET timezone (consistent with TimeBasedExit._get_dte)."""
+    return timezone.now().astimezone(ET_TIMEZONE).date()
 
 
 @pytest.mark.asyncio
@@ -22,8 +31,9 @@ class TestTimeBasedExit:
         # Create mock position with 5 DTE (below minimum)
         position = Mock()
         position.id = 1
-        # 5 days from now
-        future_date = (timezone.now() + timedelta(days=5)).strftime("%Y-%m-%d")
+        # 5 days from today in ET timezone
+        today_et = get_today_et()
+        future_date = (today_et + timedelta(days=5)).strftime("%Y-%m-%d")
         position.metadata = {"expiration_date": future_date}
         position.opened_at = timezone.now() - timedelta(days=10)
 
@@ -42,8 +52,9 @@ class TestTimeBasedExit:
 
         position = Mock()
         position.id = 1
-        # 10 days from now
-        future_date = (timezone.now() + timedelta(days=10)).strftime("%Y-%m-%d")
+        # 10 days from today in ET timezone
+        today_et = get_today_et()
+        future_date = (today_et + timedelta(days=10)).strftime("%Y-%m-%d")
         position.metadata = {"expiration_date": future_date}
         position.opened_at = timezone.now() - timedelta(days=5)
 
@@ -60,8 +71,9 @@ class TestTimeBasedExit:
 
         position = Mock()
         position.id = 1
-        # 60 days from now
-        future_date = (timezone.now() + timedelta(days=60)).strftime("%Y-%m-%d")
+        # 60 days from today in ET timezone
+        today_et = get_today_et()
+        future_date = (today_et + timedelta(days=60)).strftime("%Y-%m-%d")
         position.metadata = {"expiration_date": future_date}
         position.opened_at = timezone.now()
 
@@ -78,8 +90,9 @@ class TestTimeBasedExit:
 
         position = Mock()
         position.id = 1
-        # 30 days from now
-        future_date = (timezone.now() + timedelta(days=30)).strftime("%Y-%m-%d")
+        # 30 days from today in ET timezone
+        today_et = get_today_et()
+        future_date = (today_et + timedelta(days=30)).strftime("%Y-%m-%d")
         position.metadata = {"expiration_date": future_date}
         position.opened_at = timezone.now()
 
@@ -160,8 +173,9 @@ class TestTimeBasedExit:
 
         position = Mock()
         position.id = 1
-        # 5 DTE (triggers min_dte)
-        future_date = (timezone.now() + timedelta(days=5)).strftime("%Y-%m-%d")
+        # 5 DTE (triggers min_dte) - use ET timezone
+        today_et = get_today_et()
+        future_date = (today_et + timedelta(days=5)).strftime("%Y-%m-%d")
         position.metadata = {"expiration_date": future_date}
         # 65 days held (triggers max_holding)
         position.opened_at = timezone.now() - timedelta(days=65)
@@ -179,8 +193,9 @@ class TestTimeBasedExit:
 
         position = Mock()
         position.id = 1
-        # 5 DTE (triggers min_dte)
-        future_date = (timezone.now() + timedelta(days=5)).strftime("%Y-%m-%d")
+        # 5 DTE (triggers min_dte) - use ET timezone
+        today_et = get_today_et()
+        future_date = (today_et + timedelta(days=5)).strftime("%Y-%m-%d")
         position.metadata = {"expiration_date": future_date}
         # 30 days held (does NOT trigger max_holding)
         position.opened_at = timezone.now() - timedelta(days=30)

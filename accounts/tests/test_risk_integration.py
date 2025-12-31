@@ -72,9 +72,9 @@ class RiskIntegrationTests(TestCase):
         assert data["current_risk"] == 0.0  # No positions
         assert data["remaining_budget"] == 10000.0
         assert data["utilization_percent"] == 0.0
-        # Tradeable capital is 25000, so spread width should be 5 ($25-50k range)
-        assert data["spread_width"] == 5
-        assert data["max_spreads"] == 20  # 10000 / (5 * 100) = 20
+        # Tradeable capital is 25000, spread width is 7 ($25k-$50k tier)
+        assert data["spread_width"] == 7
+        assert data["max_spreads"] == 14  # 10000 / (7 * 100) = 14
         assert not data["is_stressed"]
 
     def test_risk_budget_api_stressed_mode(self):

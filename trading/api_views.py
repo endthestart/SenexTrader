@@ -262,7 +262,7 @@ async def check_streamer_readiness(request):
         )
 
 
-# Dynamic Strategy API Endpoints (Phase 2)
+# Dynamic Strategy API Endpoints
 
 
 @login_required
@@ -283,8 +283,8 @@ async def generate_suggestion(request, strategy):
         # Normalize strategy name (convert dashes to underscores for internal use)
         strategy_key = strategy.replace("-", "_")
 
-        # Dynamic strategy lookup via registry
-        from services.strategies.registry import get_strategy, is_strategy_registered
+        # Dynamic strategy lookup via factory
+        from services.strategies.factory import get_strategy, is_strategy_registered
 
         if not is_strategy_registered(strategy_key):
             return JsonResponse(
@@ -584,6 +584,7 @@ async def reject_suggestion(request, suggestion_id):
 async def get_order_status(request, order_id):
     """
     Get current status of an order by ID.
+    Accepts either database trade_id (numeric) or broker_order_id (string).
     Checks both database and broker API if needed.
     """
     # Async-safe user access - force SimpleLazyObject evaluation
@@ -593,18 +594,25 @@ async def get_order_status(request, order_id):
     try:
         from trading.models import Trade
 
-        # Phase 4.2: Find trade with optimized query (avoid N+1)
+        # Support both database ID and broker_order_id
         try:
-            trade = await Trade.objects.select_related("position", "trading_account", "user").aget(
-                broker_order_id=order_id, user=user
-            )
+            if order_id.isdigit():
+                # Numeric ID - look up by database primary key
+                trade = await Trade.objects.select_related("position", "trading_account", "user").aget(
+                    id=int(order_id), user=user
+                )
+            else:
+                # String ID - look up by broker_order_id
+                trade = await Trade.objects.select_related("position", "trading_account", "user").aget(
+                    broker_order_id=order_id, user=user
+                )
         except Trade.DoesNotExist:
             return ErrorResponseBuilder.not_found("Order")
 
         # Return current status from database
         # The stream manager should be keeping this up to date
-        # Get position symbol asynchronously
-        position_symbol = (await trade.position).symbol
+        # Position is already fetched via select_related
+        position_symbol = trade.position.symbol
 
         return JsonResponse(
             {
@@ -635,7 +643,6 @@ def get_pending_orders(request):
     try:
         from trading.models import Trade
 
-        # Phase 4.2: Get pending trades with optimized query (avoid N+1)
         # Include all TastyTrade working statuses: submitted, routed, live, working
         pending_trades = list(
             Trade.objects.filter(
@@ -905,12 +912,14 @@ async def generate_suggestion_forced(request):
     POST /trading/api/suggestions/forced/
     Body: {"symbol": "SPY", "strategy": "short_put_vertical"}
 
-    Valid strategies (14 total):
+    Valid strategies (18 total):
     - Credit Spreads: short_put_vertical, short_call_vertical
-    - Debit Spreads: long_call_vertical, long_put_vertical, cash_secured_put
-    - Volatility: long_call_ratio_backspread, long_straddle, long_strangle,
+    - Debit Spreads: long_call_vertical, long_put_vertical
+    - Volatility: long_call_ratio_backspread, long_put_ratio_backspread,
+                  long_straddle, short_straddle, long_strangle, short_strangle,
                   short_iron_condor, long_iron_condor, iron_butterfly
-    - Stock-Based: long_call_calendar, covered_call
+    - Calendar: call_calendar, put_calendar
+    - Stock-Based: cash_secured_put, covered_call
 
     Note: Senex Trident has its own dedicated endpoint
 
@@ -1072,7 +1081,6 @@ async def get_position_greeks(request, position_id):
         from services.market_data.greeks import GreeksService
         from trading.models import Position
 
-        # Phase 4.2: Fetch position with optimized query (avoid N+1)
         position = await Position.objects.select_related("trading_account").aget(
             id=position_id, user=user
         )
@@ -1157,7 +1165,6 @@ async def get_all_positions_greeks(request):
         from services.market_data.greeks import GreeksService
         from trading.models import Position
 
-        # Phase 4.2: Get all open positions with optimized query (avoid N+1)
         positions = [
             position
             async for position in Position.objects.filter(
@@ -1223,7 +1230,6 @@ async def get_position_details(request, position_id):
         from services.market_data.greeks import GreeksService
         from trading.models import Position
 
-        # Phase 4.2: Fetch position with optimized query including trades (avoid N+1)
         position = await (
             Position.objects.select_related("trading_account")
             .prefetch_related("trades")

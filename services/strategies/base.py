@@ -1,9 +1,7 @@
 """
 Base classes for trading strategies.
 
-Epic 22 Architecture:
-- Task 026: Added abstract order builder methods
-- Each strategy owns its leg construction logic (SRP)
+Each strategy owns its leg construction logic (SRP).
 """
 
 from abc import ABC, abstractmethod
@@ -61,7 +59,7 @@ class BaseStrategy(ABC):
         a unique snake_case identifier for the strategy type.
 
         Examples:
-            - "bull_put_spread"
+            - "short_put_vertical"
             - "iron_condor"
             - "covered_call"
         """
@@ -170,7 +168,6 @@ class BaseStrategy(ABC):
         """
         Build opening order legs for this strategy.
 
-        Epic 22 Task 026: Each strategy implements its own leg construction.
 
         Args:
             context: Strategy-specific context containing:
@@ -206,7 +203,6 @@ class BaseStrategy(ABC):
         """
         Build closing order legs for this strategy.
 
-        Epic 22 Task 026: Each strategy implements its own closing logic.
 
         Args:
             position: Position object containing:

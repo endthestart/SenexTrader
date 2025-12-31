@@ -2,6 +2,7 @@
 
 from datetime import datetime
 from decimal import Decimal
+from zoneinfo import ZoneInfo
 
 from django.utils import timezone
 
@@ -14,6 +15,9 @@ from services.sdk.trading_utils import PriceEffect
 from trading.models import Position, Trade
 
 logger = get_logger(__name__)
+
+# US Eastern timezone for market-aligned DTE calculations
+ET_TIMEZONE = ZoneInfo("America/New_York")
 
 
 OPEN_STATES = {"open_full", "open_partial", "closing"}
@@ -42,7 +46,7 @@ class DTEManager:
             )
             return None
 
-        today = timezone.now().date()
+        today = timezone.now().astimezone(ET_TIMEZONE).date()
         return (exp_date - today).days
 
     def get_dte_threshold(self, position: Position) -> int:
@@ -81,7 +85,7 @@ class DTEManager:
             if order_status == "filled":
                 logger.info(f"Position {position.id}: DTE close order {current_order_id} filled")
                 return True
-            if order_status in ["rejected", "cancelled"]:
+            if order_status in ["rejected", "cancelled", "expired"]:
                 logger.warning(
                     f"Position {position.id}: DTE close order {current_order_id} was {order_status} "
                     f"- will retry (attempt {retry_count + 1}/3)"
@@ -165,11 +169,12 @@ class DTEManager:
         )
 
         # Build and submit order
+        # Use GTC so the order stays active until filled (DAY orders expire at market close)
         order_spec = OrderSpec(
             legs=closing_legs,
             limit_price=limit_price,
             order_type=order_type,
-            time_in_force="DAY",
+            time_in_force="GTC",
             description=f"DTE auto-close {position.id} ({position.symbol}) DTE={current_dte}",
             price_effect=price_effect,
         )
@@ -398,7 +403,30 @@ class DTEManager:
             cancelled_targets: Dict of cancelled profit targets from _cancel_open_trades()
         """
         entry_price = Decimal(str(position.avg_price or 0))
-        spread_width = Decimal(str(position.spread_width or 3))
+
+        # Get spread width from position field, or calculate from strikes
+        spread_width = position.spread_width
+        if spread_width is None:
+            # Calculate from strikes in metadata
+            strikes = position.metadata.get("strikes", {}) if position.metadata else {}
+            short_put = strikes.get("short_put")
+            long_put = strikes.get("long_put")
+            short_call = strikes.get("short_call")
+            long_call = strikes.get("long_call")
+
+            if short_put and long_put:
+                spread_width = Decimal(str(float(short_put) - float(long_put)))
+            elif short_call and long_call:
+                spread_width = Decimal(str(float(long_call) - float(short_call)))
+            else:
+                spread_width = Decimal("3")  # Default fallback
+                logger.warning(
+                    f"Position {position.id}: Could not determine spread width from "
+                    f"strikes, using default $3"
+                )
+        else:
+            spread_width = Decimal(str(spread_width))
+
         is_credit_position = position.opening_price_effect == "Credit"
 
         # Log the values we're using for calculation
@@ -416,9 +444,6 @@ class DTEManager:
                 f"Position {position.id}: Credit spread max_loss = "
                 f"${spread_width} - ${entry_price} = ${max_loss_per_spread}"
             )
-        else:
-            max_value_per_spread = spread_width
-
         # DTE 4-7: Progressive Escalation to Eliminate Risk
         # Rationale: Assignment risk increases exponentially as DTE → 0.
         # We prefer controlled losses over assignment complications.

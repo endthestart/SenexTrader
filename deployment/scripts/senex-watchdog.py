@@ -152,7 +152,7 @@ def send_email_notification(failure_count: int):
         ]
 
         result = subprocess.run(
-            email_cmd,  # noqa: S603
+            email_cmd,
             check=False,
             capture_output=True,
             text=True,

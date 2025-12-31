@@ -1,7 +1,6 @@
 """
 Earnings Calendar Service - Track upcoming earnings events
 
-Epic 22 Task 016: Integrates with TastyTrade MarketMetricInfo to provide:
 - Days until next earnings
 - Earnings date detection
 - Earnings window validation
@@ -136,10 +135,10 @@ class EarningsCalendar:
         # Strategies that AVOID earnings
         avoid_strategies = {
             "senex_trident",
-            "bull_put_spread",
-            "bear_call_spread",
-            "bull_call_spread",
-            "bear_put_spread",
+            "short_put_vertical",
+            "short_call_vertical",
+            "long_call_vertical",
+            "long_put_vertical",
             "short_iron_condor",
             "long_iron_condor",
             "iron_butterfly",

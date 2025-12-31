@@ -58,10 +58,34 @@ class TradeReconciliationService:
                 report["errors"].append("No primary trading account found")
                 return report
 
-            # Fetch order history for past 7 days
+            # Fetch order history for past 7 days with pagination
             start_date = (timezone.now() - timedelta(days=7)).date()
             tt_account = await Account.a_get(session, account.account_number)
-            order_history = await tt_account.a_get_order_history(session, start_date=start_date)
+
+            # Paginate through all orders
+            all_orders = []
+            page_offset = 0
+            per_page = 100
+
+            while True:
+                order_page = await tt_account.a_get_order_history(
+                    session,
+                    start_date=start_date,
+                    per_page=per_page,
+                    page_offset=page_offset,
+                )
+
+                if not order_page:
+                    break
+
+                all_orders.extend(order_page)
+
+                if len(order_page) < per_page:
+                    break
+
+                page_offset += 1
+
+            order_history = all_orders
 
             logger.info(f"User {self.user.id}: Fetched {len(order_history)} orders from TastyTrade")
 
@@ -103,6 +127,14 @@ class TradeReconciliationService:
                             trade.fill_price = fill_data["fill_price"]
                         if fill_data["order_legs"]:
                             trade.order_legs = fill_data["order_legs"]
+
+                        # Look up commission from transactions
+                        commission = await self._get_commission_for_order(str(order.id))
+                        if commission:
+                            trade.commission = commission
+                            logger.info(
+                                f"User {self.user.id}: Trade {trade.id} commission=${commission}"
+                            )
 
                         await trade.asave()
                         report["trades_updated"] += 1
@@ -561,6 +593,16 @@ class TradeReconciliationService:
 
                     if position.profit_target_details:
                         for spread_type, details in position.profit_target_details.items():
+                            # Check for manual skip flag (set via manual intervention)
+                            if details.get("skip_recreation"):
+                                skip_reason = details.get("skip_reason", "manual_skip")
+                                logger.info(
+                                    f"Position {position.id}: Profit target {spread_type} "
+                                    f"marked skip_recreation=True ({skip_reason}) - skipping"
+                                )
+                                valid_spread_types.add(spread_type)
+                                continue
+
                             order_id = details.get("order_id")
                             if not order_id:
                                 # If profit_targets_created is True but order_id is null,
@@ -581,21 +623,44 @@ class TradeReconciliationService:
                             try:
                                 order = tt_account.get_order(session, order_id)
                                 if order:
+                                    # Get status value (handle both enum and string)
+                                    order_status = (
+                                        order.status.value
+                                        if hasattr(order.status, "value")
+                                        else str(order.status)
+                                    )
+
                                     # Order exists - check if it's still live (not filled/cancelled)
-                                    if order.status in ["Live", "Received", "Queued"]:
+                                    if order_status in ["Live", "Received", "Queued"]:
                                         valid_spread_types.add(spread_type)
                                         logger.info(
                                             f"Position {position.id}: Profit target {spread_type} "
-                                            f"order {order_id} is VALID ({order.status})"
+                                            f"order {order_id} is VALID ({order_status})"
+                                        )
+                                    elif order_status == "Filled":
+                                        # CRITICAL: Profit target was FILLED - the spread closed!
+                                        # This is SUCCESS, not an error. We need to:
+                                        # 1. Update profit_target_details with fill info
+                                        # 2. Update position lifecycle state
+                                        # 3. Mark as valid (don't recreate!)
+                                        valid_spread_types.add(spread_type)
+                                        logger.info(
+                                            f"Position {position.id}: Profit target {spread_type} "
+                                            f"order {order_id} is FILLED - processing closure"
+                                        )
+
+                                        # Process the filled profit target
+                                        await self._process_filled_profit_target(
+                                            position, spread_type, order_id, order
                                         )
                                     else:
-                                        # Order was filled/cancelled - should recreate
+                                        # Order was cancelled/rejected/expired - may need recreation
                                         logger.warning(
                                             f"Position {position.id}: Profit target {spread_type} "
-                                            f"order {order_id} is {order.status} - needs recreation"
+                                            f"order {order_id} is {order_status} - needs recreation"
                                         )
                                         invalid_order_ids.append(
-                                            (spread_type, order_id, order.status)
+                                            (spread_type, order_id, order_status)
                                         )
                                 else:
                                     logger.warning(
@@ -620,9 +685,53 @@ class TradeReconciliationService:
                                 f"INVALID PROFIT TARGET ORDERS: Position {position.id} ({position.strategy_type}) "
                                 f"has {len(invalid_order_ids)} invalid orders: {invalid_order_ids}"
                             )
-                            report["missing_orders_recreated"] += len(
-                                [x for x in invalid_order_ids if x[0] in missing_spread_types]
+
+                        # STEP 3.5: Before recreating, check if there's already a LIVE order at broker
+                        # This handles race conditions where multiple orders were submitted
+                        # and one succeeded while another was rejected (e.g., Position 50 scenario)
+                        spreads_with_existing_live_orders = []
+                        for spread_type in list(missing_spread_types):
+                            existing_live_order_id = await self._find_existing_live_order_for_spread(
+                                position, spread_type, tt_account, session
                             )
+                            if existing_live_order_id:
+                                logger.info(
+                                    f"Position {position.id}: Found existing LIVE order {existing_live_order_id} "
+                                    f"for {spread_type} - updating position instead of recreating"
+                                )
+                                # Update the position's order_id to point to the live order
+                                await self._update_profit_target_order_id(
+                                    position, spread_type, existing_live_order_id
+                                )
+                                spreads_with_existing_live_orders.append(spread_type)
+                                valid_spread_types.add(spread_type)
+
+                        # Remove spreads that we found live orders for
+                        for spread_type in spreads_with_existing_live_orders:
+                            missing_spread_types.remove(spread_type)
+
+                        if not missing_spread_types:
+                            logger.info(
+                                f"Position {position.id}: All missing profit targets resolved by "
+                                f"finding existing LIVE orders"
+                            )
+                            continue
+
+                        report["missing_orders_recreated"] += len(missing_spread_types)
+
+                        # CRITICAL: Check if position is in DTE automation mode
+                        # If DTE <= threshold, the DTE manager handles closing, not profit targets
+                        dte_automation = (position.metadata or {}).get("dte_automation", {})
+                        last_processed_dte = dte_automation.get("last_processed_dte")
+                        if last_processed_dte is not None:
+                            logger.info(
+                                f"Position {position.id}: In DTE automation mode "
+                                f"(last_processed_dte={last_processed_dte}), "
+                                f"skipping profit target recreation - DTE manager handles closing"
+                            )
+                            report.setdefault("skipped_dte_automation", 0)
+                            report["skipped_dte_automation"] += 1
+                            continue
 
                         logger.warning(
                             f"MISSING PROFIT TARGETS: Position {position.id} ({position.strategy_type}) "
@@ -747,10 +856,10 @@ class TradeReconciliationService:
 
         # Most single spread strategies have 1 profit target
         if strategy_type in [
-            "bull_put_spread",
-            "bear_call_spread",
-            "bull_call_spread",
-            "bear_put_spread",
+            "short_put_vertical",
+            "short_call_vertical",
+            "long_call_vertical",
+            "long_put_vertical",
             "cash_secured_put",
             "covered_call",
         ]:
@@ -777,14 +886,14 @@ class TradeReconciliationService:
         if strategy_type in ["iron_condor", "short_iron_condor", "long_iron_condor"]:
             return ["put_spread", "call_spread"]
 
-        # Most single spread strategies have one spread type
+        # Vertical spread strategies have one spread type
         if strategy_type in [
-            "bull_put_spread",
-            "bear_call_spread",
-            "bull_call_spread",
-            "bear_put_spread",
+            "short_put_vertical",
+            "short_call_vertical",
+            "long_call_vertical",
+            "long_put_vertical",
         ]:
-            return ["spread"]  # Generic spread identifier
+            return ["spread"]
 
         # Single leg strategies
         if strategy_type in ["cash_secured_put", "covered_call"]:
@@ -818,10 +927,27 @@ class TradeReconciliationService:
             )
             return []
 
-        # Get leg symbols currently in position
-        current_leg_symbols = {leg.get("symbol") for leg in legs if leg.get("symbol")}
+        leg_entries: list[dict] = []
+        current_leg_symbols = set()
 
-        if not current_leg_symbols:
+        for leg in legs:
+            symbol = leg.get("symbol")
+            if not symbol:
+                continue
+
+            normalized_symbol = symbol.strip()
+            quantity = self._normalize_leg_quantity(leg)
+            direction = self._infer_leg_direction(leg)
+
+            if quantity <= 0:
+                continue
+
+            leg_entries.append(
+                {"symbol": normalized_symbol, "quantity": quantity, "direction": direction}
+            )
+            current_leg_symbols.add(normalized_symbol)
+
+        if not leg_entries:
             logger.warning(f"Position {position.id}: No valid leg symbols found in metadata")
             return []
 
@@ -837,7 +963,14 @@ class TradeReconciliationService:
             if spread_legs:
                 # Use spread_legs mapping if available
                 for spread_type in expected_spread_types:
-                    spread_leg_symbols = spread_legs.get(spread_type, [])
+                    spread_leg_symbols = [
+                        (symbol or "").strip() for symbol in spread_legs.get(spread_type, [])
+                    ]
+                    spread_leg_symbols = [symbol for symbol in spread_leg_symbols if symbol]
+
+                    if not spread_leg_symbols:
+                        continue
+
                     if all(symbol in current_leg_symbols for symbol in spread_leg_symbols):
                         open_spread_types.append(spread_type)
                         logger.debug(
@@ -851,36 +984,42 @@ class TradeReconciliationService:
                             f"(missing legs: {missing})"
                         )
             else:
-                # Fallback: Analyze by option type if spread_legs not available
-                # Count puts and calls
-                puts = [s for s in current_leg_symbols if "P" in s[-9:]]  # Put indicator
-                calls = [s for s in current_leg_symbols if "C" in s[-9:]]  # Call indicator
+                put_counts = {"short": 0, "long": 0}
+                call_counts = {"short": 0, "long": 0}
 
-                logger.debug(
-                    f"Position {position.id}: Detected {len(puts)} puts, {len(calls)} calls"
-                )
+                for entry in leg_entries:
+                    symbol = entry["symbol"]
+                    direction = entry["direction"]
+                    quantity = entry["quantity"]
+                    tail = symbol[-9:] if len(symbol) >= 9 else symbol
 
-                # Senex Trident: 2 put spreads (4 put legs) + 1 call spread (2 call legs)
-                # If we have 2+ calls, call spread is open
-                if len(calls) >= 2 and "call_spread" in expected_spread_types:
+                    if "P" in tail:
+                        put_counts[direction] += quantity
+                    elif "C" in tail:
+                        call_counts[direction] += quantity
+
+                call_spreads_open = min(call_counts["short"], call_counts["long"])
+                if (
+                    call_spreads_open >= 1
+                    and "call_spread" in expected_spread_types
+                ):
                     open_spread_types.append("call_spread")
 
-                # If we have 4 puts, both put spreads are open
-                # If we have 2 puts, only one put spread is open
-                if len(puts) >= 4:
+                put_spreads_open = min(put_counts["short"], put_counts["long"])
+                if put_spreads_open >= 2:
                     if "put_spread_1" in expected_spread_types:
                         open_spread_types.append("put_spread_1")
                     if "put_spread_2" in expected_spread_types:
                         open_spread_types.append("put_spread_2")
-                elif len(puts) >= 2:
-                    # Only one put spread open - prefer put_spread_1
-                    if "put_spread_1" in expected_spread_types:
-                        open_spread_types.append("put_spread_1")
+                elif put_spreads_open == 1 and "put_spread_1" in expected_spread_types:
+                    open_spread_types.append("put_spread_1")
 
                 if open_spread_types:
                     logger.info(
                         f"Position {position.id}: Detected open spreads (fallback method): "
-                        f"{open_spread_types}"
+                        f"{open_spread_types} "
+                        f"(call spreads remaining: {call_spreads_open}, "
+                        f"put spreads remaining: {put_spreads_open})"
                     )
 
         else:
@@ -890,3 +1029,517 @@ class TradeReconciliationService:
             open_spread_types = expected_spread_types
 
         return open_spread_types
+
+    def _normalize_leg_quantity(self, leg: dict) -> int:
+        """Normalize leg quantity to a positive integer for counting."""
+        quantity = leg.get("quantity")
+
+        if quantity in (None, ""):
+            return 1
+
+        try:
+            qty = int(float(quantity))
+        except (TypeError, ValueError):
+            return 1
+
+        return abs(qty)
+
+    def _infer_leg_direction(self, leg: dict) -> str:
+        """Infer whether a leg is short or long."""
+        direction = str(leg.get("quantity_direction", "")).lower()
+        if direction in ("short", "long"):
+            return direction
+
+        action = str(leg.get("action", "")).lower()
+        if "sell" in action:
+            return "short"
+        if "buy" in action:
+            return "long"
+
+        quantity = leg.get("quantity")
+        try:
+            qty = float(quantity)
+            if qty < 0:
+                return "short"
+            if qty > 0:
+                return "long"
+        except (TypeError, ValueError):
+            pass
+
+        return "long"
+
+    async def _process_filled_profit_target(
+        self,
+        position,
+        spread_type: str,
+        order_id: str,
+        order,
+    ) -> None:
+        """
+        Process a filled profit target order discovered during reconciliation.
+
+        This handles the case where:
+        1. A profit target order filled at the broker
+        2. The order history cache didn't get updated (pagination issue, timing, etc.)
+        3. The PositionSyncService._reconcile_profit_target_fills() couldn't detect it
+        4. This reconciliation service discovers the fill via direct API call
+
+        Updates:
+        - profit_target_details[spread_type].status = "filled"
+        - profit_target_details[spread_type].filled_at
+        - profit_target_details[spread_type].fill_price
+        - profit_target_details[spread_type].realized_pnl
+        - position.quantity (decrement by 1)
+        - position.total_realized_pnl
+        - position.lifecycle_state (open_full -> open_partial or closed)
+
+        Args:
+            position: Position object to update
+            spread_type: Spread type identifier (e.g., "call_spread")
+            order_id: TastyTrade order ID
+            order: TastyTrade order object with fill data
+        """
+        from decimal import Decimal
+
+        from django.db import transaction
+        from django.utils import timezone as dj_timezone
+
+        from asgiref.sync import sync_to_async
+
+        from trading.models import Position, TastyTradeOrderHistory
+
+        # Extract fill data from order
+        fill_price = self._extract_fill_price_from_order(order)
+        filled_at = self._extract_filled_at_from_order(order)
+
+        # Look up submission timestamp from order history
+        submitted_at = None
+        try:
+            order_history = await TastyTradeOrderHistory.objects.filter(
+                broker_order_id=order_id
+            ).afirst()
+            if order_history and order_history.received_at:
+                submitted_at = order_history.received_at
+        except Exception as e:
+            logger.warning(f"Position {position.id}: Error looking up submitted_at: {e}")
+
+        @sync_to_async
+        def _update_position_atomic():
+            """Inner sync function that performs atomic database updates."""
+            with transaction.atomic():
+                # Refresh position from database to prevent stale data
+                fresh_position = Position.objects.select_for_update().get(id=position.id)
+
+                # Initialize profit_target_details if needed
+                if not fresh_position.profit_target_details:
+                    fresh_position.profit_target_details = {}
+
+                # Get or create details for this spread type
+                details = fresh_position.profit_target_details.setdefault(spread_type, {})
+
+                # Skip if already processed
+                if details.get("status") == "filled":
+                    logger.info(
+                        f"Position {position.id}: Spread {spread_type} already marked as filled, skipping"
+                    )
+                    return False
+
+                # Mark as filled with timing data
+                details["status"] = "filled"
+                details["order_id"] = order_id
+                if submitted_at:
+                    details["submitted_at"] = submitted_at.isoformat()
+                details["filled_at"] = (
+                    filled_at.isoformat() if filled_at else dj_timezone.now().isoformat()
+                )
+
+                if fill_price is not None:
+                    details["fill_price"] = float(abs(fill_price))
+
+                # Calculate realized P&L
+                original_credit = Decimal(str(details.get("original_credit", 0)))
+                pnl = Decimal("0")
+                if fill_price is not None and original_credit:
+                    # P&L = (credit received - debit paid) * contracts * multiplier
+                    pnl = (original_credit - abs(fill_price)) * Decimal("100")
+                    details["realized_pnl"] = float(pnl)
+
+                # Update position fields
+                # Track original quantity for lifecycle state determination
+                original_quantity = fresh_position.metadata.get(
+                    "original_quantity", fresh_position.quantity
+                )
+                if "original_quantity" not in (fresh_position.metadata or {}):
+                    if fresh_position.metadata is None:
+                        fresh_position.metadata = {}
+                    fresh_position.metadata["original_quantity"] = fresh_position.quantity
+                    original_quantity = fresh_position.quantity
+
+                # Decrement quantity (1 contract per spread for Senex Trident)
+                new_quantity = max(0, fresh_position.quantity - 1)
+                fresh_position.quantity = new_quantity
+                fresh_position.total_realized_pnl = (
+                    fresh_position.total_realized_pnl or Decimal("0")
+                ) + pnl
+
+                # Update lifecycle state
+                if new_quantity == 0:
+                    fresh_position.lifecycle_state = "closed"
+                    fresh_position.closed_at = dj_timezone.now()
+                    logger.info(
+                        f"Position {position.id}: All contracts closed via reconciled profit target, "
+                        f"state → closed, realized_pnl=${fresh_position.total_realized_pnl}"
+                    )
+                elif new_quantity < original_quantity:
+                    fresh_position.lifecycle_state = "open_partial"
+                    logger.info(
+                        f"Position {position.id}: {spread_type} closed via reconciliation, "
+                        f"{new_quantity}/{original_quantity} remaining, state → open_partial, "
+                        f"P&L=${pnl}"
+                    )
+
+                # Save changes
+                fresh_position.save(
+                    update_fields=[
+                        "quantity",
+                        "total_realized_pnl",
+                        "lifecycle_state",
+                        "closed_at",
+                        "profit_target_details",
+                        "metadata",
+                    ]
+                )
+
+                return True
+
+        try:
+            updated = await _update_position_atomic()
+            if updated:
+                logger.info(
+                    f"Position {position.id}: Successfully processed filled profit target "
+                    f"{spread_type} (order {order_id})"
+                )
+        except Exception as e:
+            logger.error(
+                f"Position {position.id}: Error processing filled profit target {spread_type}: {e}",
+                exc_info=True,
+            )
+
+    def _extract_fill_price_from_order(self, order) -> "Decimal | None":
+        """Extract the fill price from a TastyTrade order object."""
+        from decimal import Decimal
+
+        try:
+            # Check if order has price attribute (the net credit/debit)
+            if hasattr(order, "price") and order.price:
+                return Decimal(str(order.price))
+
+            # Try to calculate from leg fills
+            if hasattr(order, "legs") and order.legs:
+                total_value = Decimal("0")
+                has_fills = False
+
+                for leg in order.legs:
+                    if hasattr(leg, "fills") and leg.fills:
+                        has_fills = True
+                        action = (
+                            leg.action.value
+                            if hasattr(leg.action, "value")
+                            else str(leg.action)
+                        )
+
+                        for fill in leg.fills:
+                            if hasattr(fill, "fill_price") and fill.fill_price:
+                                price = Decimal(str(fill.fill_price))
+                                qty = abs(
+                                    Decimal(str(fill.quantity))
+                                    if hasattr(fill, "quantity")
+                                    else Decimal("1")
+                                )
+
+                                if "sell" in action.lower():
+                                    total_value += price * qty
+                                else:
+                                    total_value -= price * qty
+
+                if has_fills:
+                    return total_value
+
+        except Exception as e:
+            logger.warning(f"Error extracting fill price from order: {e}")
+
+        return None
+
+    def _extract_filled_at_from_order(self, order):
+        """Extract the filled_at timestamp from a TastyTrade order object."""
+        try:
+            # Check if order has terminal_at (when order reached terminal state)
+            if hasattr(order, "terminal_at") and order.terminal_at:
+                return order.terminal_at
+
+            # Check leg fills for filled_at
+            if hasattr(order, "legs") and order.legs:
+                for leg in order.legs:
+                    if hasattr(leg, "fills") and leg.fills:
+                        for fill in leg.fills:
+                            if hasattr(fill, "filled_at") and fill.filled_at:
+                                return fill.filled_at
+
+        except Exception as e:
+            logger.warning(f"Error extracting filled_at from order: {e}")
+
+        return None
+
+    async def _find_existing_live_order_for_spread(
+        self,
+        position,
+        spread_type: str,
+        tt_account,
+        session,
+    ) -> str | None:
+        """
+        Search for an existing LIVE order at the broker for the given spread.
+
+        This handles the race condition scenario where multiple orders were submitted
+        for the same spread, one was recorded in the position (and got rejected),
+        but another one actually went through and is live at the broker.
+
+        IMPORTANT: When multiple positions have identical legs (e.g., two Senex Trident
+        positions on the same underlying with same strikes), we must be careful to
+        only return orders that belong to THIS position. We do this by:
+        1. Filtering to orders created around the same time as this position
+        2. Excluding orders already claimed by other positions
+
+        Args:
+            position: Position object
+            spread_type: Spread type identifier (e.g., "put_spread_1")
+            tt_account: TastyTrade account object
+            session: OAuth session
+
+        Returns:
+            Order ID of the live order if found, None otherwise
+        """
+        from trading.models import Position as PositionModel
+        from trading.models import TastyTradeOrderHistory
+
+        try:
+            # Get the leg symbols for this spread type from the position
+            spread_legs = self._get_spread_leg_symbols(position, spread_type)
+            if not spread_legs:
+                logger.debug(
+                    f"Position {position.id}: Could not determine leg symbols for {spread_type}"
+                )
+                return None
+
+            # Get the position's opened_at time for filtering
+            position_opened_at = position.opened_at
+            if not position_opened_at:
+                logger.debug(
+                    f"Position {position.id}: No opened_at timestamp, cannot correlate orders"
+                )
+                return None
+
+            # Search for LIVE orders that:
+            # 1. Match the leg symbols
+            # 2. Were created within a reasonable time window of position opening
+            #    (allow 5 minutes before/after to handle timing differences)
+            from datetime import timedelta
+
+            time_window_start = position_opened_at - timedelta(minutes=5)
+            time_window_end = position_opened_at + timedelta(minutes=5)
+
+            # Get all order IDs already claimed by OTHER positions
+            # This ensures we don't steal another position's order
+            @sync_to_async
+            def get_claimed_order_ids():
+                claimed = set()
+                other_positions = PositionModel.objects.filter(
+                    symbol=position.symbol,
+                    lifecycle_state__in=["open_full", "open_partial"],
+                ).exclude(pk=position.id)
+
+                for other_pos in other_positions:
+                    if other_pos.profit_target_details:
+                        for _st, details in other_pos.profit_target_details.items():
+                            order_id = details.get("order_id")
+                            if order_id:
+                                claimed.add(str(order_id))
+                return claimed
+
+            claimed_order_ids = await get_claimed_order_ids()
+            logger.debug(
+                f"Position {position.id}: Order IDs already claimed by other positions: {claimed_order_ids}"
+            )
+
+            live_orders = await sync_to_async(
+                lambda: list(
+                    TastyTradeOrderHistory.objects.filter(
+                        underlying_symbol=position.symbol,
+                        status="Live",
+                        received_at__gte=time_window_start,
+                        received_at__lte=time_window_end,
+                    ).order_by("received_at")  # Oldest first
+                )
+            )()
+
+            for order in live_orders:
+                # Skip orders already claimed by other positions
+                if str(order.broker_order_id) in claimed_order_ids:
+                    logger.debug(
+                        f"Position {position.id}: Skipping order {order.broker_order_id} "
+                        f"- already claimed by another position"
+                    )
+                    continue
+
+                order_legs = order.order_data.get("legs", []) if order.order_data else []
+                order_leg_symbols = {leg.get("symbol", "").strip() for leg in order_legs}
+
+                # Check if order legs match our spread legs
+                spread_leg_set = {s.strip() for s in spread_legs}
+                if order_leg_symbols == spread_leg_set:
+                    logger.info(
+                        f"Position {position.id}: Found matching LIVE order {order.broker_order_id} "
+                        f"for {spread_type} (created at {order.received_at}, position opened at {position_opened_at})"
+                    )
+                    return order.broker_order_id
+
+            logger.debug(
+                f"Position {position.id}: No matching unclaimed LIVE order found for {spread_type} "
+                f"in time window {time_window_start} to {time_window_end}"
+            )
+            return None
+
+        except Exception as e:
+            logger.error(
+                f"Position {position.id}: Error searching for existing live order: {e}",
+                exc_info=True,
+            )
+            return None
+
+    def _get_spread_leg_symbols(self, position, spread_type: str) -> list[str] | None:
+        """
+        Get the leg symbols for a specific spread type from the position metadata.
+
+        For Senex Trident:
+        - call_spread: 2 call legs
+        - put_spread_1: 2 put legs (higher strikes for 40% target)
+        - put_spread_2: same 2 put legs (for 60% target)
+
+        Returns list of OCC symbols for the spread legs, or None if not determinable.
+        """
+        legs = (position.metadata or {}).get("legs", [])
+        if not legs:
+            return None
+
+        # Separate calls and puts
+        calls = [leg.get("symbol") for leg in legs if "C0" in leg.get("symbol", "")]
+        puts = [leg.get("symbol") for leg in legs if "P0" in leg.get("symbol", "")]
+
+        if spread_type == "call_spread":
+            return calls if len(calls) == 2 else None
+        if spread_type in ["put_spread_1", "put_spread_2"]:
+            # For Senex Trident, there are 4 put legs (2 spreads with same strikes)
+            # Return the unique put symbols (should be 2)
+            unique_puts = list(set(puts))
+            return unique_puts if len(unique_puts) == 2 else None
+
+        return None
+
+    async def _update_profit_target_order_id(
+        self,
+        position,
+        spread_type: str,
+        new_order_id: str,
+    ) -> None:
+        """
+        Update the position's profit_target_details with a new order_id for a spread.
+
+        This is used when we discover that the position points to a rejected order
+        but there's actually a live order at the broker for the same spread.
+
+        Args:
+            position: Position object to update
+            spread_type: Spread type identifier (e.g., "put_spread_1")
+            new_order_id: The correct order ID to use
+        """
+        from django.db import transaction
+
+        @sync_to_async
+        def _update_atomic():
+            with transaction.atomic():
+                from trading.models import Position as PositionModel
+
+                fresh_position = PositionModel.objects.select_for_update().get(
+                    pk=position.id
+                )
+
+                if not fresh_position.profit_target_details:
+                    fresh_position.profit_target_details = {}
+
+                if spread_type not in fresh_position.profit_target_details:
+                    fresh_position.profit_target_details[spread_type] = {}
+
+                old_order_id = fresh_position.profit_target_details[spread_type].get(
+                    "order_id"
+                )
+                fresh_position.profit_target_details[spread_type]["order_id"] = new_order_id
+
+                fresh_position.save(update_fields=["profit_target_details"])
+
+                logger.info(
+                    f"Position {position.id}: Updated {spread_type} order_id from "
+                    f"{old_order_id} to {new_order_id}"
+                )
+
+        try:
+            await _update_atomic()
+        except Exception as e:
+            logger.error(
+                f"Position {position.id}: Failed to update {spread_type} order_id: {e}",
+                exc_info=True,
+            )
+
+    async def _get_commission_for_order(self, broker_order_id: str) -> "Decimal | None":
+        """
+        Get total commission (including fees) for an order from transactions.
+
+        Looks up TastyTradeTransaction records linked to this order_id and sums:
+        - commission
+        - clearing_fees
+        - regulatory_fees
+
+        Args:
+            broker_order_id: The TastyTrade order ID
+
+        Returns:
+            Total commission as Decimal, or None if no transactions found
+        """
+        from decimal import Decimal
+
+        from django.db.models import Sum
+
+        from asgiref.sync import sync_to_async
+
+        from trading.models import TastyTradeTransaction
+
+        try:
+            order_id_int = int(broker_order_id)
+        except (ValueError, TypeError):
+            return None
+
+        @sync_to_async
+        def _get_commission():
+            result = TastyTradeTransaction.objects.filter(order_id=order_id_int).aggregate(
+                total_commission=Sum("commission"),
+                total_clearing=Sum("clearing_fees"),
+                total_regulatory=Sum("regulatory_fees"),
+            )
+
+            commission = result.get("total_commission") or Decimal("0")
+            clearing = result.get("total_clearing") or Decimal("0")
+            regulatory = result.get("total_regulatory") or Decimal("0")
+
+            total = commission + clearing + regulatory
+            return total if total != Decimal("0") else None
+
+        return await _get_commission()

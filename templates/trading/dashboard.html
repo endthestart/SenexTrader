@@ -143,28 +143,34 @@
         </div>
     </div>
 
-    <!-- Completed Positions Summary -->
+    <!-- P&L Summary -->
     <div class="row mb-4">
         <div class="col-12">
             <div class="card bg-dark border-secondary">
                 <div class="card-header bg-secondary">
                     <h5 class="mb-0">
-                        <i class="fas fa-check-circle me-2"></i>Completed Positions
+                        <i class="fas fa-chart-line me-2"></i>Profit & Loss
                     </h5>
                 </div>
                 <div class="card-body">
                     <div class="row">
                         <div class="col-md-6">
-                            <p class="text-muted mb-1">Total Closed Positions</p>
-                            <h4 class="mb-0">{{ completed_positions_data.count }}</h4>
-                        </div>
-                        <div class="col-md-6">
-                            <p class="text-muted mb-1">Total Realized P&L</p>
-                            <h4 class="mb-0 {% if completed_positions_data.total_realized_pnl > 0 %}text-success{% elif completed_positions_data.total_realized_pnl < 0 %}text-danger{% endif %}">
+                            <p class="text-muted mb-1">Realized P&L</p>
+                            <h4 class="mb-0 {% if pnl_summary.realized_pnl > 0 %}text-success{% elif pnl_summary.realized_pnl < 0 %}text-danger{% endif %}">
                                 {% if privacy_mode %}
                                     <span class="text-muted">••••••</span>
                                 {% else %}
-                                    ${{ completed_positions_data.total_realized_pnl|floatformat:2|intcomma }}
+                                    ${{ pnl_summary.realized_pnl|floatformat:2|intcomma }}
+                                {% endif %}
+                            </h4>
+                        </div>
+                        <div class="col-md-6">
+                            <p class="text-muted mb-1">Unrealized P&L</p>
+                            <h4 class="mb-0 {% if pnl_summary.unrealized_pnl > 0 %}text-success{% elif pnl_summary.unrealized_pnl < 0 %}text-danger{% endif %}">
+                                {% if privacy_mode %}
+                                    <span class="text-muted">••••••</span>
+                                {% else %}
+                                    ${{ pnl_summary.unrealized_pnl|floatformat:2|intcomma }}
                                 {% endif %}
                             </h4>
                         </div>

@@ -178,6 +178,13 @@ class TransactionImporter:
         existing = await TastyTradeTransaction.objects.filter(transaction_id=tx_id).afirst()
 
         # Build field values
+        # Ensure executed_at is timezone-aware
+        from django.utils import timezone
+
+        executed_at = tx.executed_at
+        if executed_at is not None and timezone.is_naive(executed_at):
+            executed_at = timezone.make_aware(executed_at)
+
         tx_fields = {
             "user": user,
             "trading_account": account,
@@ -196,7 +203,7 @@ class TransactionImporter:
             "instrument_type": self._extract_instrument_type(tx),
             "quantity": self._to_decimal(getattr(tx, "quantity", None)),
             "price": self._to_decimal(getattr(tx, "price", None)),
-            "executed_at": tx.executed_at,
+            "executed_at": executed_at,
             "raw_data": self._serialize_transaction(tx),
         }
 
@@ -295,7 +302,11 @@ class TransactionImporter:
 
         Process:
         1. Get all transactions with order_id that aren't linked
-        2. For each, find Position with matching opening_order_id
+        2. For each, try to find Position by:
+           a. opening_order_id (primary match for opening transactions)
+           b. profit_target_details[*].order_id (profit target fills)
+           c. metadata.dte_automation.order_id (DTE automation closes)
+           d. Symbol-based matching as fallback (external closes)
         3. Set related_position
 
         Args:
@@ -303,41 +314,39 @@ class TransactionImporter:
             account: Optional filter by account
 
         Returns:
-            {"linked": N, "not_found": M, "already_linked": X}
+            {"linked": N, "not_found": M, "already_linked": X,
+             "linked_by_opening": N1, "linked_by_profit_target": N2,
+             "linked_by_dte": N3, "linked_by_symbol": N4}
         """
         result = {
             "linked": 0,
             "not_found": 0,
             "already_linked": 0,
+            "linked_by_opening": 0,
+            "linked_by_profit_target": 0,
+            "linked_by_dte": 0,
+            "linked_by_symbol": 0,
         }
 
-        # Build query for unlinked transactions
-        query = TastyTradeTransaction.objects.filter(
-            user=user,
-            order_id__isnull=False,
-            related_position__isnull=True,
-        )
-        if account:
-            query = query.filter(trading_account=account)
-
-        # Process in batches
-        transactions = [tx async for tx in query]
-
+        transactions = await self._get_unlinked_transactions(user, account)
         logger.info(f"Processing {len(transactions)} unlinked transactions")
 
+        # Build lookup caches for profit target and DTE order IDs
+        pt_order_map, dte_order_map = await self._build_order_id_caches(user, account)
+
         for tx in transactions:
-            # Find position by opening_order_id matching transaction's order_id
-            position = await Position.objects.filter(
-                user=user,
-                opening_order_id=str(tx.order_id),
-            ).afirst()
+            position, link_type = await self._find_position_for_transaction(
+                tx, user, account, pt_order_map, dte_order_map
+            )
 
             if position:
                 tx.related_position = position
                 await tx.asave(update_fields=["related_position"])
                 result["linked"] += 1
+                result[f"linked_by_{link_type}"] += 1
                 logger.debug(
-                    f"Linked transaction {tx.transaction_id} " f"to position {position.id}"
+                    f"Linked transaction {tx.transaction_id} to position {position.id} "
+                    f"(via {link_type})"
                 )
             else:
                 result["not_found"] += 1
@@ -351,12 +360,169 @@ class TransactionImporter:
 
         logger.info(
             f"Transaction linking complete: "
-            f"{result['linked']} newly linked, "
+            f"{result['linked']} newly linked "
+            f"(opening={result['linked_by_opening']}, "
+            f"profit_target={result['linked_by_profit_target']}, "
+            f"dte={result['linked_by_dte']}, "
+            f"symbol={result['linked_by_symbol']}), "
             f"{result['not_found']} position not found, "
             f"{result['already_linked']} already linked"
         )
 
         return result
+
+    async def _get_unlinked_transactions(
+        self,
+        user: User,
+        account: TradingAccount | None,
+    ) -> list[TastyTradeTransaction]:
+        """Get transactions with order_id that aren't linked to a position."""
+        query = TastyTradeTransaction.objects.filter(
+            user=user,
+            order_id__isnull=False,
+            related_position__isnull=True,
+        )
+        if account:
+            query = query.filter(trading_account=account)
+        return [tx async for tx in query]
+
+    async def _build_order_id_caches(
+        self,
+        user: User,
+        account: TradingAccount | None,
+    ) -> tuple[dict[str, Position], dict[str, Position]]:
+        """
+        Build lookup caches mapping order IDs to positions.
+
+        Returns:
+            Tuple of (profit_target_order_map, dte_order_map)
+        """
+        pt_order_to_position: dict[str, Position] = {}
+        dte_order_to_position: dict[str, Position] = {}
+
+        position_query = Position.objects.filter(user=user)
+        if account:
+            position_query = position_query.filter(trading_account=account)
+
+        async for pos in position_query:
+            # Index profit target order IDs
+            if pos.profit_target_details:
+                for pt_details in pos.profit_target_details.values():
+                    order_id = pt_details.get("order_id")
+                    if order_id:
+                        pt_order_to_position[str(order_id)] = pos
+
+            # Index DTE automation order IDs
+            if pos.metadata:
+                dte_info = pos.metadata.get("dte_automation", {})
+                dte_order_id = dte_info.get("order_id")
+                if dte_order_id:
+                    dte_order_to_position[str(dte_order_id)] = pos
+
+        return pt_order_to_position, dte_order_to_position
+
+    async def _find_position_for_transaction(
+        self,
+        tx: TastyTradeTransaction,
+        user: User,
+        account: TradingAccount | None,
+        pt_order_map: dict[str, Position],
+        dte_order_map: dict[str, Position],
+    ) -> tuple[Position | None, str | None]:
+        """
+        Find position for transaction using multiple matching strategies.
+
+        Returns:
+            Tuple of (matched_position, link_type) where link_type is one of:
+            "opening", "profit_target", "dte", "symbol", or None if no match.
+        """
+        tx_order_id = str(tx.order_id)
+
+        # 1. Try opening_order_id match (primary)
+        position = await Position.objects.filter(
+            user=user,
+            opening_order_id=tx_order_id,
+        ).afirst()
+        if position:
+            return position, "opening"
+
+        # 2. Try profit_target order_id match
+        position = pt_order_map.get(tx_order_id)
+        if position:
+            return position, "profit_target"
+
+        # 3. Try DTE automation order_id match
+        position = dte_order_map.get(tx_order_id)
+        if position:
+            return position, "dte"
+
+        # 4. Try symbol-based matching as fallback
+        position = await self._match_by_symbol(tx, user, account)
+        if position:
+            return position, "symbol"
+
+        return None, None
+
+    async def _match_by_symbol(
+        self,
+        tx: TastyTradeTransaction,
+        user: User,
+        account: TradingAccount | None,
+    ) -> Position | None:
+        """
+        Match transaction to position by OCC symbol as fallback.
+
+        Used for external closes where no order ID is tracked. Uses
+        conservative matching to avoid false positives:
+        1. Transaction must be a closing action (Buy/Sell to Close)
+        2. OCC symbol must match a position leg
+        3. Transaction must be executed after position was opened
+        4. Position must still be open or recently closed
+
+        Args:
+            tx: Transaction to match
+            user: User
+            account: Optional trading account filter
+
+        Returns:
+            Matched Position or None
+        """
+        # Only match closing transactions
+        action = (tx.action or "").lower()
+        if "close" not in action:
+            return None
+
+        # Must have a symbol to match
+        if not tx.symbol:
+            return None
+
+        # Build position query - look for open or recently closed positions
+        query = Position.objects.filter(
+            user=user,
+            lifecycle_state__in=["open_full", "open_partial", "closing", "closed"],
+        )
+        if account:
+            query = query.filter(trading_account=account)
+
+        async for pos in query:
+            # Check if transaction was executed after position opened
+            if pos.opened_at and tx.executed_at and tx.executed_at < pos.opened_at:
+                continue
+
+            # Check if symbol matches position's underlying
+            if tx.underlying_symbol and tx.underlying_symbol == pos.symbol:
+                # Check if OCC symbol matches any position leg
+                legs = pos.metadata.get("legs", []) if pos.metadata else []
+                for leg in legs:
+                    leg_symbol = leg.get("symbol")
+                    if leg_symbol and leg_symbol == tx.symbol:
+                        logger.info(
+                            f"Symbol-based match: tx {tx.transaction_id} "
+                            f"({tx.symbol}) -> position {pos.id}"
+                        )
+                        return pos
+
+        return None
 
     async def get_transactions_for_position(
         self,

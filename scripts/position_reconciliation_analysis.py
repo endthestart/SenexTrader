@@ -260,7 +260,7 @@ def analyze_positions(args):
         .order_by("-opened_at")
     )
 
-    db_open = db_app_managed.filter(lifecycle_state__in=["open", "open_full", "open_partial"])
+    db_open = db_app_managed.filter(lifecycle_state__in=["open_full", "open_partial"])
 
     db_closed_with_trades = []
     for pos in db_app_managed.filter(lifecycle_state="closed"):

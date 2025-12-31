@@ -122,7 +122,7 @@ async def test_should_avoid_dividend_bear_call_moderate_risk():
         assignment_risk_level="moderate",
     )
 
-    should_avoid, reason = schedule.should_avoid_dividend(dividend_info, "bear_call_spread")
+    should_avoid, reason = schedule.should_avoid_dividend(dividend_info, "short_call_vertical")
 
     assert should_avoid is True
     assert "MODERATE assignment risk" in reason

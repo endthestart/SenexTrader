@@ -13,6 +13,7 @@ from tastytrade.order import Leg
 from accounts.models import TradingAccount
 from services.core.data_access import get_primary_tastytrade_account
 from services.core.exceptions import (
+    ConflictingPositionError,
     InvalidPriceEffectError,
     MarketClosedError,
     MissingPricingDataError,
@@ -58,6 +59,116 @@ class OrderExecutionService:
     def _should_dry_run(self, order_context: dict | None = None) -> bool:
         """Check if dry-run mode active. See planning/33-dry-run-support/"""
         return self._dry_run_enabled
+
+    async def _check_for_conflicting_positions(
+        self, account: TradingAccount, suggestion: TradingSuggestion
+    ) -> None:
+        """
+        Check if the suggestion conflicts with existing open positions or pending orders.
+
+        Raises ConflictingPositionError if:
+        - Any option symbol in the new order already exists in an open position
+        - Any option symbol in the new order has a pending/working order
+
+        This prevents the broker error:
+        'cannot_close_against_more_than_existing_position'
+        """
+        from asgiref.sync import sync_to_async
+
+        from trading.models import TastyTradeOrderHistory
+
+        # Get option symbols from the suggestion
+        new_symbols = set()
+        if suggestion.short_put_strike and suggestion.long_put_strike:
+            # Build put spread OCC symbols
+            exp_str = suggestion.expiration_date.strftime("%y%m%d")
+            underlying = suggestion.underlying_symbol.ljust(6)
+            short_put = f"{underlying}{exp_str}P{int(suggestion.short_put_strike * 1000):08d}"
+            long_put = f"{underlying}{exp_str}P{int(suggestion.long_put_strike * 1000):08d}"
+            new_symbols.add(short_put)
+            new_symbols.add(long_put)
+
+        if suggestion.short_call_strike and suggestion.long_call_strike:
+            # Build call spread OCC symbols
+            exp_str = suggestion.expiration_date.strftime("%y%m%d")
+            underlying = suggestion.underlying_symbol.ljust(6)
+            short_call = f"{underlying}{exp_str}C{int(suggestion.short_call_strike * 1000):08d}"
+            long_call = f"{underlying}{exp_str}C{int(suggestion.long_call_strike * 1000):08d}"
+            new_symbols.add(short_call)
+            new_symbols.add(long_call)
+
+        if not new_symbols:
+            return
+
+        @sync_to_async
+        def get_conflicting_symbols():
+            """Get symbols from open positions and working orders."""
+            existing_symbols = set()
+            position_map = {}  # symbol -> position_id
+            order_map = {}  # symbol -> order_id
+
+            # Check 1: Open positions (legs we currently hold)
+            open_positions = Position.objects.filter(
+                user=self.user,
+                trading_account=account,
+                lifecycle_state__in=["open_full", "open_partial"],
+            )
+
+            for pos in open_positions:
+                if pos.metadata and "legs" in pos.metadata:
+                    for leg in pos.metadata["legs"]:
+                        symbol = leg.get("symbol", "").strip()
+                        if symbol:
+                            existing_symbols.add(symbol)
+                            position_map[symbol] = pos.id
+
+            # Check 2: Working/pending orders (profit targets, pending opens)
+            # These are orders submitted to the broker but not yet filled
+            working_orders = TastyTradeOrderHistory.objects.filter(
+                user=self.user,
+                trading_account=account,
+                status__in=["Received", "Routed", "Live", "In Flight"],
+            )
+
+            for order in working_orders:
+                if order.order_data and "legs" in order.order_data:
+                    for leg in order.order_data["legs"]:
+                        symbol = leg.get("symbol", "").strip()
+                        if symbol:
+                            existing_symbols.add(symbol)
+                            order_map[symbol] = order.broker_order_id
+
+            return existing_symbols, position_map, order_map
+
+        existing_symbols, position_map, order_map = await get_conflicting_symbols()
+
+        # Check for conflicts
+        conflicts = new_symbols & existing_symbols
+        if conflicts:
+            # Find which position/order has the conflict
+            conflict_position_id = None
+            conflict_order_id = None
+            for symbol in conflicts:
+                if symbol in position_map:
+                    conflict_position_id = position_map[symbol]
+                if symbol in order_map:
+                    conflict_order_id = order_map[symbol]
+
+            conflict_source = []
+            if conflict_position_id:
+                conflict_source.append(f"Position {conflict_position_id}")
+            if conflict_order_id:
+                conflict_source.append(f"Order {conflict_order_id}")
+
+            logger.warning(
+                f"Position conflict detected for user {self.user.id}: "
+                f"Suggestion {suggestion.id} conflicts with {', '.join(conflict_source)}. "
+                f"Conflicting symbols: {conflicts}"
+            )
+            raise ConflictingPositionError(
+                conflicting_symbols=list(conflicts),
+                existing_position_id=conflict_position_id,
+            )
 
     async def _execute_dry_run(
         self,
@@ -175,6 +286,9 @@ class OrderExecutionService:
         if not account:
             logger.error("No primary trading account available for user %s", self.user.id)
             raise NoAccountError(user_id=self.user.id)
+
+        # Check for conflicting positions before proceeding
+        await self._check_for_conflicting_positions(account, suggestion)
 
         # Check test mode flag (controls sandbox vs production environment)
         is_test_mode = account.is_test
@@ -363,24 +477,27 @@ class OrderExecutionService:
         def _create_records():
             with transaction.atomic():
                 num_spreads = suggestion.put_spread_quantity + suggestion.call_spread_quantity
+                strategy_type = suggestion.strategy_id
+                is_trident = strategy_type == "senex_trident"
 
                 position = Position.objects.create(
                     user=self.user,
                     trading_account=account,
-                    strategy_type="senex_trident",
+                    strategy_type=strategy_type,
                     symbol=suggestion.underlying_symbol,
                     lifecycle_state="pending_entry",
                     quantity=num_spreads,
                     initial_risk=suggestion.max_risk,
                     spread_width=None,
-                    number_of_spreads=num_spreads,  # Senex Trident: 2 put spreads + 1 call spread
+                    number_of_spreads=num_spreads,
                     is_app_managed=True,
+                    is_automated_entry=suggestion.is_automated,
                     opening_price_effect=PriceEffect.CREDIT.value,
                     opened_at=timezone.now(),
                     metadata={
                         "suggestion_id": suggestion.id,
-                        "strategy_type": "senex_trident",
-                        "is_complete_trident": suggestion.call_spread_quantity > 0,
+                        "strategy_type": strategy_type,
+                        "is_complete_trident": is_trident and suggestion.call_spread_quantity > 0,
                         "strikes": {
                             "short_put": str(suggestion.short_put_strike),
                             "long_put": str(suggestion.long_put_strike),
@@ -916,7 +1033,6 @@ class OrderExecutionService:
         # This is the primary key for linking this position to its TastyTrade order
         if order_id:
             position.opening_order_id = order_id
-        # NOTE: broker_order_ids removed - use opening_order_id instead
 
         # Set opening_complex_order_id if this is part of an OTOCO order
         if complex_order_id:
@@ -1316,6 +1432,7 @@ class OrderExecutionService:
         """
         logger.info(f"SYNC PROFIT TARGETS: Starting for position {position.id}")
 
+        from services.strategies.factory import get_strategy
         from trading.models import Trade
 
         # Stock holdings (strategy_type=None) don't have profit targets
@@ -1326,12 +1443,10 @@ class OrderExecutionService:
                 "message": "Stock holdings do not have profit targets",
             }
 
-        # Determine strategy type and get appropriate strategy
-        if position.strategy_type == "senex_trident":
-            from services.strategies.senex_trident_strategy import SenexTridentStrategy
-
-            strategy = SenexTridentStrategy(self.user)
-        else:
+        # Get strategy from factory
+        try:
+            strategy = get_strategy(position.strategy_type, self.user)
+        except ValueError:
             logger.warning(f"Unknown strategy type: {position.strategy_type}")
             return {
                 "status": "error",

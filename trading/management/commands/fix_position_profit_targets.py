@@ -17,7 +17,6 @@ Usage:
 """
 
 from django.contrib.auth import get_user_model
-from django.utils import timezone
 
 from services.core.logging import get_logger
 from services.execution.order_service import OrderExecutionService
@@ -209,27 +208,25 @@ class Command(AsyncCommand):
                 self.style.WARNING(f"  📅 DTE <= {dte_threshold} - DTE close mode")
             )
             return await self._create_dte_close(position, current_dte, dry_run)
-        else:
-            # Normal mode: Check if profit targets need recovery
-            if not position.profit_targets_created:
-                self.stdout.write("  Profit targets never created - creating now")
-                return await self._recreate_profit_targets(
-                    position, opening_trade, dry_run, check_status
-                )
-
-            # Check if profit target orders still exist
-            needs_recovery = await self._check_profit_target_status(
-                position, opening_trade, check_status
+        # Normal mode: Check if profit targets need recovery
+        if not position.profit_targets_created:
+            self.stdout.write("  Profit targets never created - creating now")
+            return await self._recreate_profit_targets(
+                position, opening_trade, dry_run, check_status
             )
 
-            if needs_recovery:
-                self.stdout.write("  Profit targets need recovery")
-                return await self._recreate_profit_targets(
-                    position, opening_trade, dry_run, check_status
-                )
-            else:
-                self.stdout.write("  Profit targets are intact")
-                return "skipped"
+        # Check if profit target orders still exist
+        needs_recovery = await self._check_profit_target_status(
+            position, opening_trade, check_status
+        )
+
+        if needs_recovery:
+            self.stdout.write("  Profit targets need recovery")
+            return await self._recreate_profit_targets(
+                position, opening_trade, dry_run, check_status
+            )
+        self.stdout.write("  Profit targets are intact")
+        return "skipped"
 
     async def _check_profit_target_status(
         self, position: Position, opening_trade: Trade, check_status: bool
@@ -310,10 +307,9 @@ class Command(AsyncCommand):
                     )
 
                 return "recovered"
-            else:
-                error_msg = result.get("message", "Unknown error") if result else "No result"
-                self.stdout.write(self.style.ERROR(f"  Failed: {error_msg}"))
-                return "error"
+            error_msg = result.get("message", "Unknown error") if result else "No result"
+            self.stdout.write(self.style.ERROR(f"  Failed: {error_msg}"))
+            return "error"
 
         except Exception as e:
             self.stdout.write(self.style.ERROR(f"  Error: {e}"))
@@ -336,9 +332,8 @@ class Command(AsyncCommand):
                     self.style.SUCCESS(f"  DTE close order submitted at DTE={current_dte}")
                 )
                 return "dte_closed"
-            else:
-                self.stdout.write(self.style.WARNING("  DTE close not needed or already exists"))
-                return "skipped"
+            self.stdout.write(self.style.WARNING("  DTE close not needed or already exists"))
+            return "skipped"
 
         except Exception as e:
             self.stdout.write(self.style.ERROR(f"  DTE close failed: {e}"))

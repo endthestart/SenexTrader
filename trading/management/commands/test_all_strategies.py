@@ -16,7 +16,7 @@ from django.contrib.auth import get_user_model
 
 from services.management.utils import AsyncCommand, add_user_arguments, aget_user_from_options
 from services.market_data.analysis import MarketAnalyzer
-from services.strategies.registry import STRATEGY_REGISTRY, get_strategy
+from services.strategies.factory import STRATEGY_DEFINITIONS, get_strategy
 
 User = get_user_model()
 
@@ -57,7 +57,7 @@ class Command(AsyncCommand):
         symbol = options["symbol"]
         self.stdout.write(f"Testing with user: {user.email}")
         self.stdout.write(f"Symbol: {symbol}")
-        self.stdout.write(f"Total strategies: {len(STRATEGY_REGISTRY)}\n")
+        self.stdout.write(f"Total strategies: {len(STRATEGY_DEFINITIONS)}\n")
 
         # Run async tests
         await self.run_tests(user, symbol)
@@ -105,7 +105,7 @@ class Command(AsyncCommand):
 
             # Test each strategy
             results = []
-            strategy_names = sorted(STRATEGY_REGISTRY.keys())
+            strategy_names = sorted(STRATEGY_DEFINITIONS.keys())
 
             self.stdout.write("=" * 80)
             self.stdout.write("Testing strategies...")

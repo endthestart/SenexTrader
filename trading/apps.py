@@ -1,5 +1,3 @@
-import os
-
 from django.apps import AppConfig
 
 
@@ -15,22 +13,10 @@ class TradingConfig(AppConfig):
         Delegates data validation to Celery task to avoid database access during initialization.
         Non-blocking - queues task and continues.
         """
-        # Import strategy modules to trigger @register_strategy decorators
-        # Only run during server startup, skip for migrations/management commands
+        # Strategy modules are now instantiated via StrategyFactory
+        # No decorator-based registration needed - factory uses explicit definitions
+        import os
         import sys
-
-        import services.strategies.calendar_spread_strategy
-        import services.strategies.call_backspread_strategy
-        import services.strategies.cash_secured_put_strategy
-        import services.strategies.covered_call_strategy
-        import services.strategies.credit_spread_strategy
-        import services.strategies.debit_spread_strategy
-        import services.strategies.iron_butterfly_strategy
-        import services.strategies.long_iron_condor_strategy
-        import services.strategies.long_straddle_strategy
-        import services.strategies.long_strangle_strategy
-        import services.strategies.senex_trident_strategy
-        import services.strategies.short_iron_condor_strategy  # noqa: F401
 
         management_commands = ["check", "migrate", "makemigrations", "shell", "test"]
         if os.environ.get("RUN_MAIN") != "true" or any(

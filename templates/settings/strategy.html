@@ -18,6 +18,18 @@
     </div>
 
     <div class="mt-3">
+      <label class="form-label text-muted" for="automated-trading-symbol">Underlying Symbol</label>
+      <select class="form-select bg-dark text-light" id="automated-trading-symbol" style="max-width: 300px;"
+              {% if not tastytrade_account or not tastytrade_account.is_active %}disabled{% endif %}>
+        <option value="QQQ" {% if automated_trading_symbol == 'QQQ' %}selected{% endif %}>QQQ - Invesco QQQ Trust</option>
+        <option value="SPY" {% if automated_trading_symbol == 'SPY' %}selected{% endif %}>SPY - SPDR S&P 500 ETF</option>
+      </select>
+      <div class="form-text text-muted small">
+        Select the underlying ETF for automated Senex Trident trades.
+      </div>
+    </div>
+
+    <div class="mt-3">
       <label class="form-label text-muted" for="automation-offset-input">Execution Price Offset (cents)</label>
       <div class="input-group" style="max-width: 300px;">
         <input type="number"
@@ -277,6 +289,30 @@ saveAutomationOffsetButton?.addEventListener('click', async function() {
         this.disabled = false;
     }
 });
+
+// Handle symbol selection change
+const symbolSelect = document.getElementById('automated-trading-symbol');
+symbolSelect?.addEventListener('change', async function() {
+    const symbol = this.value;
+    const originalValue = this.dataset.originalValue || 'QQQ';
+    
+    try {
+        await updateAutomatedTradingSettings(
+            { symbol: symbol },
+            (data) => {
+                this.dataset.originalValue = data.symbol;
+                window.showResultModal('success', 'Symbol Updated', `Automated trading will now use ${data.symbol}.`);
+            }
+        );
+    } catch (error) {
+        this.value = originalValue;
+        window.showResultModal('error', 'Update Failed', 'Failed to update symbol. Please try again.');
+    }
+});
+// Store initial value
+if (symbolSelect) {
+    symbolSelect.dataset.originalValue = symbolSelect.value;
+}
 
 // Handle email preference save
 document.getElementById('save-email-preference')?.addEventListener('click', async function() {

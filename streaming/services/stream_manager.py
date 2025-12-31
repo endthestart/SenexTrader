@@ -108,7 +108,7 @@ class UserStreamManager:
             "disconnected"  # disconnected, connecting, connected, error, stopped
         )
 
-        # Initialize helpers (Phase 5.1 extraction)
+        # Initialize helpers
         self.order_processor = OrderEventProcessor(user_id, self._broadcast)
         self.metrics_calculator = PositionMetricsCalculator(user_id)
         self.subscription_manager = StreamSubscriptionManager(user_id)
@@ -430,9 +430,8 @@ class UserStreamManager:
         # IMPORTANT: Runtime import used here to break circular dependency
         # between streaming and services modules. Do NOT move this import
         # to module level as it will create circular import issues.
-        # Epic 22: Replaced if/elif chain with registry lookup (task-025)
         # ruff: noqa: PLC0415
-        from services.strategies.registry import get_strategy
+        from services.strategies.factory import get_strategy
 
         try:
             strategy = get_strategy(strategy_type, user)
@@ -1050,14 +1049,14 @@ class UserStreamManager:
         1. Read from Redis cache (populated by DXLinkStreamer/AlertStreamer)
         2. Calculate metrics using service layer (no duplication)
         3. Broadcast via WebSocket for real-time UI updates
-        4. Database persistence handled by Celery task (trading.tasks.sync_positions_task)
+        4. Database persistence handled by Celery task (trading.tasks.batch_sync_data_task)
         """
         logger.info(f"User {self.user_id}: Starting unified position metrics update service")
 
         # Update loop
         while self.is_streaming:
             try:
-                # Delegate to metrics calculator helper (Phase 5.1b)
+                # Delegate to metrics calculator helper
                 update_data = await self.metrics_calculator.calculate_unified_metrics()
 
                 if update_data:
@@ -1092,7 +1091,7 @@ class UserStreamManager:
             logger.info(f"User {self.user_id}: Starting AlertStreamer order listener")
 
             async for order in alert_streamer.listen(PlacedOrder):
-                # Delegate to order processor helper (Phase 5.1a)
+                # Delegate to order processor helper
                 await self.order_processor.handle_order_event(order)
 
         except Exception as e:

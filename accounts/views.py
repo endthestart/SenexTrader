@@ -440,6 +440,17 @@ class StrategySettingsView(SettingsBaseView):
             user=self.request.user, connection_type="TASTYTRADE"
         ).first()
 
+        # Get automated trading symbol from senex_trident config
+        # Get automated trading symbol (example default: QQQ - customize for your needs)
+        senex_config = StrategyConfiguration.objects.filter(
+            user=self.request.user, strategy_id="senex_trident"
+        ).first()
+        context["automated_trading_symbol"] = "QQQ"
+        if senex_config and senex_config.parameters:
+            context["automated_trading_symbol"] = senex_config.parameters.get(
+                "senex_trident", {}
+            ).get("underlying_symbol", "QQQ")
+
         # Get profit target settings for spread strategies
         credit_config = StrategyConfiguration.objects.filter(
             user=self.request.user, strategy_id="short_put_vertical"

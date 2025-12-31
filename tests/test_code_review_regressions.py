@@ -104,9 +104,9 @@ class TestADXDirectionalGating:
     @pytest.mark.asyncio
     async def test_bear_put_no_adx_bonus_in_bull_trend(self, mock_user):
         """Bear Put should NOT get ADX bonus when MACD shows strong bullish trend."""
-        from services.strategies.debit_spread_strategy import LongPutVerticalStrategy
+        from services.strategies.factory import get_strategy
 
-        strategy = LongPutVerticalStrategy(mock_user)
+        strategy = get_strategy("long_put_vertical", mock_user)
 
         # Strong bull trend: High ADX + strong_bullish MACD
         report = create_neutral_market_report()
@@ -124,9 +124,9 @@ class TestADXDirectionalGating:
     @pytest.mark.asyncio
     async def test_bull_call_no_adx_bonus_in_bear_trend(self, mock_user):
         """Bull Call should NOT get ADX bonus when MACD shows strong bearish trend."""
-        from services.strategies.debit_spread_strategy import LongCallVerticalStrategy
+        from services.strategies.factory import get_strategy
 
-        strategy = LongCallVerticalStrategy(mock_user)
+        strategy = get_strategy("long_call_vertical", mock_user)
 
         # Strong bear trend: High ADX + strong_bearish MACD
         report = create_neutral_market_report()
@@ -144,9 +144,9 @@ class TestADXDirectionalGating:
     @pytest.mark.asyncio
     async def test_bear_put_gets_adx_bonus_in_bear_trend(self, mock_user):
         """Bear Put SHOULD get ADX bonus when MACD shows strong bearish trend."""
-        from services.strategies.debit_spread_strategy import LongPutVerticalStrategy
+        from services.strategies.factory import get_strategy
 
-        strategy = LongPutVerticalStrategy(mock_user)
+        strategy = get_strategy("long_put_vertical", mock_user)
 
         # Strong bear trend: High ADX + strong_bearish MACD (correct direction)
         report = create_neutral_market_report()

@@ -232,20 +232,24 @@ class EnhancedRiskManagerTests(TestCase):
         # Create strategy configuration for user
         config = StrategyConfiguration.objects.create(user=self.user)
 
-        # Test all account value tiers
+        # Test all account value tiers (updated per commit 7210660)
+        # < $10k: 3, $10k-$25k: 5, $25k-$50k: 7, $50k-$75k: 9, >= $75k: 11
         test_cases = [
-            (20000, 3),  # Under $25k
-            (24999, 3),  # Just under $25k
-            (25000, 5),  # Exactly $25k
-            (30000, 5),  # $25k-$50k range
-            (49999, 5),  # Just under $50k
-            (50000, 7),  # Exactly $50k
-            (60000, 7),  # $50k-$75k range
-            (74999, 7),  # Just under $75k
-            (75000, 9),  # Exactly $75k (NEW TIER)
-            (80000, 9),  # Above $75k
-            (100000, 9),  # Well above $75k
-            (1000000, 9),  # Very high account value
+            (5000, 3),   # Under $10k
+            (9999, 3),   # Just under $10k
+            (10000, 5),  # Exactly $10k
+            (20000, 5),  # $10k-$25k range
+            (24999, 5),  # Just under $25k
+            (25000, 7),  # Exactly $25k
+            (30000, 7),  # $25k-$50k range
+            (49999, 7),  # Just under $50k
+            (50000, 9),  # Exactly $50k
+            (60000, 9),  # $50k-$75k range
+            (74999, 9),  # Just under $75k
+            (75000, 11), # Exactly $75k
+            (80000, 11), # Above $75k
+            (100000, 11), # Well above $75k
+            (1000000, 11), # Very high account value
         ]
 
         for account_value, expected_width in test_cases:

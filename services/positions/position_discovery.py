@@ -450,14 +450,14 @@ class PositionDiscoveryService:
 
         if leg_count == 6:
             return "senex_trident"
-        elif leg_count == 2:
+        if leg_count == 2:
             # Check leg types to distinguish put spread vs call spread
             leg_types = [leg.get("instrument_type", "") for leg in legs]
             if all("Put" in lt or "P" in lt for lt in leg_types):
-                return "bull_put_spread"
-            elif all("Call" in lt or "C" in lt for lt in leg_types):
-                return "bear_call_spread"
-            return "bull_put_spread"  # Default to put spread
+                return "short_put_vertical"
+            if all("Call" in lt or "C" in lt for lt in leg_types):
+                return "short_call_vertical"
+            return "short_put_vertical"  # Default to put spread
 
         return None
 
@@ -483,16 +483,16 @@ class PositionDiscoveryService:
 
         if leg_count == 6:
             return "senex_trident"
-        elif leg_count == 2:
+        if leg_count == 2:
             # Check if put or call from OCC symbol
             # OCC format: SYMBOL YYMMDD P/C STRIKE
             for tx in transactions:
                 if tx.symbol:
                     if "P" in tx.symbol[6:]:
-                        return "bull_put_spread"
-                    elif "C" in tx.symbol[6:]:
-                        return "bear_call_spread"
-            return "bull_put_spread"  # Default
+                        return "short_put_vertical"
+                    if "C" in tx.symbol[6:]:
+                        return "short_call_vertical"
+            return "short_put_vertical"  # Default
 
         return None
 

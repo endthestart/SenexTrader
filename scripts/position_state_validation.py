@@ -326,7 +326,7 @@ def validate_positions(args):
     open_positions = Position.objects.filter(
         user=account.user,
         is_app_managed=True,
-        lifecycle_state__in=["open", "open_full", "open_partial"],
+        lifecycle_state__in=["open_full", "open_partial"],
     )
 
     for pos in open_positions:

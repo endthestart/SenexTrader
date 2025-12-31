@@ -117,21 +117,32 @@ class SpreadWidthScalingTests(TestCase):
         self.config = StrategyConfiguration.objects.create(user=self.user)
 
     def test_spread_width_all_tiers(self):
-        """Test spread width for all account value tiers"""
+        """Test spread width for all account value tiers
+        
+        Updated tiers (commit 7210660):
+        - < $10k: 3-point spreads
+        - $10k-$25k: 5-point spreads  
+        - $25k-$50k: 7-point spreads
+        - $50k-$75k: 9-point spreads
+        - >= $75k: 11-point spreads
+        """
         # Define tier boundaries and expected widths
         tier_tests = [
             # (account_value, expected_width, description)
-            (Decimal("10000"), 3, "Under $25k - minimum account"),
-            (Decimal("24999"), 3, "Just under $25k tier boundary"),
-            (Decimal("25000"), 5, "Exactly $25k - tier 2 boundary"),
-            (Decimal("37500"), 5, "Mid-tier 2 ($25k-$50k)"),
-            (Decimal("49999"), 5, "Just under $50k tier boundary"),
-            (Decimal("50000"), 7, "Exactly $50k - tier 3 boundary"),
-            (Decimal("62500"), 7, "Mid-tier 3 ($50k-$75k)"),
-            (Decimal("74999"), 7, "Just under $75k tier boundary"),
-            (Decimal("75000"), 9, "Exactly $75k - tier 4 boundary"),
-            (Decimal("100000"), 9, "Large account $100k"),
-            (Decimal("1000000"), 9, "Very large account $1M"),
+            (Decimal("5000"), 3, "Under $10k - smallest tier"),
+            (Decimal("9999"), 3, "Just under $10k tier boundary"),
+            (Decimal("10000"), 5, "Exactly $10k - tier 2 boundary"),
+            (Decimal("20000"), 5, "Mid-tier 2 ($10k-$25k)"),
+            (Decimal("24999"), 5, "Just under $25k tier boundary"),
+            (Decimal("25000"), 7, "Exactly $25k - tier 3 boundary"),
+            (Decimal("37500"), 7, "Mid-tier 3 ($25k-$50k)"),
+            (Decimal("49999"), 7, "Just under $50k tier boundary"),
+            (Decimal("50000"), 9, "Exactly $50k - tier 4 boundary"),
+            (Decimal("62500"), 9, "Mid-tier 4 ($50k-$75k)"),
+            (Decimal("74999"), 9, "Just under $75k tier boundary"),
+            (Decimal("75000"), 11, "Exactly $75k - tier 5 boundary"),
+            (Decimal("100000"), 11, "Large account $100k"),
+            (Decimal("1000000"), 11, "Very large account $1M"),
         ]
 
         for account_value, expected_width, description in tier_tests:

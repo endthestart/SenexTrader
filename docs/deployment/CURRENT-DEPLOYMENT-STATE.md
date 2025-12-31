@@ -35,7 +35,7 @@ This document reflects the **actual current deployment** as of October 30, 2025,
 ### Deployment Method
 - **Primary**: Quadlet container definitions + manual deployment
 - **Automation**: Partial (Ansible structure exists but deployment is primarily manual/scripted)
-- **Container Registry**: `gitea.andermic.net/endthestart/senex-trader`
+- **Container Registry**: Configure in `.senextrader.json` (see docker/README.md)
 
 ### Current Phase
 **Phase 1: Single Server MVP**

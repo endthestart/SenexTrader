@@ -20,7 +20,7 @@ import copy
 import os
 from pathlib import Path
 
-from services.core.logging import LOGGING as BASE_LOGGING  # noqa: E402
+from services.core.logging import LOGGING as BASE_LOGGING
 
 from .base import *  # noqa: F403
 

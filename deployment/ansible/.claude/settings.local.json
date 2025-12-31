@@ -1,7 +1,7 @@
 {
   "permissions": {
     "allow": [
-      "Read(//home/andermic/Development/senextrader_project/senextrader/**)"
+      "Read(//path/to/your/senextrader/**)"
     ],
     "deny": [],
     "ask": []

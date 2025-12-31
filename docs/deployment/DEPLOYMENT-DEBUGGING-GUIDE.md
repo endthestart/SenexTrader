@@ -87,7 +87,7 @@ cat /etc/nginx/sites-enabled/your-domain.com
 - **Service Name**: `web.service`
 - **Container Name**: `web`
 - **Port**: 8000
-- **Image**: `gitea.andermic.net/endthestart/senex-trader:${IMAGE_TAG}`
+- **Image**: `${REGISTRY}/${OWNER}/senex-trader:${IMAGE_TAG}`
 - **Command**: `web` (runs Daphne ASGI server)
 
 ### Check Service Status
@@ -974,13 +974,13 @@ find /opt/senex-trader/backups/ -name "*.sql.gz" -mtime +7 -delete
 **Debug:**
 ```bash
 # Check registry connectivity
-ping gitea.andermic.net
+ping your-registry.example.com
 
 # Check credentials
-sudo -u senex podman login gitea.andermic.net
+sudo -u senex podman login your-registry.example.com
 
 # Try manual pull
-sudo -u senex podman pull gitea.andermic.net/endthestart/senex-trader:latest
+sudo -u senex podman pull your-registry.example.com/your-username/senex-trader:latest
 ```
 
 ## Common Scenarios

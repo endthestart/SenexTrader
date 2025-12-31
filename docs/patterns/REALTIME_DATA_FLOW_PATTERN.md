@@ -45,7 +45,7 @@ This document defines the **canonical data flow pattern** for all real-time data
 │                    SERVICE LAYER                             │
 │  Read-only services that calculate from cached data          │
 │  - GreeksService.get_position_greeks()                       │
-│  - PositionPnLCalculator.calculate_*()                       │
+│  - PnLCalculator.calculate_*()                               │
 │  - Single source of truth for each calculation               │
 └────────────────────┬─────────────────────────────────────────┘
                      │
@@ -90,8 +90,8 @@ This document defines the **canonical data flow pattern** for all real-time data
 
 **Correct**:
 ```python
-# services/position_pnl_calculator.py
-class PositionPnLCalculator:
+# services/positions/lifecycle/pnl_calculator.py
+class PnLCalculator:
     @staticmethod
     def calculate_leg_pnl(avg_price, current_price, quantity, direction):
         # Calculation logic here
@@ -599,14 +599,14 @@ def sync_positions(self):
 
 ```python
 # Good - Single source
-class PositionPnLCalculator:
+class PnLCalculator:
     @staticmethod
     def calculate_leg_pnl(...):
         return (avg_price - current_price) * qty
 
 # Used by both
-StreamManager: pnl = PositionPnLCalculator.calculate_leg_pnl(...)
-PositionSync: pnl = PositionPnLCalculator.calculate_leg_pnl(...)
+StreamManager: pnl = PnLCalculator.calculate_leg_pnl(...)
+PositionSync: pnl = PnLCalculator.calculate_leg_pnl(...)
 ```
 
 ### Anti-Pattern #2: Frontend Polling

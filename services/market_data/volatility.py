@@ -8,7 +8,6 @@ Provides comprehensive volatility metrics combining:
 - Volatility percentile - current vs historical range
 - Volatility trend - increasing/decreasing
 
-Epic 05, Task 005: Volatility Analyzer
 """
 
 from __future__ import annotations

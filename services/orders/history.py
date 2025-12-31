@@ -6,9 +6,10 @@ Creates local cache of order data for position reconstruction.
 from datetime import datetime, timedelta
 from decimal import Decimal
 
-from asgiref.sync import sync_to_async
 from django.contrib.auth import get_user_model
 from django.utils import timezone
+
+from asgiref.sync import sync_to_async
 
 from accounts.models import TradingAccount
 from services.core.logging import get_logger
@@ -65,14 +66,40 @@ class OrderHistoryService:
                 result["errors"].append("Unable to obtain TastyTrade session")
                 return result
 
-            # Fetch order history
+            # Fetch order history with pagination
+            # TastyTrade API returns max 50 orders per page by default
             start_date = (timezone.now() - timedelta(days=days_back)).date()
             tt_account = await Account.a_get(session, account.account_number)
-            order_history = await tt_account.a_get_order_history(session, start_date=start_date)
+
+            # Paginate through all orders
+            all_orders = []
+            page_offset = 0
+            per_page = 100  # Max allowed per page
+
+            while True:
+                order_page = await tt_account.a_get_order_history(
+                    session,
+                    start_date=start_date,
+                    per_page=per_page,
+                    page_offset=page_offset,
+                )
+
+                if not order_page:
+                    break
+
+                all_orders.extend(order_page)
+
+                # If we got fewer than per_page, we've reached the end
+                if len(order_page) < per_page:
+                    break
+
+                page_offset += 1
+
+            order_history = all_orders
 
             logger.info(
                 f"Fetched {len(order_history)} orders from TastyTrade for account "
-                f"{account.account_number} (days_back={days_back}, symbol={symbol})"
+                f"{account.account_number} (days_back={days_back}, symbol={symbol}, pages={page_offset + 1})"
             )
 
             # Process each order

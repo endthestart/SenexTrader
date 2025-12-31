@@ -8,7 +8,6 @@ Tests closure processing and P&L calculation, ensuring:
 4. Profit target closures are identified
 """
 
-from datetime import date
 from decimal import Decimal
 from unittest.mock import AsyncMock, MagicMock, patch
 

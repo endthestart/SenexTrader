@@ -63,12 +63,12 @@ class TestSensitiveDataFilter:
         assert filter.filter(mock_record) is True
         assert mock_record.msg == "Database connection: pwd=[REDACTED_PASSWORD]"
 
-        # Test pass abbreviation
-        mock_record.msg = "Auth failed for user with pass: wrongpass"
+        # Test pass with equals sign (assignment context)
+        mock_record.msg = "Config setting pass=wrongpass"
         assert filter.filter(mock_record) is True
-        assert mock_record.msg == "Auth failed for user with pass: [REDACTED_PASSWORD]"
+        assert mock_record.msg == "Config setting pass=[REDACTED_PASSWORD]"
 
-        # Test with quotes
+        # Test with quotes (JSON-style)
         mock_record.msg = 'Login attempt {"username": "john", "password": "secret123"}'
         assert filter.filter(mock_record) is True
         assert (

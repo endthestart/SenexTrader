@@ -1,10 +1,10 @@
 """
-Integration tests for StrategyRegistry.
+Integration tests for Strategy Factory.
 
-Epic 28 Task 012: Verify all registered strategies implement correct interfaces,
+Epic 50 Task 4.0: Verify all strategies in factory implement correct interfaces,
 use SDK patterns, and can generate suggestions.
 
-This test automatically covers new strategies added to the registry.
+This test automatically covers new strategies added to the factory.
 """
 
 import inspect
@@ -12,16 +12,16 @@ import inspect
 import pytest
 
 from services.strategies.base import BaseStrategy
-from services.strategies.registry import get_all_strategies
+from services.strategies.factory import get_all_strategies, list_strategies
 
 
 @pytest.mark.django_db
-class TestStrategyRegistryIntegration:
-    """Integration tests for all registered strategies."""
+class TestStrategyFactoryIntegration:
+    """Integration tests for all strategies in factory."""
 
-    def test_all_strategies_registered(self):
-        """Verify expected strategies are in registry."""
-        strategies = get_all_strategies()
+    def test_all_strategies_in_factory(self):
+        """Verify expected strategies are in factory."""
+        strategies = list_strategies()
 
         expected = [
             "long_call_vertical",
@@ -33,39 +33,37 @@ class TestStrategyRegistryIntegration:
             "iron_butterfly",
             "long_straddle",
             "long_strangle",
-            "long_call_calendar",
+            "short_straddle",
+            "short_strangle",
+            "call_calendar",
+            "put_calendar",
             "covered_call",
             "cash_secured_put",
             "long_call_ratio_backspread",
+            "senex_trident",
         ]
 
         for strategy_name in expected:
-            assert strategy_name in strategies, f"Strategy {strategy_name} not in registry"
+            assert strategy_name in strategies, f"Strategy {strategy_name} not in factory"
 
         assert len(strategies) >= len(
             expected
         ), f"Expected at least {len(expected)} strategies, got {len(strategies)}"
 
     def test_all_strategies_can_instantiate(self, mock_user):
-        """Verify all registered strategies can be instantiated."""
-        strategies = get_all_strategies()
+        """Verify all strategies can be instantiated."""
+        strategies = get_all_strategies(mock_user)
 
-        for strategy_name, strategy_class in strategies.items():
+        for strategy_name, instance in strategies.items():
             if strategy_name == "senex_trident":
                 continue
-            if strategy_name == "credit_spread":
-                continue
 
-            try:
-                instance = strategy_class(mock_user)
-                assert instance is not None
-                assert instance.strategy_name == strategy_name
-            except Exception as e:
-                pytest.fail(f"Failed to instantiate {strategy_name}: {e}")
+            assert instance is not None
+            assert instance.strategy_name == strategy_name
 
     def test_all_strategies_have_required_methods(self, mock_user):
         """Verify each strategy implements required abstract methods."""
-        strategies = get_all_strategies()
+        strategies = get_all_strategies(mock_user)
 
         required_methods = [
             "build_opening_legs",
@@ -75,11 +73,9 @@ class TestStrategyRegistryIntegration:
             "get_dte_exit_threshold",
         ]
 
-        for strategy_name, strategy_class in strategies.items():
+        for strategy_name, instance in strategies.items():
             if strategy_name == "senex_trident":
                 continue
-
-            instance = strategy_class(mock_user)
 
             for method_name in required_methods:
                 assert hasattr(
@@ -91,17 +87,13 @@ class TestStrategyRegistryIntegration:
 
     def test_all_strategies_have_correct_return_type_hints(self, mock_user):
         """Verify build_opening_legs has correct type hint (returns list[Leg])."""
-        strategies = get_all_strategies()
+        strategies = get_all_strategies(mock_user)
 
-        for strategy_name, strategy_class in strategies.items():
+        for strategy_name, instance in strategies.items():
             if strategy_name == "senex_trident":
                 continue
 
-            instance = strategy_class(mock_user)
-
             # Check method exists and has type hints
-            import inspect
-
             method = getattr(instance, "build_opening_legs", None)
             assert method is not None, f"{strategy_name} missing build_opening_legs"
 
@@ -120,21 +112,20 @@ class TestStrategyRegistryIntegration:
                 print(f"Info: {strategy_name} type hint check: {e}")
 
     def test_no_duplicate_strategy_names(self):
-        """Ensure no duplicate strategy names in registry."""
-        strategies = get_all_strategies()
-        strategy_names = list(strategies.keys())
+        """Ensure no duplicate strategy names in factory."""
+        strategies = list_strategies()
 
-        assert len(strategy_names) == len(
-            set(strategy_names)
-        ), "Duplicate strategy names found in registry"
+        assert len(strategies) == len(
+            set(strategies)
+        ), "Duplicate strategy names found in factory"
 
-    def test_all_strategies_subclass_base_strategy(self):
+    def test_all_strategies_subclass_base_strategy(self, mock_user):
         """Verify all strategies inherit from BaseStrategy."""
-        strategies = get_all_strategies()
+        strategies = get_all_strategies(mock_user)
 
-        for strategy_name, strategy_class in strategies.items():
-            assert issubclass(
-                strategy_class, BaseStrategy
+        for strategy_name, instance in strategies.items():
+            assert isinstance(
+                instance, BaseStrategy
             ), f"{strategy_name} does not inherit from BaseStrategy"
 
 
@@ -142,15 +133,15 @@ class TestStrategyRegistryIntegration:
 class TestSDKCompliance:
     """Verify SDK pattern compliance across all strategies."""
 
-    def test_strategy_uses_sdk_helpers(self):
+    def test_strategy_uses_sdk_helpers(self, mock_user):
         """Verify strategies import from sdk_instruments or leg_builder."""
-        strategies = get_all_strategies()
+        strategies = get_all_strategies(mock_user)
 
-        for strategy_name, strategy_class in strategies.items():
+        for strategy_name, instance in strategies.items():
             if strategy_name == "senex_trident":
                 continue
 
-            source = inspect.getsource(strategy_class)
+            source = inspect.getsource(type(instance))
 
             # Should use SDK helper imports (either direct or via base classes)
             uses_sdk_helpers = (
@@ -169,19 +160,22 @@ class TestSDKCompliance:
                 or "DebitSpreadStrategy" in source
             )
 
+            # Calendar strategies have NotImplementedError stubs (Phase 5.3)
+            is_calendar_stub = strategy_name in ("call_calendar", "put_calendar")
+
             assert (
-                uses_sdk_helpers or is_base_class
+                uses_sdk_helpers or is_base_class or is_calendar_stub
             ), f"{strategy_name} does not use SDK helper imports or spread base"
 
-    def test_strategy_no_dict_leg_construction(self):
+    def test_strategy_no_dict_leg_construction(self, mock_user):
         """Verify strategies don't manually construct dict legs."""
-        strategies = get_all_strategies()
+        strategies = get_all_strategies(mock_user)
 
-        for strategy_name, strategy_class in strategies.items():
+        for strategy_name, instance in strategies.items():
             if strategy_name == "senex_trident":
                 continue
 
-            source = inspect.getsource(strategy_class)
+            source = inspect.getsource(type(instance))
 
             # Anti-pattern: returning dicts as legs with these fields together
             dict_patterns = [
@@ -202,41 +196,44 @@ class TestSDKCompliance:
 
 
 @pytest.mark.django_db
-@pytest.mark.parametrize(
-    ("strategy_name", "strategy_class"),
-    [(name, cls) for name, cls in get_all_strategies().items()],
-)
 class TestParametrizedStrategyValidation:
     """Parametrized tests for each strategy (cleaner test output)."""
 
-    def test_strategy_instantiation(self, strategy_name, strategy_class, mock_user):
+    @pytest.fixture(params=list_strategies())
+    def strategy_name(self, request):
+        return request.param
+
+    def test_strategy_instantiation(self, strategy_name, mock_user):
         """Test that each strategy can be instantiated."""
         if strategy_name == "senex_trident":
             pytest.skip("Senex Trident has special requirements")
-        if strategy_name == "credit_spread":
-            pytest.skip("CreditSpread is parameterized - use bull_put_spread/bear_call_spread")
 
-        instance = strategy_class(mock_user)
+        from services.strategies.factory import get_strategy
+
+        instance = get_strategy(strategy_name, mock_user)
         assert instance is not None
         assert instance.strategy_name == strategy_name
 
-    def test_strategy_has_name_property(self, strategy_name, strategy_class, mock_user):
+    def test_strategy_has_name_property(self, strategy_name, mock_user):
         """Test that each strategy has strategy_name property."""
         if strategy_name == "senex_trident":
             pytest.skip("Senex Trident has special requirements")
-        if strategy_name == "credit_spread":
-            pytest.skip("CreditSpread is parameterized - use bull_put_spread/bear_call_spread")
 
-        instance = strategy_class(mock_user)
+        from services.strategies.factory import get_strategy
+
+        instance = get_strategy(strategy_name, mock_user)
         assert hasattr(instance, "strategy_name")
         assert instance.strategy_name == strategy_name
 
-    def test_strategy_has_min_score_threshold(self, strategy_name, strategy_class, mock_user):
+    def test_strategy_has_min_score_threshold(self, strategy_name, mock_user):
         """Test that each strategy has MIN_SCORE_THRESHOLD defined."""
         if strategy_name == "senex_trident":
             pytest.skip("Senex Trident has special requirements")
 
-        instance = strategy_class(mock_user)
+        from services.strategies.factory import get_strategy
+
+        instance = get_strategy(strategy_name, mock_user)
         assert hasattr(instance, "MIN_SCORE_THRESHOLD")
         assert isinstance(instance.MIN_SCORE_THRESHOLD, (int, float))
         assert instance.MIN_SCORE_THRESHOLD > 0
+

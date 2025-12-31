@@ -35,14 +35,17 @@ STRATEGY_DISPLAY_NAMES = {
     "short_call_vertical": "Short Call Vertical",
     "long_put_vertical": "Long Put Vertical",
     "long_call_vertical": "Long Call Vertical",
-    "long_call_calendar": "Long Call Calendar",
-    "long_put_calendar": "Long Put Calendar",
+    "call_calendar": "Call Calendar",
+    "put_calendar": "Put Calendar",
     "short_iron_condor": "Short Iron Condor",
     "long_iron_condor": "Long Iron Condor",
     "iron_butterfly": "Iron Butterfly",
     "long_call_ratio_backspread": "Long Call Ratio Backspread",
+    "long_put_ratio_backspread": "Long Put Ratio Backspread",
     "long_straddle": "Long Straddle",
+    "short_straddle": "Short Straddle",
     "long_strangle": "Long Strangle",
+    "short_strangle": "Short Strangle",
     "cash_secured_put": "Cash-Secured Put",
     "covered_call": "Covered Call",
     "senex_trident": "Senex Trident",
@@ -56,16 +59,19 @@ STRATEGY_ORDER = [
     "long_put_vertical",
     "long_call_vertical",
     # Calendar Spreads
-    "long_call_calendar",
-    "long_put_calendar",
+    "call_calendar",
+    "put_calendar",
     # Multi-leg Strategies
     "short_iron_condor",
     "long_iron_condor",
     "iron_butterfly",
     # Volatility Strategies
     "long_straddle",
+    "short_straddle",
     "long_strangle",
+    "short_strangle",
     "long_call_ratio_backspread",
+    "long_put_ratio_backspread",
     # Stock + Option Strategies
     "cash_secured_put",
     "covered_call",
@@ -345,20 +351,29 @@ def dashboard_view(request: HttpRequest) -> HttpResponse:
 
     context["streaming_status"] = streaming_status
 
-    # Get completed positions summary
+    # Get P&L summary for app-managed positions
     from decimal import Decimal
 
     from trading.models import Position
 
-    completed_positions = Position.objects.filter(
-        user=request.user, lifecycle_state="closed", is_app_managed=True
+    app_managed_positions = Position.objects.filter(user=request.user, is_app_managed=True)
+
+    # Realized P&L: sum from ALL app-managed positions (includes partial closes)
+    total_realized_pnl = sum(
+        pos.total_realized_pnl or Decimal("0") for pos in app_managed_positions
     )
 
-    total_realized_pnl = sum(pos.total_realized_pnl or Decimal("0") for pos in completed_positions)
+    # Unrealized P&L: sum from open positions only
+    open_positions = app_managed_positions.filter(
+        lifecycle_state__in=["open_full", "open_partial"]
+    )
+    total_unrealized_pnl = sum(
+        pos.unrealized_pnl or Decimal("0") for pos in open_positions
+    )
 
-    context["completed_positions_data"] = {
-        "count": completed_positions.count(),
-        "total_realized_pnl": total_realized_pnl,
+    context["pnl_summary"] = {
+        "realized_pnl": total_realized_pnl,
+        "unrealized_pnl": total_unrealized_pnl,
     }
 
     # Add timestamp
@@ -383,7 +398,6 @@ def positions_view(request: HttpRequest) -> HttpResponse:
     from services.positions.lifecycle.dte_manager import DTEManager
     from trading.models import Position
 
-    # Phase 4.2: Optimize queries with select_related and prefetch_related to avoid N+1
     # Include both 'pending_entry' (order submitted) and 'open' lifecycle states
     managed_positions = (
         Position.objects.filter(
@@ -688,12 +702,12 @@ def trading_view(request):
     if not has_configured_primary_account_sync(request.user):
         return render(request, "trading/broker_required.html", {"page_title": "Options Trading"})
 
-    from services.strategies.registry import list_registered_strategies
+    from services.strategies.factory import list_strategies
     from trading.models import StrategyConfiguration, Trade, Watchlist
 
     all_strategy_types = [
         name
-        for name in list_registered_strategies()
+        for name in list_strategies()
         if name not in ["senex_trident", "calendar_spread"]
     ]
 

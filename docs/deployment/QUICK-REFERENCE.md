@@ -264,17 +264,17 @@ Key variables:
 
 ## Container Registry
 
-**Registry**: `gitea.andermic.net/endthestart/senex-trader`
+**Registry**: Configure in `.senextrader.json` (e.g., `your-registry.example.com/your-username/senex-trader`)
 
 ```bash
 # Login to registry (if needed)
-sudo -u senex podman login gitea.andermic.net
+sudo -u senex podman login your-registry.example.com
 
 # List local images
 sudo -u senex podman images | grep senex-trader
 
 # Pull specific tag
-sudo -u senex podman pull gitea.andermic.net/endthestart/senex-trader:TAG
+sudo -u senex podman pull your-registry.example.com/your-username/senex-trader:TAG
 
 # Remove old images
 sudo -u senex podman rmi IMAGE_ID

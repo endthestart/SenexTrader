@@ -1,6 +1,5 @@
 """
 API URL configuration for accounts app.
-Phase 6: Account state API endpoints.
 """
 
 from django.urls import path

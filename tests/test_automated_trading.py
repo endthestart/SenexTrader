@@ -122,11 +122,11 @@ class TestAutomatedTradingService:
         )
 
     @pytest.mark.asyncio
-    async def test_a_process_account_skips_existing_trade(self):
-        """Test that the service skips processing when a trade already exists.
+    async def test_a_process_account_skips_existing_open_position(self):
+        """Test that the service skips processing when an open automated position exists today.
 
-        We mock the Trade.objects.filter query to simulate an existing trade
-        because async DB access in tests can have transaction isolation issues.
+        The new logic checks for open positions (not just any trade), allowing retries
+        when previous orders didn't fill.
         """
         with (
             patch(
@@ -134,17 +134,17 @@ class TestAutomatedTradingService:
                 return_value=True,
             ),
             patch(
-                "trading.services.automated_trading_service.Trade.objects.filter"
+                "trading.services.automated_trading_service.Position.objects.filter"
             ) as mock_filter,
         ):
-            # Make the filter chain return exists() = True
-            mock_filter.return_value.exclude.return_value.exists.return_value = True
+            # Make the filter chain return exists() = True (open position exists)
+            mock_filter.return_value.exists.return_value = True
 
             service = AutomatedTradingService()
             result = await service.a_process_account(self.account)
 
         assert result["status"] == "skipped"
-        assert result["reason"] == "trade_exists_today"
+        assert result["reason"] == "open_position_exists_today"
 
     @pytest.mark.asyncio
     async def test_a_process_account_handles_no_suggestion(self):

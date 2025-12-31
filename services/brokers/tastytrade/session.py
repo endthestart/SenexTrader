@@ -47,15 +47,6 @@ class TastyTradeSessionService:
     eliminates this issue by creating fresh sessions for each task execution.
     """
 
-    # NOTE: Session caching removed to fix "Event loop is closed" production bug
-    # See docs/patterns/REALTIME_DATA_FLOW_PATTERN.md for session management patterns
-    #
-    # Previous implementation cached sessions in ClassVar, which caused event loop
-    # issues when Celery workers recycled (--max-tasks-per-child=100).
-    #
-    # New approach: Create fresh session for each task (session-per-task pattern).
-    # Performance impact is minimal (~200-500ms per task) given task frequency (10-min intervals).
-
     def __init__(self, config: TastyTradeSessionConfig | None = None, is_test: bool | None = None):
         if config is None:
             config = self._get_default_config()
@@ -133,9 +124,7 @@ class TastyTradeSessionService:
                     is_test=self.config.is_test,
                 )
 
-                # CRITICAL: Call refresh() immediately per documentation
-                # This generates a fresh session_token (15-minute lifetime)
-                # See: WORKING_STREAMING_IMPLEMENTATION.md and implementation_plan.md
+                # Must call refresh() immediately - generates fresh session_token (15-min lifetime)
                 try:
                     async with asyncio.timeout(10):  # 10 second timeout
                         await self.session.a_refresh()
@@ -171,8 +160,9 @@ class TastyTradeSessionService:
             except Exception as e:
                 last_error = str(e)
                 last_error_type = self._categorize_error(e)
-                logger.error(
-                    f"Session creation failed on attempt {attempt + 1}: {e}", exc_info=True
+                # Log as WARNING for retryable attempts, ERROR only on final failure
+                logger.warning(
+                    f"Session creation failed on attempt {attempt + 1}: {e}"
                 )
 
                 # Don't retry certain error types
@@ -182,12 +172,21 @@ class TastyTradeSessionService:
                 ]:
                     break
 
-        # All attempts failed
+        # All attempts failed - log ERROR only here for admin notification
         retry_recommended = last_error_type in [
             SessionErrorType.NETWORK_ERROR,
             SessionErrorType.TEMPORARY_ERROR,
             SessionErrorType.RATE_LIMIT,
         ]
+
+        logger.error(
+            f"Session creation failed after {actual_attempts} attempt(s): {last_error}",
+            extra={
+                "error_type": last_error_type.value,
+                "attempts": actual_attempts,
+                "retry_recommended": retry_recommended,
+            },
+        )
 
         return {
             "success": False,
@@ -434,9 +433,6 @@ class TastyTradeSessionService:
 
         return result
 
-    # NOTE: Caching-related methods removed (_needs_refresh, _refresh_session,
-    # _store_session, _clear_session) - no longer needed with session-per-task pattern
-
     @classmethod
     async def _mark_account_token_invalid(cls, user_id: int) -> None:
         """
@@ -461,10 +457,6 @@ class TastyTradeSessionService:
                 )
         except Exception as e:
             logger.error(f"Failed to mark account token invalid for user {user_id}: {e}")
-
-    # NOTE: Session monitoring methods removed (get_session_info, force_refresh_session,
-    # clear_user_session, record_activity, get_all_active_sessions)
-    # - no longer applicable with session-per-task pattern (no cached sessions to monitor)
 
     async def get_session_for_account(self, user, account_number: str | None = None):
         """
@@ -513,10 +505,6 @@ class TastyTradeSessionService:
                 user=user, account_number=account_number, connection_type="TASTYTRADE"
             ).first()
         )()
-
-    # NOTE: Background refresh methods removed (start_background_refresh, stop_background_refresh,
-    # _background_refresh_loop, _check_and_refresh_sessions, is_background_refresh_running)
-    # - no longer needed with session-per-task pattern
 
     @classmethod
     async def get_fresh_session_async(cls, user_id: int) -> object | None:

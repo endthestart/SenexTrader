@@ -14,10 +14,7 @@ from unittest.mock import MagicMock
 import pytest
 
 from services.market_data.analysis import MarketConditionReport, MomentumSignal, RegimeType
-from services.strategies.credit_spread_strategy import (
-    ShortCallVerticalStrategy,
-    ShortPutVerticalStrategy,
-)
+from services.strategies.factory import get_strategy
 
 # === TEST FIXTURES: Mock User ===
 
@@ -387,8 +384,8 @@ class TestEpic32ContextValidation:
         )
 
         # Context-aware scoring
-        bear_strategy = ShortCallVerticalStrategy(mock_user)
-        bull_strategy = ShortPutVerticalStrategy(mock_user)
+        bear_strategy = get_strategy("short_call_vertical", mock_user)
+        bull_strategy = get_strategy("short_put_vertical", mock_user)
 
         (
             context_bear_adjustment,
@@ -434,8 +431,8 @@ class TestEpic32ContextValidation:
         baseline_bull_score, _ = await BaselineScorer.score_bull_put_spread(report)
 
         # Context-aware scoring
-        bear_strategy = ShortCallVerticalStrategy(mock_user)
-        bull_strategy = ShortPutVerticalStrategy(mock_user)
+        bear_strategy = get_strategy("short_call_vertical", mock_user)
+        bull_strategy = get_strategy("short_put_vertical", mock_user)
 
         (
             context_bear_adjustment,
@@ -479,8 +476,8 @@ class TestEpic32ContextValidation:
         baseline_bull_score, _ = await BaselineScorer.score_bull_put_spread(report)
 
         # Context-aware scoring
-        bear_strategy = ShortCallVerticalStrategy(mock_user)
-        bull_strategy = ShortPutVerticalStrategy(mock_user)
+        bear_strategy = get_strategy("short_call_vertical", mock_user)
+        bull_strategy = get_strategy("short_put_vertical", mock_user)
 
         context_bear_adjustment, _ = await bear_strategy._score_market_conditions_impl(report)
         context_bull_adjustment, _ = await bull_strategy._score_market_conditions_impl(report)
@@ -517,8 +514,8 @@ class TestEpic32ContextValidation:
         baseline_bull_score, _ = await BaselineScorer.score_bull_put_spread(report)
 
         # Context-aware scoring
-        bear_strategy = ShortCallVerticalStrategy(mock_user)
-        bull_strategy = ShortPutVerticalStrategy(mock_user)
+        bear_strategy = get_strategy("short_call_vertical", mock_user)
+        bull_strategy = get_strategy("short_put_vertical", mock_user)
 
         context_bear_adjustment, _ = await bear_strategy._score_market_conditions_impl(report)
         context_bull_adjustment, _ = await bull_strategy._score_market_conditions_impl(report)
@@ -571,8 +568,8 @@ class TestEpic32ContextValidation:
         context_correct = 0
         total_cases = len(test_cases)
 
-        bear_strategy = ShortCallVerticalStrategy(mock_user)
-        bull_strategy = ShortPutVerticalStrategy(mock_user)
+        bear_strategy = get_strategy("short_call_vertical", mock_user)
+        bull_strategy = get_strategy("short_put_vertical", mock_user)
 
         for report, expected_choice, description in test_cases:
             # Baseline scoring

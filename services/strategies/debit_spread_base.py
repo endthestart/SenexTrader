@@ -7,25 +7,17 @@ Debit spreads:
 - Pay net debit upfront (max risk = debit)
 - Profit from directional price movement
 
-Epic 22 Task 014: Infrastructure base class for debit spreads.
 """
 
 from abc import abstractmethod
 from decimal import Decimal
-from enum import Enum
 
 from services.core.logging import get_logger
 from services.market_data.analysis import MarketConditionReport
 from services.strategies.base import BaseStrategy
+from services.strategies.core.types import Direction
 
 logger = get_logger(__name__)
-
-
-class SpreadDirection(Enum):
-    """Direction of debit spread."""
-
-    BULLISH = "bullish"  # Bull Call Spread
-    BEARISH = "bearish"  # Bear Put Spread
 
 
 class BaseDebitSpreadStrategy(BaseStrategy):
@@ -51,7 +43,7 @@ class BaseDebitSpreadStrategy(BaseStrategy):
 
     @property
     @abstractmethod
-    def spread_direction(self) -> SpreadDirection:
+    def spread_direction(self) -> Direction:
         """Return the direction of the spread (bullish/bearish)."""
         pass
 
@@ -144,7 +136,7 @@ class BaseDebitSpreadStrategy(BaseStrategy):
             score += 15
             reasons.append(f"IV rank {report.iv_rank:.1f} below optimal but acceptable")
 
-        # HV/IV Ratio (Epic 05, Task 003)
+        # HV/IV Ratio
         # Debit strategies prefer HV > IV (options cheap relative to realized)
         if report.hv_iv_ratio > 1.3:
             score += 20
@@ -191,10 +183,10 @@ class BaseDebitSpreadStrategy(BaseStrategy):
         is_bullish_trend = report.macd_signal in ["bullish", "strong_bullish"]
         is_bearish_trend = report.macd_signal in ["bearish", "strong_bearish"]
         direction_aligned = (
-            self.spread_direction == SpreadDirection.BULLISH and is_bullish_trend
-        ) or (self.spread_direction == SpreadDirection.BEARISH and is_bearish_trend)
+            self.spread_direction == Direction.BULLISH and is_bullish_trend
+        ) or (self.spread_direction == Direction.BEARISH and is_bearish_trend)
 
-        # ADX trend strength scoring (Epic 05, Task 001)
+        # ADX trend strength scoring
         # ONLY award bonus if trend direction matches spread direction (directional gating)
         if report.adx is not None:
             if report.adx > self.OPTIMAL_ADX:
@@ -348,7 +340,7 @@ class BaseDebitSpreadStrategy(BaseStrategy):
         Bull Call: Long strike + debit
         Bear Put: Long strike - debit
         """
-        if self.spread_direction == SpreadDirection.BULLISH:
+        if self.spread_direction == Direction.BULLISH:
             # Bull Call: Need price above long strike + debit
             return long_strike + debit_paid
         # Bear Put: Need price below long strike - debit
@@ -639,7 +631,7 @@ class BaseDebitSpreadStrategy(BaseStrategy):
                 "net_vega": (min, max),    # Net vega (positive - benefit from IV increase)
             }
         """
-        if self.spread_direction == SpreadDirection.BULLISH:
+        if self.spread_direction == Direction.BULLISH:
             # Bull Call Spread: Long calls (positive delta)
             return {
                 "long_delta": (0.40, 0.60),  # Long call ~50 delta

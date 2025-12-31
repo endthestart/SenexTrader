@@ -21,7 +21,6 @@ from typing import TYPE_CHECKING
 from services.core.logging import get_logger
 from services.market_data.analysis import MarketConditionReport
 from services.strategies.base import BaseStrategy
-from services.strategies.registry import register_strategy
 from services.strategies.utils.strike_utils import round_to_even_strike
 
 if TYPE_CHECKING:
@@ -32,7 +31,6 @@ if TYPE_CHECKING:
 logger = get_logger(__name__)
 
 
-@register_strategy("cash_secured_put")
 class CashSecuredPutStrategy(BaseStrategy):
     """
     Cash-Secured Put - Sell puts with full cash backing.
@@ -154,7 +152,7 @@ class CashSecuredPutStrategy(BaseStrategy):
             score += 15
             reasons.append(f"IV Rank {report.iv_rank:.1f} adequate (>50%) - acceptable premiums")
 
-        # Factor 2: ADX Trend Strength (20% weight) - Epic 22, Task 024
+        # Factor 2: ADX Trend Strength (20% weight)
         # Prefer range-bound or weak bullish; avoid strong bearish
         if report.adx is not None:
             if report.adx < self.IDEAL_ADX_MAX:
@@ -234,7 +232,7 @@ class CashSecuredPutStrategy(BaseStrategy):
                 f"Estimated premium yield ~{estimated_premium_yield:.1f}% - minimal compensation"
             )
 
-        # Factor 5: Market Direction (10% weight) - Epic 22, Task 024
+        # Factor 5: Market Direction (10% weight)
         if report.macd_signal == "bullish":
             score += 20
             reasons.append("Bullish direction - favorable for CSP (lower assignment risk)")

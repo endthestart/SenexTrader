@@ -51,7 +51,7 @@ urlpatterns = [
         api_views.profit_target_settings,
         name="api_profit_target_settings",
     ),
-    # OAuth (Phase 2)
+    # OAuth
     path(
         "oauth/tastytrade/initiate/",
         views.tastytrade_oauth_initiate,

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import timedelta
 from decimal import Decimal
 
 from django.utils import timezone
@@ -12,12 +13,13 @@ from accounts.models import TradingAccount
 from services.core.logging import get_logger
 from services.execution.order_service import OrderExecutionService
 from services.notifications.email import EmailService
+from services.orders.cancellation import OrderCancellationService
 from services.risk.validation import RiskValidationService
 from services.sdk.trading_utils import is_market_open_now
 from services.strategies.senex_trident_strategy import SenexTridentStrategy
 
 # Note: GlobalStreamManager imported at runtime to avoid circular dependency
-from trading.models import Trade, TradingSuggestion
+from trading.models import Position, Trade, TradingSuggestion
 
 logger = get_logger(__name__)
 
@@ -70,6 +72,107 @@ class AutomatedTradingService:
         user = await sync_to_async(lambda: account.user)()
         return await self._a_process(user=user, account=account)
 
+    async def _cancel_pending_automated_orders(
+        self, user, account: TradingAccount, stale_minutes: int = 5
+    ) -> dict:
+        """
+        Cancel unfilled automated opening orders older than stale_minutes.
+
+        Returns dict with cancelled_count and details.
+        """
+        stale_threshold = timezone.now() - timedelta(minutes=stale_minutes)
+
+        @sync_to_async
+        def get_stale_positions():
+            return list(
+                Position.objects.filter(
+                    user=user,
+                    trading_account=account,
+                    lifecycle_state="pending_entry",
+                    is_automated_entry=True,
+                    created_at__lt=stale_threshold,
+                ).select_related("trading_account")
+            )
+
+        stale_positions = await get_stale_positions()
+
+        if not stale_positions:
+            return {"cancelled_count": 0, "details": []}
+
+        logger.info(
+            "User %s: Found %d stale automated orders to cancel (older than %d min)",
+            user.email,
+            len(stale_positions),
+            stale_minutes,
+        )
+
+        cancellation_service = OrderCancellationService()
+        cancelled_count = 0
+        details = []
+
+        for position in stale_positions:
+            # Get the trade associated with this position
+            @sync_to_async
+            def get_trade():
+                return Trade.objects.filter(
+                    position=position, trade_type="open"
+                ).first()
+
+            trade = await get_trade()
+
+            if not trade:
+                logger.warning(
+                    "Position %d has no opening trade, marking as expired", position.id
+                )
+                @sync_to_async
+                def mark_expired():
+                    position.lifecycle_state = "expired"
+                    position.metadata = position.metadata or {}
+                    position.metadata["auto_expired_reason"] = "no_opening_trade"
+                    position.save(update_fields=["lifecycle_state", "metadata", "updated_at"])
+
+                await mark_expired()
+                continue
+
+            # Cancel the trade at the broker
+            success, result = await cancellation_service.cancel_trade(
+                trade.id, user, reason="stale_automated_order"
+            )
+
+            details.append({
+                "position_id": position.id,
+                "trade_id": trade.id,
+                "broker_order_id": trade.broker_order_id,
+                "success": success,
+                "result": result,
+            })
+
+            if success or result.get("final_status") in ["cancelled", "expired", "rejected"]:
+                cancelled_count += 1
+                logger.info(
+                    "User %s: Cancelled stale order %s (position %d)",
+                    user.email,
+                    trade.broker_order_id,
+                    position.id,
+                )
+            elif result.get("final_status") == "filled":
+                # Order filled while we were trying to cancel - this is actually good!
+                logger.info(
+                    "User %s: Order %s filled before cancellation (position %d)",
+                    user.email,
+                    trade.broker_order_id,
+                    position.id,
+                )
+            else:
+                logger.warning(
+                    "User %s: Failed to cancel order %s: %s",
+                    user.email,
+                    trade.broker_order_id,
+                    result.get("message", "unknown error"),
+                )
+
+        return {"cancelled_count": cancelled_count, "details": details}
+
     async def _a_process(self, *, user, account: TradingAccount) -> dict:
         import time
 
@@ -89,17 +192,35 @@ class AutomatedTradingService:
 
             today = timezone.now().date()
 
-            def _trade_exists_today() -> bool:
-                return (
-                    Trade.objects.filter(user=user, submitted_at__date=today)
-                    .exclude(status__in=["cancelled", "rejected", "expired"])
-                    .exists()
+            # Step 1: Cancel any stale pending automated orders (older than 5 minutes)
+            # This ensures we don't have multiple orders competing and allows fresh pricing
+            cancel_result = await self._cancel_pending_automated_orders(user, account)
+            if cancel_result["cancelled_count"] > 0:
+                logger.info(
+                    "User %s: Cancelled %d stale automated orders before generating new suggestion",
+                    user.email,
+                    cancel_result["cancelled_count"],
                 )
 
-            trade_exists = await sync_to_async(_trade_exists_today)()
-            if trade_exists:
-                logger.info("User %s already has trade today. Skipping.", user.email)
-                return {"status": "skipped", "reason": "trade_exists_today"}
+            # Step 2: Check if we already have an OPEN position today
+            # (not just any trade - allows retries when orders don't fill)
+            @sync_to_async
+            def _has_open_position_today() -> bool:
+                return Position.objects.filter(
+                    user=user,
+                    trading_account=account,
+                    is_automated_entry=True,
+                    created_at__date=today,
+                    lifecycle_state__in=["open_full", "open_partial"],
+                ).exists()
+
+            has_open_position = await _has_open_position_today()
+            if has_open_position:
+                logger.info(
+                    "User %s already has open automated position today. Skipping.",
+                    user.email,
+                )
+                return {"status": "skipped", "reason": "open_position_exists_today"}
 
             # RETRY LOGIC: Attempt suggestion generation up to 3 times
             # Retries help with:
@@ -276,9 +397,9 @@ class AutomatedTradingService:
             # Runtime import to avoid circular dependency
             from streaming.services.stream_manager import GlobalStreamManager
 
-            logger.info("User %s: Starting streaming for SPX and QQQ...", user.id)
+            logger.info("User %s: Starting streaming for SPX, QQQ, and SPY...", user.id)
             manager = await GlobalStreamManager.get_user_manager(user.id)
-            streaming_ready = await manager.ensure_streaming_for_automation(["SPX", "QQQ"])
+            streaming_ready = await manager.ensure_streaming_for_automation(["SPX", "QQQ", "SPY"])
             if not streaming_ready:
                 logger.error("User %s: Failed to start streaming for automation", user.id)
                 return None

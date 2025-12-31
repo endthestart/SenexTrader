@@ -214,6 +214,31 @@ class OrderPlacementError(TradingError):
         super().__init__(message)
 
 
+class ConflictingPositionError(TradingError):
+    """Raised when new order conflicts with existing open positions.
+
+    This occurs when trying to sell an option that already has a buy-to-close
+    order pending, or vice versa.
+
+    Attributes:
+        conflicting_symbols: List of option symbols that conflict
+        existing_position_id: ID of the existing position causing conflict
+    """
+
+    def __init__(
+        self, conflicting_symbols: list[str], existing_position_id: int | None = None
+    ) -> None:
+        self.conflicting_symbols = conflicting_symbols
+        self.existing_position_id = existing_position_id
+        symbols_str = ", ".join(conflicting_symbols[:3])
+        if len(conflicting_symbols) > 3:
+            symbols_str += f" (+{len(conflicting_symbols) - 3} more)"
+        message = f"Cannot execute order: conflicts with existing position. Symbols: {symbols_str}"
+        if existing_position_id:
+            message += f" (Position ID: {existing_position_id})"
+        super().__init__(message)
+
+
 class MarketClosedError(TradingError):
     """Raised when attempting to submit orders while market is closed.
 

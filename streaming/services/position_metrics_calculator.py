@@ -1,16 +1,13 @@
 """
 Position Metrics Calculator - Calculates balance, Greeks, and P&L from cache.
 
-This helper extracts pure calculation logic for position metrics, following the
-stateless helper pattern from Phase 5.1a (OrderEventProcessor).
-
 Responsibility:
 - Fetch account balance from TastyTrade
 - Calculate Greeks from cache via GreeksService
 - Calculate P&L from cached quotes
 - Return unified metrics data structure
 
-Design Principles (from phase-5-boundary-validation.md):
+Design Principles:
 - Pure calculation logic, no side effects
 - No state dependencies
 - Receives all inputs as parameters
@@ -30,7 +27,7 @@ from accounts.models import AccountSnapshot, TradingAccount
 from services.core.cache import CacheManager
 from services.core.logging import get_logger
 from services.market_data.greeks import GreeksService
-from services.positions.lifecycle.pnl_calculator import PositionPnLCalculator
+from services.positions.lifecycle.pnl_calculator import PnLCalculator
 from streaming.constants import ACCOUNT_STATE_CACHE_TTL
 from streaming.services.enhanced_cache import enhanced_cache
 from trading.models import Position
@@ -303,7 +300,7 @@ class PositionMetricsCalculator:
                 cached_quote = cache.get(quote_key)
 
                 if cached_quote and cached_quote.get("mark"):
-                    leg_pnl = PositionPnLCalculator.calculate_leg_pnl(
+                    leg_pnl = PnLCalculator.calculate_leg_pnl(
                         avg_price=leg.get("average_open_price", 0),
                         current_price=float(cached_quote["mark"]),
                         quantity=leg.get("quantity", 0),
@@ -321,10 +318,12 @@ class PositionMetricsCalculator:
         cached_quote = cache.get(quote_key)
 
         if cached_quote and cached_quote.get("mark") and position.avg_price:
-            unrealized_pnl = PositionPnLCalculator.calculate_unrealized_pnl(
-                opening_credit=position.avg_price,
+            is_credit = position.opening_price_effect == "Credit"
+            unrealized_pnl = PnLCalculator.calculate_unrealized_pnl(
+                opening_price=position.avg_price,
                 current_mark=Decimal(str(cached_quote["mark"])),
                 quantity=position.quantity,
+                is_credit=is_credit,
             )
             return float(unrealized_pnl)
 

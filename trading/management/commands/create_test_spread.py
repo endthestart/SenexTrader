@@ -140,7 +140,7 @@ class Command(AsyncCommand):
             report = await analyzer.a_analyze_market_conditions(user, symbol, {})
 
             current_price = Decimal(str(report.current_price))
-            self.stdout.write(f"\nMarket Data:")
+            self.stdout.write("\nMarket Data:")
             self.stdout.write(f"   Current Price: ${current_price:.2f}")
             self.stdout.write(f"   IV Rank:       {report.iv_rank:.1f}")
 
@@ -304,7 +304,7 @@ class Command(AsyncCommand):
             short_occ = build_occ_symbol(symbol, best_exp, short_strike, "P")
             long_occ = build_occ_symbol(symbol, best_exp, long_strike, "P")
 
-            self.stdout.write(f"\n💰 Getting live pricing...")
+            self.stdout.write("\n💰 Getting live pricing...")
             self.stdout.write(f"   Short OCC: {short_occ}")
             self.stdout.write(f"   Long OCC:  {long_occ}")
 
@@ -373,8 +373,8 @@ class Command(AsyncCommand):
             self.stdout.write(f"   Max Risk:      ${max_risk:.2f}")
 
             # Summary
-            self.stdout.write(f"\nTrade Summary:")
-            self.stdout.write(f"   Strategy:    Short Put Vertical (Bull Put Spread)")
+            self.stdout.write("\nTrade Summary:")
+            self.stdout.write("   Strategy:    Short Put Vertical (Bull Put Spread)")
             self.stdout.write(f"   Symbol:      {symbol}")
             self.stdout.write(f"   Expiration:  {best_exp} ({actual_dte} DTE)")
             self.stdout.write(f"   Short Put:   ${short_strike}")
@@ -442,7 +442,7 @@ class Command(AsyncCommand):
 
             if result:
                 # Check if it's a DryRunResult or Position
-                if hasattr(result, 'is_dry_run') and result.is_dry_run:
+                if hasattr(result, "is_dry_run") and result.is_dry_run:
                     self.stdout.write(self.style.WARNING("\n🧪 DRY-RUN MODE - Order validated but not submitted"))
                     self.stdout.write(f"   Order would be valid: {result.is_valid}")
                     if result.validation_message:

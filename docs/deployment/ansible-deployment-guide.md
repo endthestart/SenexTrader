@@ -6,7 +6,7 @@ This directory contains **Ansible playbooks** for deploying Senex Trader to **st
 
 **Deployment Method:** Ansible + Podman 5.x + Quadlet (systemd-native containers)
 **Based on:** options_strategy_trader reference application
-**Container Image:** `gitea.andermic.net/endthestart/senex-trader:v0.1.16`
+**Container Image:** `${REGISTRY}/${OWNER}/senex-trader:${TAG}`
 
 **What is Quadlet?** Podman Quadlet is systemd-native container management (Podman 4.4+). It provides reliable auto-restart and lifecycle management via systemd instead of podman-compose.
 
@@ -42,7 +42,7 @@ This directory contains **Ansible playbooks** for deploying Senex Trader to **st
 ### On Control Machine (Your Laptop)
 - Ansible 2.10+ installed
 - SSH access to target servers
-- Access to Gitea registry (gitea.andermic.net)
+- Access to your container registry
 
 ### On Target Servers
 - Ubuntu/Debian Linux
@@ -536,8 +536,8 @@ ansible-vault rekey inventory/staging-vault.yml
 **Issue:** Podman login fails
 ```bash
 # Manual login on server
-ssh root@your-domain.com
-podman login gitea.andermic.net
+ssh root@your-server.example.com
+podman login your-registry.example.com
 ```
 
 ### Application Issues

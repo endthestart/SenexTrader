@@ -1,6 +1,7 @@
 """Position synchronization service for importing and managing TastyTrade positions."""
 
 from decimal import Decimal
+from zoneinfo import ZoneInfo
 
 from django.contrib.auth import get_user_model
 from django.db import transaction
@@ -12,8 +13,11 @@ from accounts.models import TradingAccount
 from services.core.logging import get_logger
 from services.orders.history import OrderHistoryService
 from services.positions.lifecycle.leg_matcher import LegMatcher, OrderAwareLegMatcher
-from services.positions.lifecycle.pnl_calculator import PositionPnLCalculator
+from services.positions.lifecycle.pnl_calculator import PnLCalculator
 from trading.models import Position
+
+# US Eastern timezone for market-aligned DTE calculations
+ET_TIMEZONE = ZoneInfo("America/New_York")
 
 User = get_user_model()
 logger = get_logger(__name__)
@@ -300,7 +304,7 @@ class PositionSyncService:
                 if avg_price and current_price and quantity:
                     multiplier = getattr(pos, "multiplier", 100)
 
-                    leg_pnl = PositionPnLCalculator.calculate_leg_pnl(
+                    leg_pnl = PnLCalculator.calculate_leg_pnl(
                         avg_price=avg_price,
                         current_price=current_price,
                         quantity=quantity,
@@ -405,7 +409,6 @@ class PositionSyncService:
 
         is_app_managed = await self._categorize_position(tt_position)
 
-        # Epic 28 Task 009: Detect instrument type from position legs
         legs = tt_position.get("legs", [])
         instrument_type = "Equity Option"  # Default for options
         strategy_type = "external"  # Default for broker-discovered positions
@@ -429,7 +432,7 @@ class PositionSyncService:
             "quantity": int(tt_position.get("quantity", 0)),
             "avg_price": self._safe_decimal(tt_position.get("average_price")),
             "unrealized_pnl": self._safe_decimal(tt_position.get("unrealized_pnl")),
-            "instrument_type": instrument_type,  # Epic 28 Task 009
+            "instrument_type": instrument_type,
             "strategy_type": strategy_type,
             "lifecycle_state": "open_full",  # All imported positions are open
         }
@@ -951,7 +954,7 @@ class PositionSyncService:
                 else:
                     exp_date = expiration_date
 
-                dte = (exp_date - dj_timezone.now().date()).days
+                dte = (exp_date - dj_timezone.now().astimezone(ET_TIMEZONE).date()).days
                 if dte <= 7:
                     reasons.append(f"Low DTE: {dte} days to expiration")
             except Exception as e:
@@ -977,7 +980,7 @@ class PositionSyncService:
             else:
                 exp_date = expiration_date
 
-            return (exp_date - dj_timezone.now().date()).days
+            return (exp_date - dj_timezone.now().astimezone(ET_TIMEZONE).date()).days
         except Exception as e:
             logger.error(f"Error calculating DTE: {e}", exc_info=True)
             return None
@@ -1039,7 +1042,8 @@ class PositionSyncService:
                 user=user,
                 trading_account=account,
                 is_app_managed=True,
-                lifecycle_state__in=["pending_entry", "open_full", "open_partial"],
+                # Include "closing" state - positions with pending DTE close orders
+                lifecycle_state__in=["pending_entry", "open_full", "open_partial", "closing"],
             )
         ]
 
@@ -1062,7 +1066,7 @@ class PositionSyncService:
         - preloaded_orders: position_id -> filled orders lookup map
         - leg_matcher: LegMatcher utility instance
         - order_aware_matcher: OrderAwareLegMatcher for position isolation
-        - pnl_calculator: PositionPnLCalculator utility instance
+        - pnl_calculator: PnLCalculator utility instance
         """
         # Build leg lookup map
         legs_by_symbol = self._build_legs_lookup_map(raw_positions)
@@ -1084,7 +1088,7 @@ class PositionSyncService:
             "preloaded_orders": preloaded_orders,
             "leg_matcher": LegMatcher(legs_by_symbol),
             "order_aware_matcher": order_aware_matcher,
-            "pnl_calculator": PositionPnLCalculator(),
+            "pnl_calculator": PnLCalculator(),
         }
 
     def _build_legs_lookup_map(self, raw_positions: list) -> dict[str, dict]:
@@ -1499,10 +1503,11 @@ class PositionSyncService:
             return
 
         # Collect all profit target order IDs
+        # Include orders with status "pending" or no status (both are unfilled)
         profit_target_order_ids = [
             details.get("order_id")
             for details in position.profit_target_details.values()
-            if details.get("order_id") and not details.get("status")  # Only check unfilled
+            if details.get("order_id") and details.get("status") not in ["filled", "cancelled"]
         ]
 
         if not profit_target_order_ids:

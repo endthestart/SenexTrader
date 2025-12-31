@@ -265,12 +265,10 @@ class TestVolatilityStrategyUsage:
 
         Strategies should NOT need to convert - they should use the value as-is.
         """
-        from services.strategies.credit_spread_strategy import (
-            ShortPutVerticalStrategy,
-        )
+        from services.strategies.factory import get_strategy
 
         user = await User.objects.acreate(username="test_user", email="test@example.com")
-        ShortPutVerticalStrategy(user)
+        get_strategy("short_put_vertical", user)
 
         # Mock market report with decimal format
         mock_report = MagicMock()

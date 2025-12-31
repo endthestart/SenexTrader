@@ -5,7 +5,6 @@ Implements simple market analysis for the Senex Trident strategy including:
 - Bollinger Bands (20-period SMA, 2 std dev)
 - Range-bound market detection
 - Pure Python implementation (no pandas/numpy dependencies)
-- Epic 32: Enhanced context fields (regime, extremes, momentum)
 """
 
 import asyncio
@@ -80,11 +79,11 @@ class MarketConditionReport:
     support_level: float | None = None
     resistance_level: float | None = None
 
-    # Trend Strength (Epic 05, Task 001)
+    # Trend Strength
     adx: float | None = None  # 0-100 scale, None if unavailable
     trend_strength: str = "weak"  # "weak", "moderate", "strong"
 
-    # Volatility Analysis (Epic 05, Task 002-003)
+    # Volatility Analysis
     historical_volatility: float = 0.0  # Annualized percentage (e.g., 25.5 for 25.5%)
     hv_iv_ratio: float = 1.0  # HV/IV ratio (1.0 = equal, <0.8 = IV high, >1.2 = IV low)
 
@@ -101,18 +100,18 @@ class MarketConditionReport:
     market_stress_level: float = 0.0  # 0-100
     recent_move_pct: float = 0.0  # Recent price move percentage
 
-    # Market Context (Epic 32 - Enhanced regime/extreme/momentum detection)
-    # Regime Detection (Task 004)
+    # Market Context
+    # Regime Detection
     regime_primary: RegimeType | None = None  # Primary market regime
     regime_confidence: float = 0.0  # Confidence in regime classification (0-100)
 
-    # Extreme Detection (Task 005)
+    # Extreme Detection
     is_overbought: bool = False  # Multiple overbought signals present
     overbought_warnings: int = 0  # Count of overbought indicators (3+ = extreme)
     is_oversold: bool = False  # Multiple oversold signals present
     oversold_warnings: int = 0  # Count of oversold indicators (3+ = extreme)
 
-    # Momentum Assessment (Task 006)
+    # Momentum Assessment
     momentum_signal: MomentumSignal = MomentumSignal.UNCLEAR  # Continuation vs exhaustion
     momentum_confidence: float = 0.0  # Confidence in momentum classification (0-100)
 
@@ -123,20 +122,17 @@ class MarketConditionReport:
     # Hard No-Trade Flags (applicable to ALL strategies)
     no_trade_reasons: list[str] = field(default_factory=list)
 
-    # Epic 22 Task 016: Earnings Information
     has_upcoming_earnings: bool = False
     earnings_date: datetime | None = None
     days_until_earnings: int | None = None
     earnings_within_danger_window: bool = False
 
-    # Epic 22 Task 017: Dividend Information
     has_upcoming_dividend: bool = False
     dividend_ex_date: datetime | None = None
     dividend_next_date: datetime | None = None
     days_until_dividend: int | None = None
     dividend_within_risk_window: bool = False
 
-    # Epic 22 Task 018: Beta (for beta-weighted delta calculations)
     beta: float | None = None
 
     def __post_init__(self):
@@ -153,7 +149,7 @@ class MarketConditionReport:
             # No ADX data available - default to weak
             self.trend_strength = "weak"
 
-        # Calculate HV/IV ratio (Epic 05, Task 003)
+        # Calculate HV/IV ratio
         # Avoid division by zero - use current_iv as denominator
         if self.current_iv > 0 and self.historical_volatility and self.historical_volatility > 0:
             # Both current_iv and historical_volatility are in percentage format (28.5 for 28.5%)
@@ -163,18 +159,14 @@ class MarketConditionReport:
         else:
             self.hv_iv_ratio = 1.0  # Neutral if data unavailable
 
-        # Task 004: Regime Detection
         self._detect_regime()
 
-        # Task 005: Extreme Detection (overbought/oversold with warning counts)
         self._detect_extremes()
 
-        # Task 006: Momentum Assessment (continuation vs exhaustion)
         self._detect_momentum()
 
     def _detect_regime(self) -> None:
         """
-        Epic 32 Task 004: Detect market regime (bull/bear/range/high-vol/crisis).
 
         Uses ONLY currently available data:
         - Price vs SMA (trend direction)
@@ -228,7 +220,6 @@ class MarketConditionReport:
 
     def _detect_extremes(self) -> None:
         """
-        Epic 32 Task 005: Detect overbought/oversold extremes with warning counts.
 
         Uses ONLY existing indicators:
         - RSI (>70 overbought, <30 oversold)
@@ -273,7 +264,6 @@ class MarketConditionReport:
 
     def _detect_momentum(self) -> None:
         """
-        Epic 32 Task 006: Assess momentum (continuation vs exhaustion).
 
         Uses ONLY available data:
         - RSI divergence from trend
@@ -636,8 +626,8 @@ class MarketAnalyzer:
         if not quote:
             is_stale = True
         else:
-            # Check if data has timestamp
-            timestamp_str: Any = quote.get("timestamp") or quote.get("fetched_at")
+            # Check if data has timestamp (streaming uses updated_at, API uses timestamp/fetched_at)
+            timestamp_str: Any = quote.get("updated_at") or quote.get("timestamp") or quote.get("fetched_at")
             if timestamp_str:
                 try:
                     if isinstance(timestamp_str, str):
@@ -673,7 +663,6 @@ class MarketAnalyzer:
         """
         Calculate market stress level (0-100) based on multiple indicators.
 
-        Epic 22 Task 023: Comprehensive stress calculation.
 
         Components:
         - IV Rank (40% weight): High IV Rank indicates elevated fear/stress
@@ -775,19 +764,17 @@ class MarketAnalyzer:
             iv_rank = float(metrics.get("iv_rank", 50.0))
             iv_percentile = float(metrics.get("iv_percentile", 50.0))
             current_iv = float(metrics.get("iv_30_day", 0.0))
-            beta = metrics.get("beta")  # Epic 22 Task 018
+            beta = metrics.get("beta")
         else:
             iv_rank = 50.0
             iv_percentile = 50.0
             current_iv = 0.0
 
-        # Epic 22 Task 016: Get earnings information
         from services.market_data.earnings import EarningsCalendar
 
         earnings_calendar = EarningsCalendar()
         earnings_info = await earnings_calendar.get_earnings_info(symbol, metrics or {})
 
-        # Epic 22 Task 017: Get dividend information
         from services.market_data.dividends import DividendSchedule
 
         dividend_schedule = DividendSchedule()
@@ -808,7 +795,7 @@ class MarketAnalyzer:
         )
         range_bound_days: int = market_snapshot.get("range_bound_days", 0) if market_snapshot else 0
 
-        # Calculate market stress level (Epic 22, Task 023)
+        # Calculate market stress level
         # Use new comprehensive calculation instead of VIX-only method
         market_stress_level: float = self._calculate_market_stress_level(
             iv_rank=iv_rank,
@@ -826,11 +813,9 @@ class MarketAnalyzer:
         if data_quality["is_stale"]:
             no_trade_reasons.append("data_stale")
 
-        # Epic 22 Task 016: Add earnings to no-trade reasons if within danger window
         if earnings_info.is_within_danger_window:
             no_trade_reasons.append(f"earnings_in_{earnings_info.days_until_earnings}_days")
 
-        # Epic 22 Task 017: Add dividend to no-trade reasons if within risk window
         if dividend_info.is_within_risk_window:
             days = dividend_info.days_until_ex_div or dividend_info.days_until_next_div
             no_trade_reasons.append(f"dividend_in_{days}_days")
@@ -849,9 +834,9 @@ class MarketAnalyzer:
             sma_20=technical_data.get("sma_20") or 0.0,
             support_level=technical_data.get("support_level"),
             resistance_level=technical_data.get("resistance_level"),
-            # Trend strength (Epic 05, Task 001)
+            # Trend strength
             adx=technical_data.get("adx"),
-            # Volatility analysis (Epic 05, Task 002)
+            # Volatility analysis
             historical_volatility=technical_data.get("historical_volatility") or 0.0,
             # Range-bound detection (price-based from MarketAnalyzer)
             is_range_bound=is_range_bound,
@@ -868,12 +853,10 @@ class MarketAnalyzer:
             last_update=data_quality["last_update"],
             # Hard no-trade flags
             no_trade_reasons=no_trade_reasons,
-            # Epic 22 Task 016: Earnings information
             has_upcoming_earnings=earnings_info.has_upcoming_earnings,
             earnings_date=earnings_info.earnings_date,
             days_until_earnings=earnings_info.days_until_earnings,
             earnings_within_danger_window=earnings_info.is_within_danger_window,
-            # Epic 22 Task 017: Dividend information
             has_upcoming_dividend=dividend_info.has_upcoming_dividend,
             dividend_ex_date=dividend_info.ex_dividend_date,
             dividend_next_date=dividend_info.dividend_next_date,
@@ -881,6 +864,5 @@ class MarketAnalyzer:
                 dividend_info.days_until_ex_div or dividend_info.days_until_next_div
             ),
             dividend_within_risk_window=dividend_info.is_within_risk_window,
-            # Epic 22 Task 018: Beta
             beta=beta,
         )

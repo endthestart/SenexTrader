@@ -15,22 +15,15 @@ Both strategies share ~97% of their code - only differing in:
 from abc import abstractmethod
 from datetime import date
 from decimal import Decimal
-from enum import Enum
 
 from services.core.logging import get_logger
 from services.market_data.analysis import MarketConditionReport
 from services.sdk.trading_utils import PriceEffect
 from services.strategies.base import BaseStrategy
+from services.strategies.core.types import Direction
 from services.strategies.utils.strike_utils import calculate_max_profit_credit_spread
 
 logger = get_logger(__name__)
-
-
-class SpreadDirection(Enum):
-    """Direction of the credit spread strategy."""
-
-    BULLISH = "bullish"  # Bull Put Spread: Profits if price stays flat or rises
-    BEARISH = "bearish"  # Bear Call Spread: Profits if price stays flat or falls
 
 
 class BaseCreditSpreadStrategy(BaseStrategy):
@@ -44,7 +37,7 @@ class BaseCreditSpreadStrategy(BaseStrategy):
     - Target 50% profit (standard)
 
     Subclasses must implement:
-    - spread_direction: SpreadDirection enum
+    - spread_direction: Direction enum
     - strategy_name: Human-readable name
     - _score_market_conditions_impl: Strategy-specific scoring
     - _select_strikes: Strike selection logic
@@ -64,14 +57,14 @@ class BaseCreditSpreadStrategy(BaseStrategy):
 
     @property
     @abstractmethod
-    def spread_direction(self) -> SpreadDirection:
+    def spread_direction(self) -> Direction:
         """Return the spread direction (BULLISH or BEARISH)."""
         pass
 
     @property
     @abstractmethod
     def strategy_name(self) -> str:
-        """Return the human-readable strategy name (e.g., 'bull_put_spread')."""
+        """Return the strategy identifier (e.g., 'short_put_vertical')."""
         pass
 
     @abstractmethod
@@ -264,7 +257,7 @@ class BaseCreditSpreadStrategy(BaseStrategy):
         score += score_adjustment
         reasons.extend(strategy_reasons)
 
-        # RSI scoring (Epic 22 Enhancement - common for all credit spreads)
+        # RSI scoring
         if report.rsi is not None:
             rsi_score, rsi_reasons = self._score_rsi_levels(report)
             score += rsi_score
@@ -646,10 +639,10 @@ class BaseCreditSpreadStrategy(BaseStrategy):
         mid_credit = None
         spread_type = ""
 
-        if self.spread_direction == SpreadDirection.BULLISH:
+        if self.spread_direction == Direction.BULLISH:
             mid_credit = suggestion.put_spread_mid_credit
             spread_type = "Bull Put Spread"
-        elif self.spread_direction == SpreadDirection.BEARISH:
+        elif self.spread_direction == Direction.BEARISH:
             mid_credit = suggestion.call_spread_mid_credit
             spread_type = "Bear Call Spread"
 

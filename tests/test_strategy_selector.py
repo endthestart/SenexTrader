@@ -705,9 +705,9 @@ class TestStrategySelector:
         """
         from decimal import Decimal
 
-        from services.strategies.credit_spread_strategy import ShortPutVerticalStrategy
+        from services.strategies.factory import get_strategy
 
-        strategy = ShortPutVerticalStrategy(mock_user)
+        strategy = get_strategy("short_put_vertical", mock_user)
 
         # Mock only the risk manager to simulate 100% utilization
         strategy.risk_manager.a_can_open_position = AsyncMock(

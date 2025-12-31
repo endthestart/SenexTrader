@@ -40,7 +40,6 @@ from typing import TYPE_CHECKING
 from services.core.logging import get_logger
 from services.market_data.analysis import MarketConditionReport
 from services.strategies.base import BaseStrategy
-from services.strategies.registry import register_strategy
 from services.strategies.utils.strike_utils import round_to_even_strike
 
 if TYPE_CHECKING:
@@ -51,7 +50,6 @@ if TYPE_CHECKING:
 logger = get_logger(__name__)
 
 
-@register_strategy("long_call_ratio_backspread")
 class LongCallRatioBackspreadStrategy(BaseStrategy):
     """
     Long Call Ratio Backspread - Advanced bullish strategy with unlimited profit potential.
@@ -150,7 +148,7 @@ class LongCallRatioBackspreadStrategy(BaseStrategy):
         score = 30.0  # Lower base (advanced strategy)
         reasons = []
 
-        # CRITICAL: Must be bullish (Epic 22, Task 024)
+        # CRITICAL: Must be bullish
         # Backspread penalizes exhaustion (buying at top is bad)
         if report.macd_signal == "strong_bullish":
             score += 30

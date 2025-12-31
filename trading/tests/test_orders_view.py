@@ -27,6 +27,7 @@ class OrdersViewTestCase(TestCase):
             connection_type="TASTYTRADE",
             is_active=True,
             access_token="test_token",
+            refresh_token="test_refresh_token",
         )
         self.client.login(email="test@example.com", password="testpass123")
 

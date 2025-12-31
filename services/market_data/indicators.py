@@ -2,9 +2,8 @@
 Technical Indicator Calculator - Pure calculation service
 
 Calculates technical indicators for market analysis without blocking event loop.
-Pure calculation service - no strategy decisions.
-
-Phase 4.1: Added caching layer (memory + database) for 80% CPU reduction.
+Pure calculation service - no strategy decisions. Includes two-tier caching
+(memory + database) for performance.
 """
 
 import asyncio
@@ -25,9 +24,7 @@ class TechnicalIndicatorCalculator:
     """
     Calculate technical indicators for market analysis.
 
-    Pure calculation service - no strategy decisions.
-
-    Phase 4.1: Implements two-tier caching:
+    Pure calculation service - no strategy decisions. Uses two-tier caching:
     - Memory cache (5 min TTL) for hot data
     - Database persistence for historical reference
     """
@@ -139,7 +136,7 @@ class TechnicalIndicatorCalculator:
         self, symbol: str, prices, period: int = 20, std_dev: float = 2.0
     ) -> tuple:
         """
-        Get Bollinger Bands with caching (Phase 4.1).
+        Get Bollinger Bands with caching.
 
         Returns: (upper, middle, lower) tuple
         """
@@ -174,7 +171,7 @@ class TechnicalIndicatorCalculator:
 
     async def _get_cached_rsi(self, symbol: str, prices, period: int = 14) -> float:
         """
-        Get RSI with caching (Phase 4.1).
+        Get RSI with caching.
 
         Returns: RSI value (0-100)
         """
@@ -209,7 +206,7 @@ class TechnicalIndicatorCalculator:
         self, symbol: str, prices, fast: int = 12, slow: int = 26, signal: int = 9
     ) -> tuple:
         """
-        Get MACD with caching (Phase 4.1).
+        Get MACD with caching.
 
         Returns: (macd_line, signal_line, histogram) tuple
         """
@@ -244,7 +241,7 @@ class TechnicalIndicatorCalculator:
 
     async def _get_cached_adx(self, symbol: str, df, period: int = 14) -> float:
         """
-        Get ADX with caching (Epic 05, Task 001).
+        Get ADX with caching.
 
         Returns: ADX value (0-100)
         """
@@ -278,7 +275,7 @@ class TechnicalIndicatorCalculator:
 
     async def _get_cached_hv(self, symbol: str, prices, period: int = 30) -> float:
         """
-        Get Historical Volatility with caching (Epic 05, Task 002).
+        Get Historical Volatility with caching.
 
         Returns: Annualized volatility percentage (e.g., 25.5 = 25.5%)
         """
@@ -508,7 +505,6 @@ class TechnicalIndicatorCalculator:
         Returns:
             float: Annualized volatility as percentage (e.g., 25.5 = 25.5%)
 
-        Epic 05, Task 002: Historical Volatility
         """
         import math
 

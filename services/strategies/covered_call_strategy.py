@@ -18,7 +18,6 @@ When to Use:
 - No strong upside expected near-term
 - Price near desired exit point
 
-Epic 22 Task 007: Covered Call implementation
 """
 
 from decimal import Decimal
@@ -27,14 +26,12 @@ from services.core.logging import get_logger
 from services.market_data.analysis import MarketConditionReport
 from services.positions.stock_detector import StockPositionDetector
 from services.strategies.base import BaseStrategy
-from services.strategies.registry import register_strategy
 from services.strategies.utils.strike_utils import round_to_even_strike
 from trading.models import Position
 
 logger = get_logger(__name__)
 
 
-@register_strategy("covered_call")
 class CoveredCallStrategy(BaseStrategy):
     """
     Covered Call - Income generation on stock holdings.
@@ -104,7 +101,7 @@ class CoveredCallStrategy(BaseStrategy):
             score += 10
             reasons.append(f"IV rank {report.iv_rank:.1f} - acceptable premium")
 
-        # Market trend (prefer neutral to slightly bullish) - Epic 22, Task 024
+        # Market trend (prefer neutral to slightly bullish)
         if report.macd_signal == "neutral":
             score += 20
             reasons.append(
@@ -414,106 +411,12 @@ class CoveredCallStrategy(BaseStrategy):
         Returns:
             Context dict ready for stream manager, or None if unsuitable
         """
-        # Get active config
-        config = await self.a_get_active_config()
-
         # Covered calls not supported yet - require share position tracking
         logger.warning(
             f"User {self.user.id}: Covered calls not supported yet. "
             f"Requires share position tracking and portfolio integration which is not implemented."
         )
         return None
-
-        # Get market report if not provided
-        if report is None:
-            from services.market_data.analysis import MarketAnalyzer
-
-            analyzer = MarketAnalyzer(self.user)
-            report = await analyzer.a_analyze_market_conditions(self.user, symbol, {})
-
-        # Score conditions
-        score, explanation = await self.a_score_market_conditions(report)
-        logger.info(f"{self.strategy_name} score for {symbol}: {score:.1f} - {explanation}")
-
-        # Check threshold (allow bypass in force mode)
-        if score < self.MIN_SCORE_THRESHOLD and not force_generation:
-            logger.info(f"Score too low ({score:.1f}) - not generating {self.strategy_name}")
-            return None
-
-        if force_generation and score < self.MIN_SCORE_THRESHOLD:
-            logger.warning(
-                f"Force generating {self.strategy_name} despite low score ({score:.1f})"
-            )
-
-        # Check stock ownership
-        has_stock = await self.stock_detector.has_sufficient_shares(symbol, 100)
-
-        # Determine call strike
-        call_strike = await self.a_select_call_strike(report)
-
-        # Find expiration with valid call strike
-        from services.market_data.utils.expiration_utils import find_expiration_with_exact_strikes
-
-        params = config.get_strategy_parameters() if config else {}
-        target_criteria = {
-            "call_strike": call_strike,
-        }
-
-        result = await find_expiration_with_exact_strikes(
-            self.user,
-            symbol,
-            target_criteria,
-            min_dte=params.get("min_dte", self.MIN_DTE),
-            max_dte=params.get("max_dte", self.MAX_DTE),
-        )
-
-        if not result:
-            logger.warning(f"No expiration with valid call strike {call_strike} for {symbol}")
-            return None
-
-        expiration, strikes = result[:2]
-        logger.info(
-            f"User {self.user.id}: Using expiration {expiration} "
-            f"with call strike: ${strikes.get('call_strike')}"
-        )
-
-        # Build OCC bundle for call
-        occ_bundle = await self.options_service.build_occ_bundle(symbol, expiration, strikes)
-        if not occ_bundle:
-            logger.warning(f"User {self.user.id}: Failed to build OCC bundle")
-            return None
-
-        # Prepare serializable market data
-        serializable_report = {
-            "current_price": float(report.current_price),
-            "iv_rank": float(report.iv_rank),
-            "macd_signal": report.macd_signal,
-            "adx": float(report.adx) if report.adx else None,
-            "market_stress_level": float(report.market_stress_level),
-            "score": score,
-            "explanation": explanation,
-        }
-
-        # Build context
-        context = {
-            "config_id": config.pk if config else None,
-            "strategy": self.strategy_name,
-            "symbol": symbol,
-            "expiration": expiration.isoformat(),
-            "market_data": serializable_report,
-            "strikes": {"call_strike": float(strikes["call_strike"])},
-            "occ_bundle": occ_bundle.to_dict(),
-            "suggestion_mode": suggestion_mode,
-            "force_generation": force_generation,  # Pass through to know if manual/forced mode
-            "has_stock_position": has_stock,
-            "requires_stock_purchase": not has_stock,  # Flag for UI
-        }
-
-        logger.info(
-            f"User {self.user.id}: Context prepared for {self.strategy_name} "
-            f"(stock: {has_stock}, will need to purchase: {not has_stock})"
-        )
-        return context
 
     async def a_request_suggestion_generation(
         self, report: "MarketConditionReport | None" = None, symbol: str = "QQQ"

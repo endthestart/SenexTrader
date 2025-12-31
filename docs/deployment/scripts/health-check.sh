@@ -96,8 +96,8 @@ echo ""
 
 # Check SSL certificate expiration (if HTTPS enabled)
 echo "8. SSL Certificate:"
-if command -v openssl &> /dev/null && [ -f "/etc/letsencrypt/live/senextrader.com/cert.pem" ]; then
-    CERT_EXPIRY=$(openssl x509 -in /etc/letsencrypt/live/senextrader.com/cert.pem -noout -enddate | cut -d= -f2)
+if command -v openssl &> /dev/null && [ -f "/etc/letsencrypt/live/your-domain.example.com/cert.pem" ]; then
+    CERT_EXPIRY=$(openssl x509 -in /etc/letsencrypt/live/your-domain.example.com/cert.pem -noout -enddate | cut -d= -f2)
     EXPIRY_EPOCH=$(date -d "$CERT_EXPIRY" +%s)
     NOW_EPOCH=$(date +%s)
     DAYS_UNTIL_EXPIRY=$(( ($EXPIRY_EPOCH - $NOW_EPOCH) / 86400 ))

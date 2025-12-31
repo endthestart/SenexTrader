@@ -10,11 +10,8 @@ from django.contrib.auth import get_user_model
 
 import pytest
 
-from services.strategies.credit_spread_strategy import (
-    ShortCallVerticalStrategy,
-    ShortPutVerticalStrategy,
-    SpreadDirection,
-)
+from services.strategies.core.types import Direction
+from services.strategies.factory import get_strategy
 from tests.helpers import create_neutral_market_report
 
 User = get_user_model()
@@ -26,7 +23,7 @@ class TestCreditSpreadDirectionParity:
 
     async def test_bullish_direction_high_score(self, mock_user):
         """Test bullish direction scores high for bullish conditions."""
-        unified = ShortPutVerticalStrategy(mock_user)
+        unified = get_strategy("short_put_vertical", mock_user)
 
         report = create_neutral_market_report()
         report.macd_signal = "bullish"
@@ -37,11 +34,11 @@ class TestCreditSpreadDirectionParity:
         unified_score, _unified_explanation = await unified.a_score_market_conditions(report)
 
         assert unified_score >= 90.0
-        assert unified.spread_direction == SpreadDirection.BULLISH
+        assert unified.spread_direction == Direction.BULLISH
 
     async def test_bearish_direction_high_score(self, mock_user):
         """Test bearish direction scores high for bearish conditions."""
-        unified = ShortCallVerticalStrategy(mock_user)
+        unified = get_strategy("short_call_vertical", mock_user)
 
         report = create_neutral_market_report()
         report.macd_signal = "bearish"
@@ -53,11 +50,11 @@ class TestCreditSpreadDirectionParity:
         unified_score, _unified_explanation = await unified.a_score_market_conditions(report)
 
         assert unified_score >= 60.0
-        assert unified.spread_direction == SpreadDirection.BEARISH
+        assert unified.spread_direction == Direction.BEARISH
 
     async def test_multiple_market_conditions_bullish(self, mock_user):
         """Test bullish direction across multiple market conditions."""
-        unified = ShortPutVerticalStrategy(mock_user)
+        unified = get_strategy("short_put_vertical", mock_user)
 
         test_cases = [
             {
@@ -92,7 +89,7 @@ class TestCreditSpreadDirectionParity:
 
     async def test_multiple_market_conditions_bearish(self, mock_user):
         """Test bearish direction across multiple market conditions."""
-        unified = ShortCallVerticalStrategy(mock_user)
+        unified = get_strategy("short_call_vertical", mock_user)
 
         test_cases = [
             {"macd_signal": "bullish", "current_price": 460.0, "rsi": 65.0, "expected_low": True},
@@ -122,11 +119,11 @@ class TestCreditSpreadDirectionParity:
 
     async def test_string_direction_parameter(self, mock_user):
         """Test that wrapper classes set direction correctly."""
-        bullish = ShortPutVerticalStrategy(mock_user)
-        bearish = ShortCallVerticalStrategy(mock_user)
+        bullish = get_strategy("short_put_vertical", mock_user)
+        bearish = get_strategy("short_call_vertical", mock_user)
 
-        assert bullish.spread_direction == SpreadDirection.BULLISH
-        assert bearish.spread_direction == SpreadDirection.BEARISH
+        assert bullish.spread_direction == Direction.BULLISH
+        assert bearish.spread_direction == Direction.BEARISH
         assert bullish.strategy_name == "short_put_vertical"
         assert bearish.strategy_name == "short_call_vertical"
 
@@ -136,7 +133,7 @@ class TestCreditSpreadTargetCriteria:
 
     def test_bull_put_target_criteria_default(self, mock_user):
         """Test bull put spread target criteria without support level."""
-        strategy = ShortPutVerticalStrategy(mock_user)
+        strategy = get_strategy("short_put_vertical", mock_user)
         report = create_neutral_market_report()
         report.support_level = None
         current_price = Decimal("450.00")
@@ -153,7 +150,7 @@ class TestCreditSpreadTargetCriteria:
 
     def test_bull_put_target_criteria_with_support(self, mock_user):
         """Test bull put spread target criteria respects support level."""
-        strategy = ShortPutVerticalStrategy(mock_user)
+        strategy = get_strategy("short_put_vertical", mock_user)
         report = create_neutral_market_report()
         report.support_level = 440.0
         current_price = Decimal("450.00")
@@ -167,7 +164,7 @@ class TestCreditSpreadTargetCriteria:
 
     def test_bear_call_target_criteria_default(self, mock_user):
         """Test bear call spread target criteria without resistance level."""
-        strategy = ShortCallVerticalStrategy(mock_user)
+        strategy = get_strategy("short_call_vertical", mock_user)
         report = create_neutral_market_report()
         report.resistance_level = None
         current_price = Decimal("450.00")
@@ -184,7 +181,7 @@ class TestCreditSpreadTargetCriteria:
 
     def test_bear_call_target_criteria_with_resistance(self, mock_user):
         """Test bear call spread target criteria respects resistance level."""
-        strategy = ShortCallVerticalStrategy(mock_user)
+        strategy = get_strategy("short_call_vertical", mock_user)
         report = create_neutral_market_report()
         report.resistance_level = 460.0
         current_price = Decimal("450.00")
@@ -209,8 +206,8 @@ class TestCreditSpreadTargetCriteria:
         - support_level (optional)
         - resistance_level (optional)
         """
-        bull_put = ShortPutVerticalStrategy(mock_user)
-        bear_call = ShortCallVerticalStrategy(mock_user)
+        bull_put = get_strategy("short_put_vertical", mock_user)
+        bear_call = get_strategy("short_call_vertical", mock_user)
         report = create_neutral_market_report()
         current_price = Decimal("450.00")
         spread_width = 5

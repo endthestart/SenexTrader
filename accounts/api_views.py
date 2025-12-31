@@ -1,6 +1,5 @@
 """
 API views for account-related endpoints.
-Phase 6: Account state API for dashboard integration.
 """
 
 import json
@@ -164,6 +163,8 @@ async def positions(request):
 def automated_trading_toggle(request):  # noqa: PLR0911
     """Toggle automated trading for the user's primary account."""
     try:
+        from trading.models import StrategyConfiguration
+
         data = json.loads(request.body)
 
         # Get primary trading account
@@ -205,13 +206,48 @@ def automated_trading_toggle(request):  # noqa: PLR0911
                     status=400,
                 )
 
+        # Handle symbol selection for automated trading
+        # Validate symbol
+        symbol = data.get("symbol")
+        if symbol is not None:
+            # Example limitation: Only QQQ/SPY supported for Senex Trident
+            # Users can modify this to support their preferred underlyings
+            if symbol not in ["QQQ", "SPY"]:
+                return JsonResponse(
+                    {"success": False, "error": "symbol must be QQQ or SPY"},
+                    status=400,
+                )
+            # Update senex_trident StrategyConfiguration
+            config, _created = StrategyConfiguration.objects.get_or_create(
+                user=request.user,
+                strategy_id="senex_trident",
+                defaults={"parameters": {"senex_trident": {"underlying_symbol": symbol}}},
+            )
+            if not _created:
+                params = config.parameters or {}
+                senex_params = params.get("senex_trident", {})
+                senex_params["underlying_symbol"] = symbol
+                params["senex_trident"] = senex_params
+                config.parameters = params
+                config.save(update_fields=["parameters", "updated_at"])
+
         # Update the setting
         primary.is_automated_trading_enabled = is_enabled
         primary.automated_entry_offset_cents = offset_cents
 
+        # Get current symbol for response (default: QQQ)
+        config = StrategyConfiguration.objects.filter(
+            user=request.user, strategy_id="senex_trident"
+        ).first()
+        current_symbol = "QQQ"  # Example default - customize for your needs
+        if config and config.parameters:
+            current_symbol = config.parameters.get("senex_trident", {}).get(
+                "underlying_symbol", "QQQ"
+            )
+
         logger.info(
             f"Automated trading {'enabled' if is_enabled else 'disabled'} "
-            f"for user {request.user.email} (offset={offset_cents}¢)"
+            f"for user {request.user.email} (offset={offset_cents}¢, symbol={current_symbol})"
         )
 
         return JsonResponse(
@@ -219,6 +255,7 @@ def automated_trading_toggle(request):  # noqa: PLR0911
                 "success": True,
                 "is_enabled": is_enabled,
                 "offset_cents": offset_cents,
+                "symbol": current_symbol,
                 "message": f"Automated trading {'enabled' if is_enabled else 'disabled'}",
             }
         )

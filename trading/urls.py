@@ -17,14 +17,14 @@ urlpatterns = [
     path("api/validate-trade-risk/", api_views.validate_trade_risk, name="api_validate_trade_risk"),
     path("api/streamer/status/", api_views.check_streamer_readiness, name="streamer_status"),
     path("api/risk-settings/", api_views.save_risk_settings, name="api_risk_settings"),
-    # Strategy Selector API endpoints (Phase 4)
+    # Strategy Selector API endpoints
     path("api/suggestions/auto/", api_views.generate_suggestion_auto, name="api_suggestions_auto"),
     path(
         "api/suggestions/forced/",
         api_views.generate_suggestion_forced,
         name="api_suggestions_forced",
     ),
-    # Dynamic strategy API endpoints (Phase 2)
+    # Dynamic strategy API endpoints
     path(
         "api/<str:strategy>/generate/",
         api_views.generate_suggestion,
@@ -66,7 +66,7 @@ urlpatterns = [
         api_views.get_all_positions_leg_symbols,
         name="api_positions_leg_symbols",
     ),
-    # Watchlist endpoints (Phase 0: Multi-Equity Suggestions)
+    # Watchlist endpoints
     path("api/watchlist/search/", api_views.watchlist_symbol_search, name="api_watchlist_search"),
     path("api/watchlist/", api_views.watchlist_api, name="api_watchlist"),
     path("api/watchlist/<int:item_id>/", api_views.watchlist_remove, name="api_watchlist_item"),

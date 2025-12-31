@@ -7,7 +7,6 @@ Description=Django/Daphne ASGI Server - Senex Trader
 After=network-online.target
 Requires=postgres.service redis.service
 After=postgres.service redis.service
-Documentation=https://docs.senextrader.com/deployment
 
 [Container]
 Image=registry.example.com/senex-trader:latest

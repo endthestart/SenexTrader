@@ -1,14 +1,11 @@
 """
 Utility module for building option legs and managing instrument fetching.
-Eliminates code duplication across strategy implementations.
 
 This module provides centralized utilities for:
 - Fetching option instruments with proper spec formatting
 - Mapping strikes to instruments
 - Building leg objects for orders
 - Session management helpers
-
-Following DRY principle per CLAUDE.md and Epic 22 refactoring.
 """
 
 from datetime import date

@@ -145,30 +145,81 @@ CELERY_TIMEZONE = "America/New_York"
 CELERY_ENABLE_UTC = True
 
 # Beat scheduler for tasks
+# Market-hours aware scheduling: More frequent during market hours (9:30 AM - 4:00 PM ET),
+# less frequent during off-hours to reduce API load while maintaining responsiveness.
 CELERY_BEAT_SCHEDULE = {
-    "monitor-dte-positions": {
-        "task": "trading.tasks.monitor_positions_for_dte_closure",
-        "schedule": 900.0,  # Every 15 minutes (reduced from 5min to limit API calls)
+    # =========================================================================
+    # MARKET HOURS TASKS (9:30 AM - 4:00 PM ET, Mon-Fri)
+    # =========================================================================
+    # Monitor open orders - detect fills, rejections quickly during trading
+    "monitor-open-orders-market": {
+        "task": "trading.tasks.monitor_open_orders",
+        "schedule": crontab(hour="9-15", minute="*/5", day_of_week="mon-fri"),  # Every 5 min
     },
+    # Batch sync - position/order reconciliation during active trading
+    "batch-sync-data-market": {
+        "task": "trading.tasks.batch_sync_data_task",
+        "schedule": crontab(hour="9-15", minute="*/10", day_of_week="mon-fri"),  # Every 10 min
+    },
+    # Monitor DTE positions - check for expiration closures
+    "monitor-dte-positions-market": {
+        "task": "trading.tasks.monitor_positions_for_dte_closure",
+        "schedule": crontab(hour="9-15", minute="*/10", day_of_week="mon-fri"),  # Every 10 min
+    },
+    # Persist Greeks from streaming cache
+    "persist-greeks-from-cache-market": {
+        "task": "trading.tasks.persist_greeks_from_cache",
+        "schedule": crontab(hour="9-15", minute="*/5", day_of_week="mon-fri"),  # Every 5 min
+    },
+    # =========================================================================
+    # OFF-HOURS TASKS (4:00 PM - 9:30 AM ET, Mon-Fri)
+    # =========================================================================
+    # Monitor open orders - less frequent, catches GTC orders
+    "monitor-open-orders-offhours": {
+        "task": "trading.tasks.monitor_open_orders",
+        "schedule": crontab(hour="0-8,16-23", minute="0,30", day_of_week="mon-fri"),  # Every 30 min
+    },
+    # Batch sync - hourly reconciliation off-hours
+    "batch-sync-data-offhours": {
+        "task": "trading.tasks.batch_sync_data_task",
+        "schedule": crontab(hour="0-8,16-23", minute="0", day_of_week="mon-fri"),  # Hourly
+    },
+    # Monitor DTE positions - less urgent off-hours
+    "monitor-dte-positions-offhours": {
+        "task": "trading.tasks.monitor_positions_for_dte_closure",
+        "schedule": crontab(hour="0-8,16-23", minute="0,30", day_of_week="mon-fri"),  # Every 30 min
+    },
+    # Persist Greeks - less frequent when market closed
+    "persist-greeks-from-cache-offhours": {
+        "task": "trading.tasks.persist_greeks_from_cache",
+        "schedule": crontab(hour="0-8,16-23", minute="0,30", day_of_week="mon-fri"),  # Every 30 min
+    },
+    # =========================================================================
+    # SCHEDULED TASKS (specific times)
+    # =========================================================================
     "automated-daily-trade-cycle": {
         "task": "trading.tasks.automated_daily_trade_cycle",
-        # Every 15 minutes from 10:00 AM to 2:45 PM ET on weekdays
-        # Runs at: 10:00, 10:15, 10:30, ..., 14:30, 14:45 (20 times/day)
-        # Task has built-in check to only trade once per day
-        "schedule": crontab(hour="10-14", minute="0,15,30,45", day_of_week="mon-fri"),
+        # Every 5 minutes from 10:00 AM to 2:55 PM ET on weekdays
+        # Runs at: 10:00, 10:05, 10:10, ..., 14:50, 14:55 (60 times/day)
+        # Each cycle: cancels stale orders, generates fresh suggestion, submits new order
+        # Only opens ONE position per day (checks for existing open positions)
+        "schedule": crontab(hour="10-14", minute="*/5", day_of_week="mon-fri"),
     },
     "generate-and-email-daily-suggestions": {
         "task": "trading.tasks.generate_and_email_daily_suggestions",
         "schedule": crontab(hour=10, minute=0, day_of_week="mon-fri"),  # 10:00 AM ET on weekdays
     },
-    "monitor-open-orders": {
-        "task": "trading.tasks.monitor_open_orders",
-        "schedule": 900.0,  # Every 15 minutes (reduced from 5min; AlertStreamer provides real-time updates)
-    },
     "generate-trading-summary": {
         "task": "trading.tasks.generate_trading_summary",
         "schedule": crontab(hour=16, minute=30, day_of_week="mon-fri"),  # 4:30 PM ET
     },
+    "ensure-historical-data": {
+        "task": "trading.tasks.ensure_historical_data",
+        "schedule": crontab(hour=17, minute=30, day_of_week="mon-fri"),  # 5:30 PM ET weekdays
+    },
+    # =========================================================================
+    # MAINTENANCE TASKS (daily/hourly, any time)
+    # =========================================================================
     "cleanup-inactive-streamers": {
         "task": "streaming.tasks.cleanup_inactive_streamers",
         "schedule": 3600.0,  # Every hour
@@ -176,24 +227,6 @@ CELERY_BEAT_SCHEDULE = {
     "cleanup-old-records": {
         "task": "trading.tasks.cleanup_old_records_task",
         "schedule": crontab(hour=3, minute=0),  # Daily at 3:00 AM ET (trades + suggestions)
-    },
-    # BATCHED DATA SYNC - Combines position sync, order history, and trade reconciliation
-    # to reduce API session overhead by sharing connection pool
-    "batch-sync-data": {
-        "task": "trading.tasks.batch_sync_data_task",
-        "schedule": 1800.0,  # Every 30 minutes (batches 3 operations into 1)
-    },
-    # NOTE: Individual tasks below are now part of batch-sync-data task (disabled)
-    # - reconcile-trades-with-tastytrade (was: every 30 min)
-    # - sync-order-history (was: every 30 min)
-    # - sync-positions (was: every 15 min)
-    "ensure-historical-data": {
-        "task": "trading.tasks.ensure_historical_data",
-        "schedule": crontab(hour=17, minute=30, day_of_week="mon-fri"),  # 5:30 PM ET weekdays
-    },
-    "persist-greeks-from-cache": {
-        "task": "trading.tasks.persist_greeks_from_cache",
-        "schedule": 900.0,  # Every 15 minutes (reduced from 10min to limit API calls; Epic 05, Task 004)
     },
     "aggregate-historical-greeks": {
         "task": "trading.tasks.aggregate_historical_greeks",

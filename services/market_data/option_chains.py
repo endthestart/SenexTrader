@@ -228,7 +228,6 @@ class OptionChainService:
         """
         Fetch option chains for multiple target DTEs efficiently.
 
-        Epic 22 Task 011: Multi-expiration support for Calendar Spreads.
 
         Args:
             user: User for session access
@@ -527,7 +526,6 @@ class OptionChainService:
 
                             # Extract strikes from this expiration
                             if hasattr(expiration_obj, "strikes") and expiration_obj.strikes:
-                                # Epic 28 Task 010: Preserve Strike objects with OCC symbols
                                 strikes_list = []
                                 for strike in expiration_obj.strikes:
                                     strike_price = Decimal(str(strike.strike_price))
@@ -591,7 +589,7 @@ class OptionChainService:
             result = {
                 "symbol": symbol,
                 "expiration": target_exp.isoformat(),
-                "strikes": strikes_list,  # Epic 28 Task 010: Full Strike objects with OCC symbols
+                "strikes": strikes_list,
                 "fetched_at": timezone.now().isoformat(),
                 "source": "tastytrade_api",
                 "total_strikes": len(put_strikes_set | call_strikes_set),

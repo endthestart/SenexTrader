@@ -12,7 +12,7 @@ SENEX_TRIDENT_DEFAULTS = {
     "underlying_symbol": "QQQ",  # QQQ has both odd and even strikes
     "target_dte": 45,  # Target days to expiration
     "min_dte": 30,  # Minimum days to expiration
-    "max_dte": 45,  # Maximum days to expiration (30-45 day window)
+    "max_dte": 50,  # Maximum days to expiration (30-50 day window)
     # Market condition thresholds
     "min_iv_rank": 25,  # Minimum IV rank for premium selling
     "bollinger_period": 20,  # Bollinger Bands period (not 37)
@@ -33,10 +33,10 @@ SENEX_TRIDENT_DEFAULTS = {
 class StrategyConfiguration(models.Model):
     @staticmethod
     def get_strategy_choices():
-        """Dynamically generate strategy choices from registry."""
-        from services.strategies.registry import list_registered_strategies
+        """Dynamically generate strategy choices from factory."""
+        from services.strategies.factory import list_strategies
 
-        strategies = list_registered_strategies()
+        strategies = list_strategies()
         return [(name, name.replace("_", " ").title()) for name in strategies]
 
     user = models.ForeignKey(User, on_delete=models.CASCADE)
@@ -68,20 +68,29 @@ class StrategyConfiguration(models.Model):
         return defaults
 
     def get_spread_width(self, tradeable_capital: Decimal) -> int:
-        """Get spread width based on tradeable capital (positions + buying power)"""
+        """Get spread width based on tradeable capital (positions + buying power).
+
+        Formula: nearest_odd(sqrt(capital / 1000)), minimum 3
+        Transitions occur at perfect squares × 1000: 4k, 16k, 36k, 64k, 100k, 144k
+        """
         # Use manual override if specified
         manual_width = self.parameters.get("senex_trident", {}).get("spread_width")
-        if manual_width and manual_width in [3, 5, 7, 9]:
+        if manual_width and manual_width in [3, 5, 7, 9, 11, 13]:
             return manual_width
 
-        # Otherwise auto-calculate based on tradeable capital
-        if tradeable_capital < 25000:
+        # Auto-calculate: nearest_odd(sqrt(capital / 1000)), min 3
+        # Thresholds: 3→16k, 5→36k, 7→64k, 9→100k, 11→144k
+        if tradeable_capital < 16000:
             return 3
-        if tradeable_capital < 50000:
+        if tradeable_capital < 36000:
             return 5
-        if tradeable_capital < 75000:
+        if tradeable_capital < 64000:
             return 7
-        return 9  # Align with risk_manager.py
+        if tradeable_capital < 100000:
+            return 9
+        if tradeable_capital < 144000:
+            return 11
+        return 13
 
 
 class Position(models.Model):
@@ -97,9 +106,11 @@ class Position(models.Model):
     ]
     STRATEGY_CHOICES = [
         ("senex_trident", "Senex Trident"),
-        ("bull_put_spread", "Bull Put Spread"),
-        ("bear_call_spread", "Bear Call Spread"),
-        ("stock_holding", "Stock Holding"),  # Epic 28 Task 009: Support stock positions
+        ("short_put_vertical", "Short Put Vertical"),
+        ("short_call_vertical", "Short Call Vertical"),
+        ("long_call_vertical", "Long Call Vertical"),
+        ("long_put_vertical", "Long Put Vertical"),
+        ("stock_holding", "Stock Holding"),
     ]
     PRICE_EFFECT_CHOICES = [
         ("Credit", "Credit"),  # SDK uses capitalized values
@@ -116,7 +127,6 @@ class Position(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE)
     trading_account = models.ForeignKey("accounts.TradingAccount", on_delete=models.CASCADE)
 
-    # Epic 28 Task 009: Support both option strategies and stock holdings
     instrument_type = models.CharField(
         max_length=20,
         choices=INSTRUMENT_TYPE_CHOICES,
@@ -146,6 +156,10 @@ class Position(models.Model):
     # Risk tracking
     is_app_managed = models.BooleanField(
         default=True, help_text="Whether position was created by our app"
+    )
+    is_automated_entry = models.BooleanField(
+        default=False,
+        help_text="Whether position was opened by automated trading (vs manual)",
     )
     initial_risk = models.DecimalField(
         max_digits=15,
@@ -224,7 +238,6 @@ class Position(models.Model):
             models.Index(fields=["user", "lifecycle_state"]),
             models.Index(fields=["trading_account", "lifecycle_state"]),
             models.Index(fields=["symbol", "lifecycle_state"]),
-            # Phase 4.2: Performance optimization indexes
             models.Index(fields=["user", "-created_at"]),
             models.Index(fields=["lifecycle_state", "-created_at"]),
             # Position isolation indexes
@@ -288,7 +301,6 @@ class Trade(models.Model):
         blank=True,
         help_text="Lifecycle event recorded when this trade executed",
     )
-    # NOTE: realized_pnl removed - use Position.total_realized_pnl instead
     lifecycle_snapshot = models.JSONField(
         default=dict,
         blank=True,
@@ -311,7 +323,6 @@ class Trade(models.Model):
             models.Index(fields=["user", "status"]),
             models.Index(fields=["broker_order_id"]),
             models.Index(fields=["position", "trade_type"]),
-            # Phase 4.2: Performance optimization indexes
             models.Index(fields=["user", "-submitted_at"]),
             models.Index(fields=["status", "-submitted_at"]),
         ]
@@ -439,7 +450,6 @@ class TradingSuggestion(models.Model):
             models.Index(fields=["user", "status"]),
             models.Index(fields=["underlying_symbol", "expiration_date"]),
             models.Index(fields=["generated_at"]),
-            # Phase 4.2: Performance optimization indexes
             models.Index(fields=["user", "-generated_at"]),
             models.Index(fields=["status", "-generated_at"]),
         ]
@@ -1009,7 +1019,7 @@ class TastyTradeTransaction(models.Model):
 
 class TechnicalIndicatorCache(models.Model):
     """
-    Cache for technical indicator calculations (Phase 4.1).
+    Cache for technical indicator calculations.
 
     Stores calculated technical indicators (Bollinger Bands, RSI, MACD)
     to reduce CPU-intensive recalculations and API calls.

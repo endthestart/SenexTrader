@@ -16,14 +16,7 @@ import pytest
 
 from services.strategies.cash_secured_put_strategy import CashSecuredPutStrategy
 from services.strategies.covered_call_strategy import CoveredCallStrategy
-from services.strategies.credit_spread_strategy import (
-    ShortCallVerticalStrategy,
-    ShortPutVerticalStrategy,
-)
-from services.strategies.debit_spread_strategy import (
-    LongCallVerticalStrategy,
-    LongPutVerticalStrategy,
-)
+from services.strategies.factory import get_strategy
 from tests.helpers import create_neutral_market_report
 
 User = get_user_model()
@@ -31,22 +24,22 @@ User = get_user_model()
 
 @pytest.fixture
 def bear_call_strategy(mock_user):
-    return ShortCallVerticalStrategy(mock_user)
+    return get_strategy("short_call_vertical", mock_user)
 
 
 @pytest.fixture
 def bear_put_strategy(mock_user):
-    return LongPutVerticalStrategy(mock_user)
+    return get_strategy("long_put_vertical", mock_user)
 
 
 @pytest.fixture
 def bull_call_strategy(mock_user):
-    return LongCallVerticalStrategy(mock_user)
+    return get_strategy("long_call_vertical", mock_user)
 
 
 @pytest.fixture
 def bull_put_strategy(mock_user):
-    return ShortPutVerticalStrategy(mock_user)
+    return get_strategy("short_put_vertical", mock_user)
 
 
 @pytest.fixture

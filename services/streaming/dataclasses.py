@@ -134,7 +134,6 @@ class OptionGreeks:
     """
     Option Greeks snapshot from streaming data.
 
-    Epic 28 Task 008: Greeks data for risk analysis and strategy scoring.
     """
 
     occ_symbol: str

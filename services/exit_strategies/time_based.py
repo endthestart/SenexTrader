@@ -6,6 +6,7 @@ Exits position based on time criteria (DTE, holding period, etc.).
 
 from datetime import datetime
 from typing import Any
+from zoneinfo import ZoneInfo
 
 from django.utils import timezone
 
@@ -13,6 +14,9 @@ from services.core.logging import get_logger
 from services.exit_strategies.base import ExitEvaluation, ExitStrategy
 
 logger = get_logger(__name__)
+
+# US Eastern timezone for market-aligned DTE calculations
+ET_TIMEZONE = ZoneInfo("America/New_York")
 
 
 class TimeBasedExit(ExitStrategy):
@@ -203,7 +207,7 @@ class TimeBasedExit(ExitStrategy):
         try:
             # Parse expiration date (format: "YYYY-MM-DD")
             expiration_date = datetime.strptime(expiration_str, "%Y-%m-%d").date()
-            today = timezone.now().date()
+            today = timezone.now().astimezone(ET_TIMEZONE).date()
             dte = (expiration_date - today).days
             return max(0, dte)  # Don't return negative DTE
         except (ValueError, TypeError) as e:

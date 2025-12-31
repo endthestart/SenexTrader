@@ -40,10 +40,10 @@ class ReconciliationOptions:
 
     # Which phases to run
     sync_order_history: bool = True
-    sync_transactions: bool = True  # Phase 1.5: Transaction history sync
-    discover_positions: bool = True  # Phase 2: Discover unmanaged positions
+    sync_transactions: bool = True
+    discover_positions: bool = True
     sync_positions: bool = True
-    process_closures: bool = True  # Phase 4: Process closed positions & P&L
+    process_closures: bool = True
     reconcile_trades: bool = True
     fix_profit_targets: bool = True
 
@@ -178,43 +178,36 @@ class ReconciliationOrchestrator:
         # Define phases with their enable flags and handlers
         # Order is critical - each phase depends on previous phases completing
         phases = [
-            # Phase 1: Get order history from broker
             (
                 "sync_order_history",
                 self.options.sync_order_history,
                 self._phase_sync_order_history,
             ),
-            # Phase 1.5: Get transactions & link to positions
             (
                 "sync_transactions",
                 self.options.sync_transactions,
                 self._phase_sync_transactions,
             ),
-            # Phase 2: Discover NEW unmanaged positions from transactions
             (
                 "discover_positions",
                 self.options.discover_positions,
                 self._phase_discover_positions,
             ),
-            # Phase 3: Sync ALL positions (managed + unmanaged)
             (
                 "sync_positions",
                 self.options.sync_positions,
                 self._phase_sync_positions,
             ),
-            # Phase 4: Process closures & calculate P&L
             (
                 "process_closures",
                 self.options.process_closures,
                 self._phase_process_closures,
             ),
-            # Phase 5: Reconcile trade states
             (
                 "reconcile_trades",
                 self.options.reconcile_trades,
                 self._phase_reconcile_trades,
             ),
-            # Phase 6: Fix profit targets (LAST - after all closures processed)
             (
                 "fix_profit_targets",
                 self.options.fix_profit_targets,
@@ -290,9 +283,9 @@ class ReconciliationOrchestrator:
 
     async def _phase_sync_order_history(self, users: list) -> PhaseResult:
         """
-        Phase 1: Sync order history from TastyTrade.
+        Sync order history from TastyTrade.
 
-        Fetches recent orders from TastyTrade and caches them in TastyTradeOrderHistory model.
+        Fetches recent orders and caches them in TastyTradeOrderHistory model.
         """
         import time
 
@@ -368,7 +361,7 @@ class ReconciliationOrchestrator:
 
     async def _phase_sync_transactions(self, users: list) -> PhaseResult:
         """
-        Phase 1.5: Sync transactions from TastyTrade.
+        Sync transactions from TastyTrade.
 
         Fetches transaction history (fills, assignments, exercises, expirations)
         and links them to Position objects using opening_order_id.
@@ -457,7 +450,7 @@ class ReconciliationOrchestrator:
 
     async def _phase_discover_positions(self, users: list) -> PhaseResult:
         """
-        Phase 2: Discover unmanaged positions from transactions.
+        Discover unmanaged positions from transactions.
 
         Creates Position records for user-opened positions at TastyTrade.
         Uses opening_order_id to differentiate identical positions.
@@ -553,7 +546,7 @@ class ReconciliationOrchestrator:
 
     async def _phase_sync_positions(self, users: list) -> PhaseResult:
         """
-        Phase 3: Sync positions from TastyTrade.
+        Sync positions from TastyTrade.
 
         Updates Position model with current state from TastyTrade.
         """
@@ -620,7 +613,7 @@ class ReconciliationOrchestrator:
 
     async def _phase_process_closures(self, users: list) -> PhaseResult:
         """
-        Phase 4: Process closed positions and calculate P&L.
+        Process closed positions and calculate P&L.
 
         Detects positions no longer at broker, calculates P&L from transactions,
         handles assignments by creating equity positions.
@@ -720,7 +713,7 @@ class ReconciliationOrchestrator:
 
     async def _phase_reconcile_trades(self, users: list) -> PhaseResult:
         """
-        Phase 5: Reconcile trade states.
+        Reconcile trade states.
 
         Fixes discrepancies between Trade status and TastyTrade order status.
         Also fixes stuck positions (pending_entry -> open_full).
@@ -795,7 +788,7 @@ class ReconciliationOrchestrator:
 
     async def _phase_fix_profit_targets(self, users: list) -> PhaseResult:
         """
-        Phase 6: Validate and fix profit targets.
+        Validate and fix profit targets.
 
         LAST phase - runs after all closures processed to avoid recreating
         profit targets for positions that closed during sync.

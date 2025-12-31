@@ -4,9 +4,6 @@ Stock Position Detector Service
 Detects existing stock positions from synced Position model.
 Required for strategies like Covered Call that need stock holdings.
 
-Epic 22 Task 010: Infrastructure for stock-based strategies.
-Epic 28 Task 003: Added caching layer to prevent rate limit issues.
-Epic 28 Task 009: Refactored to use Position model instead of direct API calls.
 """
 
 from decimal import Decimal
@@ -27,7 +24,6 @@ class StockPositionDetector:
     - Covered Call (needs 100+ shares)
     - Wheel Strategy (tracks assignments)
 
-    Epic 28: Implements 60s caching to prevent rate limit issues.
     """
 
     CACHE_TTL = 60  # 60 seconds - positions don't change rapidly
@@ -43,7 +39,6 @@ class StockPositionDetector:
         """
         Fetch positions from database (synced by PositionSyncService) and cache them.
 
-        Epic 28 Task 009: Eliminated duplicate API call.
         Now reads from Position model instead of direct TastyTrade API.
 
         Returns:
@@ -128,7 +123,6 @@ class StockPositionDetector:
         """
         Trigger position sync if database is empty (fallback mechanism).
 
-        Epic 28 Task 009: Ensures data availability by triggering sync when needed.
         """
         try:
             from services.positions.sync import PositionSyncService
@@ -165,7 +159,6 @@ class StockPositionDetector:
         """
         Get current quantity of stock owned (with caching).
 
-        Epic 28: Uses 60s cache to prevent rate limiting.
 
         Args:
             symbol: Stock symbol
@@ -195,7 +188,6 @@ class StockPositionDetector:
         """
         Get average cost basis for stock position (with caching).
 
-        Epic 28: Uses 60s cache to prevent rate limiting.
 
         Args:
             symbol: Stock symbol
@@ -224,7 +216,6 @@ class StockPositionDetector:
         """
         Get all stock positions for the user (with caching).
 
-        Epic 28: Uses 60s cache to prevent rate limiting.
 
         Returns:
             List of dicts with stock position info:
@@ -261,7 +252,6 @@ class StockPositionDetector:
         """
         Invalidate stock position cache (call after trade execution).
 
-        Epic 28 Task 003: Cache invalidation for position updates.
 
         Should be called after:
         - Stock purchases/sales

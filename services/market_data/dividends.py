@@ -1,7 +1,6 @@
 """
 Dividend Schedule Service - Track dividend events for strategy timing
 
-Epic 22 Task 017: Integrates with TastyTrade MarketMetricInfo to provide:
 - Ex-dividend date tracking
 - Assignment risk assessment
 - Strategy-specific dividend recommendations
@@ -145,13 +144,13 @@ class DividendSchedule:
         # Strategies with assignment risk from dividends
         high_risk_strategies = {
             "covered_call",  # Short call may get assigned before ex-div
-            "bear_call_spread",  # Short call leg has assignment risk
+            "short_call_vertical",  # Short call leg has assignment risk
         }
 
         # Strategies with moderate dividend considerations
         moderate_risk_strategies = {
             "cash_secured_put",  # Assignment more likely before ex-div
-            "bull_put_spread",  # Short put may get assigned
+            "short_put_vertical",  # Short put may get assigned
         }
 
         if not dividend_info.has_upcoming_dividend:

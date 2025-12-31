@@ -244,20 +244,17 @@ class MarketDataService:
                 float(iv_percentile_raw) * 100 if iv_percentile_raw is not None else None
             )
 
-            # Epic 27 Task 013: Extract implied volatility (30-day)
             # FIX: SDK returns percentage format (22.15 for 22.15%), NOT decimal (0.2215)
             # Store as-is, no conversion needed
             iv_30_day_raw = getattr(metrics, "implied_volatility_30_day", None)
             iv_30_day = float(iv_30_day_raw) if iv_30_day_raw is not None else None
 
-            # Epic 27 Task 013 Issue 2: Extract historical volatility (30-day)
             # FIX: SDK returns percentage format (22.15 for 22.15%), NOT decimal (0.2215)
             # Store as-is, no conversion needed
             # Real data only - no clamping (market crashes can produce HV > 100)
             hv_30_day_raw = getattr(metrics, "historical_volatility_30_day", None)
             hv_30_day = float(hv_30_day_raw) if hv_30_day_raw is not None else None
 
-            # Epic 22 Task 016: Extract earnings information
             earnings_data = None
             if getattr(metrics, "earnings", None):
                 earnings = metrics.earnings
@@ -269,11 +266,9 @@ class MarketDataService:
                     )
                 }
 
-            # Epic 22 Task 017: Extract dividend information
             dividend_next_date = getattr(metrics, "dividend_next_date", None)
             dividend_ex_date = getattr(metrics, "dividend_ex_date", None)
 
-            # Epic 22 Task 018: Extract beta for beta-weighted delta
             beta = getattr(metrics, "beta", None)
 
             return {
@@ -281,7 +276,7 @@ class MarketDataService:
                 "iv_rank": iv_rank,
                 "iv_percentile": iv_percentile,
                 "iv_30_day": iv_30_day,  # Already float or None
-                "hv_30_day": hv_30_day,  # Already float or None (Epic 27 Task 013 Issue 2)
+                "hv_30_day": hv_30_day,  # Already float or None
                 "earnings": earnings_data,
                 "dividend_next_date": (
                     dividend_next_date.isoformat() if dividend_next_date else None
